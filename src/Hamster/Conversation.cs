@@ -4,7 +4,6 @@ using System.IO;
 
 namespace Hamster;
 
-/// <summary>The chat with Claude: history, the running turn, and the questions Claude needs the user to answer.</summary>
 public sealed class Conversation : IClaudeListener
 {
     public const int MaxChats = 100;
@@ -17,6 +16,7 @@ public sealed class Conversation : IClaudeListener
     CancellationTokenSource? run;
     ChatItem? active, lastAnswered;
     DateTime answeredAt;
+    int resets;
 
     public Conversation(IClaudeClient claude, JsonFile<SavedChats> store)
     {
@@ -35,14 +35,12 @@ public sealed class Conversation : IClaudeListener
     public bool IsBrowsingWeb => webTools.Count > 0;
     public bool IsWaitingForUser => Chats.Any(chat => chat.NeedsAction);
 
-    /// <summary>What the collapsed chat list shows: the running chat and a fresh answer.</summary>
     public bool IsCurrent(ChatItem chat, DateTime now) =>
         chat == active || (chat == lastAnswered && now - answeredAt < AnswerShownTime);
 
     public bool AnsweredWithin(TimeSpan time, DateTime now) => lastAnswered is { Status: ChatStatus.Done } && now - answeredAt < time;
 
-    /// <summary>Claude reads attached files itself, so it needs their paths; images travel inside the message and are only named.</summary>
-    public static string WithAttachments(string text, IReadOnlyList<string> files, IReadOnlyList<string> images)
+    public static string WithAttachments(string text, IReadOnlyList<string> files, IReadOnlyList<ImageAttachment> images)
     {
         if (files.Count == 0 && images.Count == 0)
             return text;
@@ -50,7 +48,7 @@ public sealed class Conversation : IClaudeListener
         if (files.Count > 0)
             prompt += $"\n\nVedhæftede filer:\n{string.Join('\n', files)}";
         if (images.Count > 0)
-            prompt += $"\n\nVedhæftede billeder:\n{string.Join('\n', images)}";
+            prompt += $"\n\nVedhæftede billeder:\n{string.Join('\n', images.Select(image => image.Name))}";
         return prompt;
     }
 
@@ -66,13 +64,17 @@ public sealed class Conversation : IClaudeListener
         Changed?.Invoke();
         try
         {
+            var resetsAtStart = resets;
             var result = await claude.SendAsync(prompt, images ?? [], sessionId, this, cancellation.Token);
             // An answer that arrived just before Stop is kept.
             var stopped = result.IsError && cancellation.IsCancellationRequested;
             (chat.Answer, chat.Status) = stopped ? ("Afbrudt.", ChatStatus.Error) : (result.Text, result.IsError ? ChatStatus.Error : ChatStatus.Done);
-            // A turn that had to be killed ends without a result, but its session still exists.
-            sessionId = result.SessionId ?? (stopped ? sessionId : null);
-            Cost = result.Cost ?? Cost;
+            // After "Ny samtale" the turn's session and cost belong to the thrown-away conversation.
+            if (resetsAtStart == resets)
+            {
+                sessionId = result.SessionId ?? (stopped ? sessionId : null);
+                Cost = result.Cost ?? Cost;
+            }
         }
         catch (Exception exception) when (exception is Win32Exception or IOException or InvalidOperationException)
         {
@@ -89,6 +91,7 @@ public sealed class Conversation : IClaudeListener
 
     public void Reset()
     {
+        resets++;
         Cancel();
         Chats.Clear();
         (sessionId, Cost) = (null, 0);
@@ -96,7 +99,6 @@ public sealed class Conversation : IClaudeListener
         Changed?.Invoke();
     }
 
-    /// <summary>Removes the chat from the list; Claude's session still remembers it.</summary>
     public void Delete(ChatItem chat)
     {
         if (chat == active)
@@ -131,7 +133,10 @@ public sealed class Conversation : IClaudeListener
         try
         {
             using var registration = cancellationToken.Register(question.Cancel);
-            return await question.Answer;
+            var allowed = await question.Answer;
+            if (!allowed)
+                chat.Activity.Add($"Afvist: {request.ToolName}");
+            return allowed;
         }
         finally
         {
@@ -140,6 +145,6 @@ public sealed class Conversation : IClaudeListener
         }
     }
 
-    // The running chat is saved once it finishes; saved half-way it would come back as a chat that chews forever.
+    // Saved half-way, the running chat would come back chewing forever.
     void Save() => store.Save(new SavedChats(sessionId, [.. Chats.Where(chat => chat != active).Select(chat => chat.ToRecord())], Cost));
 }

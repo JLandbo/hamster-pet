@@ -2,8 +2,6 @@ namespace Hamster;
 
 public static partial class Sprites
 {
-    // The rolling hamster from the user's GIF (24 frames), one pixel per 12x12 block, cropped to the hamster and recoloured
-    // to this palette. The roll starts from the normal body, so it starts and ends on its feet.
     // A method rather than a field, because static initializers across partial files run in no guaranteed order.
     static IEnumerable<string[]> SpinBodies() =>
         SpinSource.ReplaceLineEndings("\n").Split("\n\n").Select(frame => frame.Split('\n')).Prepend(Body);

@@ -15,7 +15,6 @@ public interface IClaudeListener
 
 public interface IClaudeClient
 {
-    /// <summary>Cancelling stops the turn, and claude's result for the stopped turn is still returned.</summary>
     Task<ClaudeResult> SendAsync(string prompt, IReadOnlyList<ImageAttachment> images, string? sessionId, IClaudeListener listener, CancellationToken cancellationToken);
 }
 
@@ -24,7 +23,6 @@ public sealed class ClaudeClient(string workingDirectory) : IClaudeClient
     // Full model id rather than the "opus" alias, so a newer Opus doesn't replace it silently.
     public const string DefaultModel = "claude-opus-5-5";
     public const string DefaultEffort = "xhigh";
-    // Claude Code's config value for Manual mode.
     public const string DefaultPermissionMode = "default";
     static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
 
@@ -55,7 +53,6 @@ public sealed class ClaudeClient(string workingDirectory) : IClaudeClient
         if (result is not null)
             return result;
 
-        // No result at all, e.g. the saved session no longer exists, so start a new session next time.
         var error = (await errors).Trim();
         return new ClaudeResult(SessionId: null, error.Length > 0 ? error : $"claude stoppede uventet (exit code {process.ExitCode}).", IsError: true);
     }
@@ -65,12 +62,12 @@ public sealed class ClaudeClient(string workingDirectory) : IClaudeClient
     {
         input = TextWriter.Synchronized(input);
         var pending = new ConcurrentDictionary<string, CancellationTokenSource>();
-        // Off the UI thread: with images the first message is large, and the write blocks until claude has read it.
+        // Off the UI thread: with images the message is large, and the write blocks until claude reads it.
         await Task.Run(() => Send(input, ClaudeProtocol.UserMessage(prompt, images)));
         using var interrupt = cancellationToken.Register(() => Interrupt(input));
         try
         {
-            // Read until claude's result, also after cancelling, since the result of a stopped turn carries its cost.
+            // No token: after Stop, claude's result still comes and carries the turn's cost.
             while (await output.ReadLineAsync() is { } line)
             {
                 foreach (var message in ClaudeProtocol.Parse(line))
@@ -165,7 +162,7 @@ public sealed class ClaudeClient(string workingDirectory) : IClaudeClient
         }
         catch (Exception exception) when (exception is InvalidOperationException or Win32Exception or AggregateException)
         {
-            // Already exited, or part of its process tree could not be killed; nothing more to do.
+            // Already exited.
         }
     }
 }

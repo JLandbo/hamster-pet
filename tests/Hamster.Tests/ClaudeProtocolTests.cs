@@ -115,6 +115,19 @@ public class ClaudeProtocolTests
     }
 
     [Fact]
+    public void Parse_WhenErrorResultHasErrors_ThenTextIsTheErrors()
+    {
+        // Arrange
+        const string line = """{"type":"result","subtype":"error_max_turns","is_error":true,"session_id":"s1","errors":["Reached maximum number of turns (1)"]}""";
+
+        // Act
+        var events = ClaudeProtocol.Parse(line);
+
+        // Assert
+        Assert.Equal("Reached maximum number of turns (1)", Assert.IsType<ClaudeResult>(Assert.Single(events)).Text);
+    }
+
+    [Fact]
     public void Parse_WhenErrorResultWithoutText_ThenFallsBackToSubtype()
     {
         // Arrange

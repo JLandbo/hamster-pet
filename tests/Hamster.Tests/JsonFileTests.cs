@@ -24,12 +24,16 @@ public sealed class JsonFileTests : IDisposable
         Assert.Same(SavedChats.Empty, chats);
     }
 
-    [Fact]
-    public void Load_WhenFileCorrupt_ThenReturnsEmpty()
+    [Theory]
+    [InlineData("{")]
+    [InlineData("{}")]
+    [InlineData("""{"SessionId":null,"Chats":null}""")]
+    [InlineData("""{"SessionId":null,"Chats":[{"Prompt":null,"Answer":"","Status":"Done"}]}""")]
+    public void Load_WhenFileCorrupt_ThenReturnsEmpty(string content)
     {
         // Arrange
         Directory.CreateDirectory(directory);
-        File.WriteAllText(FilePath, "{");
+        File.WriteAllText(FilePath, content);
 
         // Act
         var chats = Store().Load();

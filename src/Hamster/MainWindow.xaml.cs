@@ -61,7 +61,7 @@ public partial class MainWindow : Window
             FadeWhenIdle();
             Animate();
         };
-        // Before Loaded, so the hamster has its first frame, and with it its size, when the window is placed.
+        // Before Loaded: without a frame the hamster has no size when the window is placed.
         Animate();
     }
 
@@ -95,7 +95,6 @@ public partial class MainWindow : Window
         FadeWhenIdle();
     }
 
-    // After a while without activity only the hamster remains, sitting where the toolbar was; hovering it brings the rest back.
     void FadeWhenIdle()
     {
         var show = InputBox.Visibility == Visibility.Visible || DateTime.UtcNow - lastActivity < IdleTime;
@@ -113,7 +112,6 @@ public partial class MainWindow : Window
 
     void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        // The hamster itself must end up on a screen: it stands right of the window's centre, with its feet at the bottom.
         var petLeft = Pet.TranslatePoint(new Point(), this).X - ActualWidth / 2;
         var screen = new Rect(SystemParameters.VirtualScreenLeft - petLeft, SystemParameters.VirtualScreenTop + Pet.ActualHeight,
             SystemParameters.VirtualScreenWidth - Pet.ActualWidth, SystemParameters.VirtualScreenHeight - Pet.ActualHeight);
@@ -140,7 +138,6 @@ public partial class MainWindow : Window
 
     void Window_Closed(object sender, EventArgs e) => conversation.Cancel();
 
-    // Transparent areas are click-through, so this only fires while hovering the hamster, the chats or the toolbar.
     void Window_MouseMove(object sender, MouseEventArgs e)
     {
         Touch();
@@ -151,7 +148,6 @@ public partial class MainWindow : Window
     void Conversation_Changed()
     {
         Touch();
-        // Only follow new messages when the user isn't scrolled up reading older ones.
         var following = IsAtBottom;
         UpdateToolbar();
         UpdateChatList();
@@ -221,7 +217,6 @@ public partial class MainWindow : Window
 
     void Pet_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        // Holding it still makes it dangle; only a quick press-and-release is petting.
         var clicked = pressed && !dragging && DateTime.UtcNow - pressedAt < ClickTime;
         Pet.ReleaseMouseCapture();
         if (!clicked)
@@ -272,7 +267,7 @@ public partial class MainWindow : Window
         else if (e.Key == Key.Enter && (Input.Text.Trim().Length > 0 || attachedFiles.Count + attachedImages.Count > 0) && !conversation.IsBusy)
         {
             e.Handled = true;
-            var prompt = Conversation.WithAttachments(Input.Text.Trim(), attachedFiles, [.. attachedImages.Select(image => image.Name)]);
+            var prompt = Conversation.WithAttachments(Input.Text.Trim(), attachedFiles, attachedImages);
             ImageAttachment[] images = [.. attachedImages];
             Input.Clear();
             ClearAttachments();
@@ -282,7 +277,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // A screenshot from Win+Shift+S only exists on the clipboard, so Ctrl+V attaches it as an image.
     void Input_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.V || Keyboard.Modifiers != ModifierKeys.Control || !Clipboard.ContainsImage() || Clipboard.GetImage() is not { } image)
@@ -369,7 +363,6 @@ public partial class MainWindow : Window
 
     void Stop_Click(object sender, RoutedEventArgs e) => conversation.Cancel();
 
-    // The Claude app registers the claude:// protocol, so its install path doesn't matter.
     void OpenClaude_Click(object sender, RoutedEventArgs e) => Open("claude://", "Kunne ikke åbne Claude-appen. Er den installeret?");
 
     void Open(string target, string failure)
@@ -384,14 +377,12 @@ public partial class MainWindow : Window
         }
     }
 
-    // Outside a NavigationWindow a hyperlink only asks to navigate; the browser has to be opened here.
     void Link_RequestNavigate(object sender, RequestNavigateEventArgs e)
     {
         Open(e.Uri.AbsoluteUri, $"Kunne ikke åbne {e.Uri.AbsoluteUri}");
         e.Handled = true;
     }
 
-    // A left click opens the button's list of choices too, not only a right click.
     void ShowChoices_Click(object sender, RoutedEventArgs e)
     {
         var choices = ((Button)sender).ContextMenu;
@@ -406,7 +397,6 @@ public partial class MainWindow : Window
 
     void Mode_Click(object sender, RoutedEventArgs e) => claude.PermissionMode = Choose(ModeButton, (string)((MenuItem)e.OriginalSource).Tag);
 
-    /// <summary>Ticks the choice with this value and shows it on the button.</summary>
     static string Choose(Button button, string value)
     {
         foreach (var item in button.ContextMenu.Items.OfType<MenuItem>())
@@ -433,6 +423,5 @@ public partial class MainWindow : Window
             e.Handled = true;
     }
 
-    // ScrollViewer scrolls on its next layout pass, so newly added bubbles are included.
     void ScrollToNewest() => ChatScroll.ScrollToEnd();
 }

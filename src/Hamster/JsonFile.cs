@@ -6,7 +6,13 @@ namespace Hamster;
 
 public sealed class JsonFile<T>(string path, T empty)
 {
-    static readonly JsonSerializerOptions Options = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
+    static readonly JsonSerializerOptions Options = new()
+    {
+        WriteIndented = true,
+        RespectRequiredConstructorParameters = true,
+        RespectNullableAnnotations = true,
+        Converters = { new JsonStringEnumConverter() },
+    };
 
     public T Load()
     {
@@ -18,7 +24,6 @@ public sealed class JsonFile<T>(string path, T empty)
         }
         catch (JsonException)
         {
-            // A half-written file must not stop the pet from starting.
             return empty;
         }
     }
@@ -28,7 +33,7 @@ public sealed class JsonFile<T>(string path, T empty)
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            // Written aside and moved over the old file, so a crash or power cut mid-write can't leave half a file.
+            // Moved into place, so a crash mid-write can't leave half a file.
             var temporary = path + ".tmp";
             using (var file = File.Create(temporary))
             {
@@ -39,7 +44,6 @@ public sealed class JsonFile<T>(string path, T empty)
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            // A locked or read-only file must not crash the pet; the next save tries again.
         }
     }
 }

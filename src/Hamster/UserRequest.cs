@@ -1,6 +1,5 @@
 namespace Hamster;
 
-/// <summary>A tool permission only the user can decide, answered with Tillad/Afvis.</summary>
 public sealed class UserRequest(string title, string details)
 {
     readonly TaskCompletionSource<bool> answer = new(TaskCreationOptions.RunContinuationsAsynchronously);

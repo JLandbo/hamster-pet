@@ -149,7 +149,6 @@ public class ClaudeClientTests
 
     static string[] Lines(StringWriter input) => input.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
-    // Hands out lines as the test adds them, like claude's stdout.
     sealed class LineReader : TextReader
     {
         readonly Channel<string> lines = Channel.CreateUnbounded<string>();

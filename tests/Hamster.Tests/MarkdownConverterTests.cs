@@ -97,11 +97,26 @@ public class MarkdownConverterTests
         Assert.Equal((new Uri("https://github.com/xoofx/markdig"), "Markdig"), (link.NavigateUri, Text(link)));
     }
 
-    [Fact]
-    public void Render_WhenLinkIsNotAWebAddress_ThenOnlyItsText()
+    [Theory]
+    [InlineData("<https://example.com>")]
+    [InlineData("Se https://example.com her")]
+    public void Render_WhenUrlInText_ThenHyperlinkToIt(string markdown)
     {
         // Act
-        var document = MarkdownConverter.Render("[noter](noter.md)");
+        var document = MarkdownConverter.Render(markdown);
+
+        // Assert
+        var inlines = Assert.IsType<Span>(((Paragraph)document.Blocks.Single()).Inlines.Single()).Inlines;
+        Assert.Equal(new Uri("https://example.com"), Assert.Single(inlines.OfType<Hyperlink>()).NavigateUri);
+    }
+
+    [Theory]
+    [InlineData("[noter](noter.md)")]
+    [InlineData("[noter](file:///C:/noter.md)")]
+    public void Render_WhenLinkIsNotAWebAddress_ThenOnlyItsText(string markdown)
+    {
+        // Act
+        var document = MarkdownConverter.Render(markdown);
 
         // Assert
         var inline = Assert.IsType<Span>(((Paragraph)document.Blocks.Single()).Inlines.Single()).Inlines.Single();

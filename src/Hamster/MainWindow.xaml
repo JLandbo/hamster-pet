@@ -5,11 +5,13 @@
         Title="Hamster"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize" Width="396" Height="1200" UseLayoutRounding="True"
-        FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
+        FontFamily="{DynamicResource UiFont}" FontSize="13"
         Loaded="Window_Loaded" Closed="Window_Closed" MouseMove="Window_MouseMove"
         AllowDrop="True" DragOver="Window_DragOver" Drop="Window_Drop">
 
     <Window.Resources>
+        <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI</FontFamily>
+        <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
         <SolidColorBrush x:Key="Surface" Color="#F0262626" />
         <SolidColorBrush x:Key="Edge" Color="#26FFFFFF" />
         <SolidColorBrush x:Key="Text" Color="#F2F2F2" />
@@ -18,9 +20,9 @@
 
         <DropShadowEffect x:Key="Shadow" BlurRadius="12" ShadowDepth="2" Opacity="0.35" />
         <local:MarkdownConverter x:Key="Markdown" />
-        <!-- The theme gives flow documents Georgia, justified text and page padding instead of the bubble's look. -->
+        <!-- The theme would give flow documents Georgia, justified text and page padding. -->
         <Style TargetType="FlowDocument">
-            <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI" />
+            <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="TextAlignment" Value="Left" />
             <Setter Property="PagePadding" Value="0" />
@@ -88,7 +90,7 @@
 
         <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource PillButton}">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+            <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
             <Setter Property="FontSize" Value="15" />
             <Setter Property="Padding" Value="12,7" />
         </Style>
@@ -109,7 +111,7 @@
                         <Border x:Name="Root" Background="Transparent" CornerRadius="6" Padding="8,5,14,5">
                             <DockPanel>
                                 <TextBlock x:Name="Check" DockPanel.Dock="Left" Width="18" VerticalAlignment="Center" Visibility="Hidden"
-                                           Text="&#xE73E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10"
+                                           Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="10"
                                            Foreground="{StaticResource Attention}" />
                                 <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
                             </DockPanel>
@@ -129,7 +131,7 @@
 
         <Style x:Key="ChoiceMenu" TargetType="ContextMenu">
             <Setter Property="HasDropShadow" Value="False" />
-            <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI" />
+            <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
             <Setter Property="FontSize" Value="12" />
             <Setter Property="ItemContainerStyle" Value="{StaticResource ChoiceItem}" />
             <Setter Property="Template">
@@ -152,7 +154,6 @@
     </Window.Resources>
 
     <StackPanel x:Name="Root" VerticalAlignment="Bottom" SizeChanged="Root_SizeChanged">
-        <!-- Slides down into the toolbar's place while the toolbar is faded out. -->
         <StackPanel>
             <StackPanel.RenderTransform>
                 <TranslateTransform x:Name="IdleOffset" />
@@ -189,7 +190,7 @@
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <TextBlock Text="{Binding}" ToolTip="{Binding}" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"
-                                                           Foreground="{StaticResource Muted}" FontFamily="Cascadia Mono, Consolas" FontSize="11" />
+                                                           Foreground="{StaticResource Muted}" FontFamily="{x:Static local:MarkdownConverter.CodeFont}" FontSize="11" />
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
@@ -204,7 +205,7 @@
                                                     <TextBlock Text="Kræver din tilladelse" Foreground="{StaticResource Attention}" FontWeight="SemiBold" />
                                                     <TextBlock Text="{Binding Title}" Foreground="{StaticResource Text}" Margin="0,4,0,2" TextWrapping="Wrap" />
                                                     <TextBlock Text="{Binding Details}" Foreground="{StaticResource Muted}" TextWrapping="Wrap"
-                                                               FontFamily="Cascadia Mono, Consolas" FontSize="12" />
+                                                               FontFamily="{x:Static local:MarkdownConverter.CodeFont}" FontSize="12" />
                                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
                                                         <Button Content="Afvis" Click="Deny_Click" Style="{StaticResource PillButton}" />
                                                         <Button Content="Tillad" Click="Allow_Click" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" />
@@ -232,7 +233,6 @@
                 </ItemsControl>
             </ScrollViewer>
 
-            <!-- Right-aligned with the toolbar and the chat bubbles. -->
             <Image x:Name="Pet" Width="160" Height="144" Margin="0,4,8,0" HorizontalAlignment="Right" Cursor="Hand"
                    RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5"
                    MouseLeftButtonDown="Pet_MouseLeftButtonDown" MouseMove="Pet_MouseMove" MouseLeftButtonUp="Pet_MouseLeftButtonUp"
@@ -249,7 +249,6 @@
             </Image>
         </StackPanel>
 
-        <!-- The same 8 px gutter as the chat bubbles, so it is as wide as they are, and placing it on screen keeps incoming messages on screen too. -->
         <Border x:Name="Toolbar" Margin="8,6,8,0" Padding="4" CornerRadius="16"
                 Background="{StaticResource Surface}" BorderBrush="{StaticResource Edge}" BorderThickness="1" Effect="{StaticResource Shadow}">
             <DockPanel LastChildFill="False">
@@ -303,7 +302,7 @@
                 <Button x:Name="AttachmentChip" DockPanel.Dock="Left" Visibility="Collapsed" Click="ClearAttachments_Click"
                         Style="{StaticResource PillButton}" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Top">
                     <TextBlock FontSize="11">
-                        <Run FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE723;" />
+                        <Run FontFamily="{StaticResource IconFont}" Text="&#xE723;" />
                         <Run x:Name="AttachmentCount" />
                     </TextBlock>
                 </Button>

@@ -17,7 +17,6 @@ public static partial class Sprites
         ['w'] = 0xFFFFFFFF, ['y'] = 0xFFFFD23F, ['z'] = 0xFF5B6B8C,
     };
 
-    // Traced 1:1 from the reference hamster image.
     static readonly string[] Body =
     [
         "...dddd........ddddd........",
@@ -108,7 +107,6 @@ public static partial class Sprites
             ],
             [Mood.Run] =
             [
-                // Speed lines trail on the right, behind the left-facing sprite.
                 new(Compose(openMouth, overlays: [(Speed, 35, 18)]), 120),
                 new(Compose(openMouth, dy: -1, overlays: [(Speed, 34, 19)]), 120),
             ],
@@ -142,7 +140,6 @@ public static partial class Sprites
         new(Compose(Edit(face, EyesClosed)), 150),
     ];
 
-    // Paints the glyphs over the rows; '.' in a glyph leaves the pixel below it.
     static string[] Edit(string[] rows, params Overlay[] overlays)
     {
         var grid = rows.Select(row => row.ToCharArray()).ToArray();
@@ -154,7 +151,6 @@ public static partial class Sprites
         return [.. grid.Select(row => new string(row))];
     }
 
-    // Dropping one leg row makes the body sink a pixel - reads as breathing.
     static string[] Squash(string[] rows) => [new string('.', rows[0].Length), .. rows[..^2], rows[^1]];
 
     static string[] Compose(string[] body, int dx = 0, int dy = 0, params Overlay[] overlays) =>

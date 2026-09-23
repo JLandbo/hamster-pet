@@ -149,6 +149,42 @@ public sealed class ConversationTests : IDisposable
         Assert.Empty(conversation.Chats[0].Requests);
     }
 
+    [Fact(Timeout = 5_000)]
+    public async Task Reset_WhenRunningTurnEndsAfterwards_ThenNextMessageStartsNewConversation()
+    {
+        // Arrange
+        var reply = new TaskCompletionSource<ClaudeResult>();
+        claude.Reply = (_, _) => reply.Task;
+        var sending = conversation.SendAsync("hej");
+        conversation.Reset();
+        reply.SetResult(Stopped);
+        await sending.WaitAsync(TestContext.Current.CancellationToken);
+        claude.Reply = (_, _) => Task.FromResult(Answered);
+
+        // Act
+        await conversation.SendAsync("forfra");
+
+        // Assert
+        Assert.Equal([null, null], claude.Sessions);
+        Assert.Equal(0m, conversation.Cost);
+    }
+
+    [Fact(Timeout = 5_000)]
+    public async Task AskPermissionAsync_WhenUserDenies_ThenActivityShowsIt()
+    {
+        // Arrange
+        claude.Reply = async (listener, _) =>
+            new ClaudeResult("session-1", $"{await listener.AskPermissionAsync(Request(), CancellationToken.None)}", IsError: false);
+        var sending = conversation.SendAsync("hej");
+
+        // Act
+        conversation.Chats[0].Requests[0].Respond(false);
+        await sending.WaitAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(["Afvist: Bash"], conversation.Chats[0].Activity);
+    }
+
     [Fact]
     public async Task Reset_WhenCalled_ThenForgetsChatsAndSession()
     {
@@ -255,9 +291,9 @@ public sealed class ConversationTests : IDisposable
     public async Task SendAsync_WhenClaudeReportsCost_ThenCostIsTheSessionTotal()
     {
         // Arrange
-        claude.Reply = (_, _) => Task.FromResult(new ClaudeResult("session-1", "Svar", IsError: false, Cost: 0.36m));
+        claude.Reply = (_, _) => Task.FromResult(Answered with { Cost = 0.36m });
         await conversation.SendAsync("hej");
-        claude.Reply = (_, _) => Task.FromResult(new ClaudeResult("session-1", "Svar", IsError: false, Cost: 0.5m));
+        claude.Reply = (_, _) => Task.FromResult(Answered with { Cost = 0.5m });
 
         // Act
         await conversation.SendAsync("igen");
@@ -270,7 +306,7 @@ public sealed class ConversationTests : IDisposable
     public async Task Constructor_WhenCostWasSaved_ThenRestoresCost()
     {
         // Arrange
-        claude.Reply = (_, _) => Task.FromResult(new ClaudeResult("session-1", "Svar", IsError: false, Cost: 0.36m));
+        claude.Reply = (_, _) => Task.FromResult(Answered with { Cost = 0.36m });
         await conversation.SendAsync("hej");
 
         // Act
@@ -284,7 +320,7 @@ public sealed class ConversationTests : IDisposable
     public async Task Reset_WhenCalled_ThenCostIsZero()
     {
         // Arrange
-        claude.Reply = (_, _) => Task.FromResult(new ClaudeResult("session-1", "Svar", IsError: false, Cost: 0.36m));
+        claude.Reply = (_, _) => Task.FromResult(Answered with { Cost = 0.36m });
         await conversation.SendAsync("hej");
 
         // Act
@@ -332,7 +368,7 @@ public sealed class ConversationTests : IDisposable
         {
             listener.ToolStarted(new ToolUse("toolu_1", "WebSearch"));
             browsing = conversation.IsBrowsingWeb;
-            return Task.FromResult(new ClaudeResult("session-1", "Svar", IsError: false));
+            return Task.FromResult(Answered);
         };
 
         // Act
@@ -350,7 +386,7 @@ public sealed class ConversationTests : IDisposable
         {
             listener.ToolStarted(new ToolUse("toolu_1", "Read", "Mood.cs"));
             listener.ToolStarted(new ToolUse("toolu_2", "Bash", "git log"));
-            return Task.FromResult(new ClaudeResult("session-1", "Svar", IsError: false));
+            return Task.FromResult(Answered);
         };
 
         // Act
@@ -400,7 +436,7 @@ public sealed class ConversationTests : IDisposable
         var sending = conversation.SendAsync("stop");
         conversation.Cancel();
         await sending.WaitAsync(TestContext.Current.CancellationToken);
-        claude.Reply = (_, _) => Task.FromResult(new ClaudeResult("session-1", "Svar", IsError: false));
+        claude.Reply = (_, _) => Task.FromResult(Answered);
 
         // Act
         await conversation.SendAsync("igen");
@@ -413,7 +449,7 @@ public sealed class ConversationTests : IDisposable
     public async Task Cancel_WhenAnswerAlreadyArrived_ThenKeepsTheAnswer()
     {
         // Arrange
-        claude.Reply = (_, cancellationToken) => UntilStopped(cancellationToken, new ClaudeResult("session-1", "Svar", IsError: false));
+        claude.Reply = (_, cancellationToken) => UntilStopped(cancellationToken, Answered);
         var sending = conversation.SendAsync("hej");
 
         // Act
@@ -450,7 +486,7 @@ public sealed class ConversationTests : IDisposable
     public void WithAttachments_WhenImagesAttached_ThenNamesThem()
     {
         // Act
-        var prompt = Conversation.WithAttachments("Hvad ser du?", [], ["screenshot.png"]);
+        var prompt = Conversation.WithAttachments("Hvad ser du?", [], [new ImageAttachment("screenshot.png", "image/png", [])]);
 
         // Assert
         Assert.Equal("Hvad ser du?\n\nVedhæftede billeder:\nscreenshot.png", prompt);
@@ -471,10 +507,9 @@ public sealed class ConversationTests : IDisposable
 
     static PermissionRequest Request() => new("req-1", "Bash", new JsonObject { ["command"] = "dir" });
 
+    static readonly ClaudeResult Answered = new("session-1", "Svar", IsError: false);
     static readonly ClaudeResult Stopped = new("session-1", "error_during_execution", IsError: true, Cost: 0.2m);
 
-    // Like ClaudeClient, stopping ends the turn with claude's result for it. It completes on the stopping thread, so nothing
-    // runs concurrently with the rest of Reset or Delete; in the app the UI thread gives the same guarantee.
     static Task<ClaudeResult> UntilStopped(CancellationToken cancellationToken, ClaudeResult result)
     {
         var reply = new TaskCompletionSource<ClaudeResult>();
@@ -485,7 +520,7 @@ public sealed class ConversationTests : IDisposable
     sealed class FakeClaude : IClaudeClient
     {
         public Func<IClaudeListener, CancellationToken, Task<ClaudeResult>> Reply { get; set; } =
-            (_, _) => Task.FromResult(new ClaudeResult("session-1", "Svar", IsError: false));
+            (_, _) => Task.FromResult(Answered);
         public List<string?> Sessions { get; } = [];
         public List<ImageAttachment> Images { get; } = [];
 

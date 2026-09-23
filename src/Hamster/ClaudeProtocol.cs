@@ -5,7 +5,6 @@ namespace Hamster;
 
 public abstract record ClaudeEvent;
 
-/// <param name="Detail">What the tool works on, e.g. the file it reads or the command it runs.</param>
 public sealed record ToolUse(string Id, string Name, string Detail = "") : ClaudeEvent
 {
     public bool IsWeb => Name is "WebSearch" or "WebFetch";
@@ -25,24 +24,20 @@ public sealed record CancelRequest(string RequestId) : ClaudeEvent;
 /// <param name="Cost">Claude's estimate in USD, accumulated over the whole session.</param>
 public sealed record ClaudeResult(string? SessionId, string Text, bool IsError, decimal? Cost = null) : ClaudeEvent;
 
-/// <summary>Claude Code's stream-json protocol (one JSON object per line on stdin/stdout).</summary>
 public static class ClaudeProtocol
 {
     public static string[] Arguments(string? sessionId, string model, string effort, string permissionMode) =>
     [
         "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
         "--permission-prompt-tool", "stdio", "--permission-mode", permissionMode,
-        // Only the user's own settings: an allow rule or hook written into the workspace must not silence the permission bubbles.
+        // Settings written into the workspace must not be able to silence the permission bubbles.
         "--setting-sources", "user",
         "--model", model, "--effort", effort,
         .. (sessionId is null ? Array.Empty<string>() : ["--resume", sessionId]),
-        // A fixed list, so nothing runs without a permission bubble: the tools that ask first, and the ones that only read or list.
-        // Left out: Skill (a skill's allowed-tools skip the bubble), the tools that act without asking (CronCreate, CronDelete,
-        // ScheduleWakeup, PushNotification, RemoteTrigger, SendMessage), and AskUserQuestion, which the pet has no UI for.
+        // Only tools that ask first or only read. Skill and the tools that act without asking are left out, and AskUserQuestion has no UI.
         "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,Monitor,ToolSearch,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Workflow,TaskStop,ListAgents,CronList,ReportFindings,ShareOnboardingGuide",
     ];
 
-    // The input field that says most about what a tool does, in order of preference.
     static readonly string[] DetailFields = ["file_path", "notebook_path", "command", "url", "query", "pattern", "description"];
 
     public static IEnumerable<ClaudeEvent> Parse(string line)
@@ -67,7 +62,7 @@ public static class ClaudeProtocol
             "control_cancel_request" => [new CancelRequest((string)message["request_id"]!)],
             "result" => [new ClaudeResult(
                 (string?)message["session_id"],
-                (string?)message["result"] ?? (string?)message["subtype"] ?? "",
+                ResultText(message),
                 (bool?)message["is_error"] ?? false,
                 (decimal?)message["total_cost_usd"])],
             _ => [],
@@ -95,7 +90,6 @@ public static class ClaudeProtocol
                 }),
             ]);
 
-    /// <summary>Asks claude to stop the turn; it still sends the result, with what the turn cost so far.</summary>
     public const string Interrupt = """{"type":"control_request","request_id":"interrupt","request":{"subtype":"interrupt"}}""";
 
     public static string Allow(PermissionRequest request) =>
@@ -118,6 +112,12 @@ public static class ClaudeProtocol
     static string Detail(JsonNode? input) =>
         DetailFields.Select(field => input is JsonObject fields && fields[field] is JsonValue value && value.TryGetValue(out string? text) ? text : null)
             .FirstOrDefault(text => text is not null) ?? "";
+
+    static string ResultText(JsonNode message) =>
+        (string?)message["result"]
+        ?? (message["errors"] is JsonArray { Count: > 0 } errors ? string.Join('\n', errors.Select(error => (string?)error)) : null)
+        ?? (string?)message["subtype"]
+        ?? "";
 
     static PermissionRequest ToPermissionRequest(JsonNode message)
     {

@@ -11,11 +11,10 @@ using Inline = System.Windows.Documents.Inline;
 
 namespace Hamster;
 
-/// <summary>Renders claude's markdown answers as a FlowDocument, so code blocks and tables look like code blocks and tables.</summary>
 public sealed class MarkdownConverter : IValueConverter
 {
-    static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UsePipeTables().Build();
-    static readonly FontFamily CodeFont = new("Cascadia Mono, Consolas");
+    static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UsePipeTables().UseAutoLinks().Build();
+    public static readonly FontFamily CodeFont = new("Cascadia Mono, Consolas");
     static readonly Thickness Spacing = new(0, 8, 0, 0);
     // Resource keys from MainWindow.xaml, resolved once the document is shown.
     const string Shade = "Edge";
@@ -48,7 +47,6 @@ public sealed class MarkdownConverter : IValueConverter
         _ => new Paragraph(),
     };
 
-    // Blocks are spaced by a top margin, so nothing trails after the last one.
     static void AddBlocks(BlockCollection target, ContainerBlock source)
     {
         foreach (var block in source.Select(ToBlock))
@@ -96,8 +94,8 @@ public sealed class MarkdownConverter : IValueConverter
             rows.Rows.Add(tableRow);
         }
         var table = new Table { CellSpacing = 0, RowGroups = { rows } };
-        // Flow tables can't size columns to their content; sharing the width by each column's longest word keeps words whole.
-        var columns = rows.Rows.SelectMany(row => row.Cells.Select((cell, index) => (index, word: LongestWord(cell)))).GroupBy(cell => cell.index, cell => cell.word);
+        // Flow tables can't size columns to their content, so the width is shared by each column's longest word.
+        var columns = rows.Rows.SelectMany(row => row.Cells.Index()).GroupBy(cell => cell.Index, cell => LongestWord(cell.Item));
         foreach (var column in columns)
             table.Columns.Add(new TableColumn { Width = new(Math.Max(1, column.Max()), GridUnitType.Star) });
         return table;
@@ -119,15 +117,16 @@ public sealed class MarkdownConverter : IValueConverter
         EmphasisInline emphasis => Span(emphasis, new Italic()),
         LineBreakInline { IsHard: true } => new LineBreak(),
         LineBreakInline => new Run(" "),
+        AutolinkInline link when WebUri(link.Url) is { } uri => new Hyperlink(new Run(link.Url)) { NavigateUri = uri, ToolTip = uri.AbsoluteUri },
         AutolinkInline link => new Run(link.Url),
         HtmlEntityInline entity => new Run(entity.Transcoded.ToString()),
         HtmlInline html => new Run(html.Tag),
-        LinkInline { IsImage: false } link when Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" =>
-            Span(link, new Hyperlink { NavigateUri = uri, ToolTip = uri.AbsoluteUri }),
-        // Other links and anything else show their text only.
+        LinkInline { IsImage: false } link when WebUri(link.Url) is { } uri => Span(link, new Hyperlink { NavigateUri = uri, ToolTip = uri.AbsoluteUri }),
         ContainerInline container => Span(container, new Span()),
         _ => new Run(inline.ToString()),
     };
+
+    static Uri? WebUri(string? url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? uri : null;
 
     static T Themed<T>(T element, DependencyProperty property, string resourceKey) where T : FrameworkContentElement
     {
