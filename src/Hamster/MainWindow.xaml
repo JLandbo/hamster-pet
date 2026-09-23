@@ -25,6 +25,9 @@
             <Setter Property="TextAlignment" Value="Left" />
             <Setter Property="PagePadding" Value="0" />
         </Style>
+        <Style TargetType="Hyperlink">
+            <Setter Property="Foreground" Value="#6FA8FF" />
+        </Style>
 
         <Style TargetType="ScrollBar">
             <Setter Property="Width" Value="6" />
@@ -45,11 +48,6 @@
                                 </Thumb>
                             </Track.Thumb>
                         </Track>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="PART_Track" Property="Visibility" Value="Hidden" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -121,7 +119,7 @@
                                 <Setter TargetName="Check" Property="Visibility" Value="Visible" />
                             </Trigger>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="Root" Property="Background" Value="#26FFFFFF" />
+                                <Setter TargetName="Root" Property="Background" Value="{StaticResource Edge}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -159,8 +157,8 @@
             <StackPanel.RenderTransform>
                 <TranslateTransform x:Name="IdleOffset" />
             </StackPanel.RenderTransform>
-            <ScrollViewer x:Name="ChatScroll" Width="396" Background="#01000000" Focusable="False"
-                          VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled"
+            <ScrollViewer x:Name="ChatScroll" Background="#01000000" Focusable="False"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                           PreviewMouseWheel="ChatScroll_PreviewMouseWheel">
                 <!-- The system template reserves a 17 px column for the scrollbar; here the slim one overlays the margin instead,
                      so the bubbles are exactly as wide as the toolbar. -->
@@ -187,9 +185,18 @@
                                                  VerticalAlignment="Top" Fill="#6FA8FF" />
                                         <TextBlock Text="{Binding Prompt}" Foreground="{StaticResource Text}" FontWeight="SemiBold" TextWrapping="Wrap" />
                                     </DockPanel>
+                                    <ItemsControl ItemsSource="{Binding Activity}" Margin="16,0,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" ToolTip="{Binding}" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"
+                                                           Foreground="{StaticResource Muted}" FontFamily="Cascadia Mono, Consolas" FontSize="11" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                     <FlowDocumentScrollViewer Document="{Binding DisplayAnswer, Converter={StaticResource Markdown}}" Margin="16,4,0,0"
                                                               VerticalScrollBarVisibility="Disabled" FocusVisualStyle="{x:Null}"
-                                                              RequestBringIntoView="Answer_RequestBringIntoView" Foreground="{StaticResource Muted}" />
+                                                              RequestBringIntoView="Answer_RequestBringIntoView" Hyperlink.RequestNavigate="Link_RequestNavigate"
+                                                              Foreground="{StaticResource Muted}" />
                                     <ItemsControl ItemsSource="{Binding Requests}" Margin="16,0,0,0">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="{x:Type local:UserRequest}">
@@ -225,7 +232,8 @@
                 </ItemsControl>
             </ScrollViewer>
 
-            <Image x:Name="Pet" Width="160" Height="144" Margin="0,4,0,0" Cursor="Hand"
+            <!-- Right-aligned with the toolbar and the chat bubbles. -->
+            <Image x:Name="Pet" Width="160" Height="144" Margin="0,4,8,0" HorizontalAlignment="Right" Cursor="Hand"
                    RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5"
                    MouseLeftButtonDown="Pet_MouseLeftButtonDown" MouseMove="Pet_MouseMove" MouseLeftButtonUp="Pet_MouseLeftButtonUp"
                    LostMouseCapture="Pet_LostMouseCapture" MouseEnter="Pet_MouseEnterOrLeave" MouseLeave="Pet_MouseEnterOrLeave">
@@ -241,54 +249,55 @@
             </Image>
         </StackPanel>
 
-        <!-- As wide as the chat bubbles, so placing the toolbar on screen keeps incoming messages on screen too. -->
-        <Border x:Name="Toolbar" Width="380" Margin="0,6,0,0" Padding="4" CornerRadius="16"
+        <!-- The same 8 px gutter as the chat bubbles, so it is as wide as they are, and placing it on screen keeps incoming messages on screen too. -->
+        <Border x:Name="Toolbar" Margin="8,6,8,0" Padding="4" CornerRadius="16"
                 Background="{StaticResource Surface}" BorderBrush="{StaticResource Edge}" BorderThickness="1" Effect="{StaticResource Shadow}">
             <DockPanel LastChildFill="False">
                 <TextBlock x:Name="CostText" DockPanel.Dock="Left" ToolTip="Claudes estimerede pris for samtalen" Foreground="{StaticResource Muted}"
                            FontSize="11" VerticalAlignment="Center" Margin="10,0,2,0" />
                 <Button x:Name="ModelButton" DockPanel.Dock="Left" ToolTip="Model" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
                     <Button.ContextMenu>
-                        <ContextMenu Style="{StaticResource ChoiceMenu}">
-                            <MenuItem Header="Fable 5.1" Tag="claude-fable-5-1" Click="Model_Click" />
-                            <MenuItem Header="Opus 5.5" Tag="claude-opus-5-5" Click="Model_Click" />
-                            <MenuItem Header="Sonnet 5" Tag="claude-sonnet-5" Click="Model_Click" />
-                            <MenuItem Header="Haiku 4.5" Tag="claude-haiku-4-5-20251001" Click="Model_Click" />
+                        <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Model_Click">
+                            <MenuItem Header="Fable 5.1" Tag="claude-fable-5-1" />
+                            <MenuItem Header="Opus 5.5" Tag="claude-opus-5-5" />
+                            <MenuItem Header="Sonnet 5" Tag="claude-sonnet-5" />
+                            <MenuItem Header="Haiku 4.5" Tag="claude-haiku-4-5-20251001" />
                         </ContextMenu>
                     </Button.ContextMenu>
                 </Button>
                 <Button x:Name="EffortButton" DockPanel.Dock="Left" ToolTip="Effort" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
                     <Button.ContextMenu>
-                        <ContextMenu Style="{StaticResource ChoiceMenu}">
-                            <MenuItem Header="low" Tag="low" Click="Effort_Click" />
-                            <MenuItem Header="medium" Tag="medium" Click="Effort_Click" />
-                            <MenuItem Header="high" Tag="high" Click="Effort_Click" />
-                            <MenuItem Header="xhigh" Tag="xhigh" Click="Effort_Click" />
-                            <MenuItem Header="max" Tag="max" Click="Effort_Click" />
+                        <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Effort_Click">
+                            <MenuItem Header="low" Tag="low" />
+                            <MenuItem Header="medium" Tag="medium" />
+                            <MenuItem Header="high" Tag="high" />
+                            <MenuItem Header="xhigh" Tag="xhigh" />
+                            <MenuItem Header="max" Tag="max" />
                         </ContextMenu>
                     </Button.ContextMenu>
                 </Button>
                 <Button x:Name="ModeButton" DockPanel.Dock="Left" ToolTip="Mode" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
                     <Button.ContextMenu>
-                        <ContextMenu Style="{StaticResource ChoiceMenu}">
-                            <MenuItem Header="plan" Tag="plan" Click="Mode_Click" />
-                            <MenuItem Header="manual" Tag="default" Click="Mode_Click" />
-                            <MenuItem Header="auto edit" Tag="acceptEdits" Click="Mode_Click" />
-                            <MenuItem Header="auto" Tag="auto" Click="Mode_Click" />
-                            <MenuItem Header="bypass" Tag="bypassPermissions" Click="Mode_Click" />
+                        <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Mode_Click">
+                            <MenuItem Header="plan" Tag="plan" />
+                            <MenuItem Header="manual" Tag="default" />
+                            <MenuItem Header="auto edit" Tag="acceptEdits" />
+                            <MenuItem Header="auto" Tag="auto" />
+                            <MenuItem Header="bypass" Tag="bypassPermissions" />
                         </ContextMenu>
                     </Button.ContextMenu>
                 </Button>
-                <!-- Right-docked children stack from the right edge, so this reads left to right as claude, write, chats, stop. -->
-                <Button x:Name="StopButton" DockPanel.Dock="Right" Content="&#xE71A;" ToolTip="Stop" Click="Stop_Click" Style="{StaticResource IconButton}" Visibility="Collapsed" />
-                <Button x:Name="ToggleChats" DockPanel.Dock="Right" Content="&#xE70D;" ToolTip="Vis/skjul chats" Click="ToggleChats_Click" Style="{StaticResource IconButton}" />
-                <Button DockPanel.Dock="Right" Content="&#xE70F;" ToolTip="Skriv" Click="Write_Click" Style="{StaticResource IconButton}" />
-                <Button DockPanel.Dock="Right" Content="&#xE8A7;" ToolTip="Åbn Claude-appen" Click="OpenClaude_Click" Style="{StaticResource IconButton}" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="&#xE8A7;" ToolTip="Åbn Claude-appen" Click="OpenClaude_Click" Style="{StaticResource IconButton}" />
+                    <Button Content="&#xE70F;" ToolTip="Skriv" Click="Write_Click" Style="{StaticResource IconButton}" />
+                    <Button x:Name="ToggleChats" Content="&#xE70D;" ToolTip="Vis/skjul chats" Click="ToggleChats_Click" Style="{StaticResource IconButton}" />
+                    <Button x:Name="StopButton" Content="&#xE71A;" ToolTip="Stop" Click="Stop_Click" Style="{StaticResource IconButton}" Visibility="Collapsed" />
+                </StackPanel>
             </DockPanel>
         </Border>
 
         <!-- Hidden, not collapsed: its space stays reserved, so showing it doesn't push the hamster up. -->
-        <Border x:Name="InputBox" Width="380" Margin="0,6,0,4" Padding="12,8" CornerRadius="14" Visibility="Hidden"
+        <Border x:Name="InputBox" Margin="8,6,8,4" Padding="12,8" CornerRadius="14" Visibility="Hidden"
                 Background="{StaticResource Surface}" BorderBrush="{StaticResource Edge}" BorderThickness="1" Effect="{StaticResource Shadow}">
             <DockPanel>
                 <Button x:Name="AttachmentChip" DockPanel.Dock="Left" Visibility="Collapsed" Click="ClearAttachments_Click"

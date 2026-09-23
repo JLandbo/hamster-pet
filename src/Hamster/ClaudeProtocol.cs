@@ -5,9 +5,12 @@ namespace Hamster;
 
 public abstract record ClaudeEvent;
 
-public sealed record ToolUse(string Id, string Name) : ClaudeEvent
+/// <param name="Detail">What the tool works on, e.g. the file it reads or the command it runs.</param>
+public sealed record ToolUse(string Id, string Name, string Detail = "") : ClaudeEvent
 {
     public bool IsWeb => Name is "WebSearch" or "WebFetch";
+
+    public string Description => Detail.Length > 0 ? $"{Name}: {Detail.ReplaceLineEndings(" ")}" : Name;
 }
 
 public sealed record ToolResult(string ToolUseId) : ClaudeEvent;
@@ -29,13 +32,20 @@ public static class ClaudeProtocol
     [
         "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
         "--permission-prompt-tool", "stdio", "--permission-mode", permissionMode,
+        // Only the user's own settings: an allow rule or hook written into the workspace must not silence the permission bubbles.
+        "--setting-sources", "user",
         "--model", model, "--effort", effort,
         .. (sessionId is null ? Array.Empty<string>() : ["--resume", sessionId]),
-        // The pet has no UI for answering Claude's clarifying questions.
-        "--disallowedTools", "AskUserQuestion",
+        // A fixed list, so nothing runs without a permission bubble: the tools that ask first, and the ones that only read or list.
+        // Left out: Skill (a skill's allowed-tools skip the bubble), the tools that act without asking (CronCreate, CronDelete,
+        // ScheduleWakeup, PushNotification, RemoteTrigger, SendMessage), and AskUserQuestion, which the pet has no UI for.
+        "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,Monitor,ToolSearch,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Workflow,TaskStop,ListAgents,CronList,ReportFindings,ShareOnboardingGuide",
     ];
 
-    public static IReadOnlyList<ClaudeEvent> Parse(string line)
+    // The input field that says most about what a tool does, in order of preference.
+    static readonly string[] DetailFields = ["file_path", "notebook_path", "command", "url", "query", "pattern", "description"];
+
+    public static IEnumerable<ClaudeEvent> Parse(string line)
     {
         JsonNode? message;
         try
@@ -51,8 +61,8 @@ public static class ClaudeProtocol
 
         return (string?)message["type"] switch
         {
-            "assistant" => [.. ContentBlocks(message, "tool_use").Select(block => new ToolUse((string)block["id"]!, (string)block["name"]!))],
-            "user" => [.. ContentBlocks(message, "tool_result").Select(block => new ToolResult((string)block["tool_use_id"]!))],
+            "assistant" => ContentBlocks(message, "tool_use").Select(block => new ToolUse((string)block["id"]!, (string)block["name"]!, Detail(block["input"]))),
+            "user" => ContentBlocks(message, "tool_result").Select(block => new ToolResult((string)block["tool_use_id"]!)),
             "control_request" when (string?)message["request"]?["subtype"] == "can_use_tool" => [ToPermissionRequest(message)],
             "control_cancel_request" => [new CancelRequest((string)message["request_id"]!)],
             "result" => [new ClaudeResult(
@@ -85,6 +95,9 @@ public static class ClaudeProtocol
                 }),
             ]);
 
+    /// <summary>Asks claude to stop the turn; it still sends the result, with what the turn cost so far.</summary>
+    public const string Interrupt = """{"type":"control_request","request_id":"interrupt","request":{"subtype":"interrupt"}}""";
+
     public static string Allow(PermissionRequest request) =>
         Response(request.RequestId, new JsonObject { ["behavior"] = "allow", ["updatedInput"] = request.Input.DeepClone() });
 
@@ -101,6 +114,10 @@ public static class ClaudeProtocol
         message["message"]?["content"] is JsonArray content
             ? content.OfType<JsonNode>().Where(block => (string?)block["type"] == type)
             : [];
+
+    static string Detail(JsonNode? input) =>
+        DetailFields.Select(field => input is JsonObject fields && fields[field] is JsonValue value && value.TryGetValue(out string? text) ? text : null)
+            .FirstOrDefault(text => text is not null) ?? "";
 
     static PermissionRequest ToPermissionRequest(JsonNode message)
     {

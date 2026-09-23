@@ -2,7 +2,7 @@ using System.Windows;
 
 namespace Hamster;
 
-/// <summary>Where the hamster stands: the horizontal centre and the bottom edge, in screen DIPs.</summary>
+/// <summary>Where the pet's window stands: its horizontal centre and bottom edge, in screen DIPs.</summary>
 public sealed record Placement(double CenterX, double Bottom)
 {
     // A saved spot can be on a monitor that is no longer connected.

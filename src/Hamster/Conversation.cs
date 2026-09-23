@@ -28,7 +28,6 @@ public sealed class Conversation : IClaudeListener
     }
 
     public event Action? Changed;
-    public event Action<ChatItem>? Answered;
 
     public ObservableCollection<ChatItem> Chats { get; } = [];
     public decimal Cost { get; private set; }
@@ -39,6 +38,8 @@ public sealed class Conversation : IClaudeListener
     /// <summary>What the collapsed chat list shows: the running chat and a fresh answer.</summary>
     public bool IsCurrent(ChatItem chat, DateTime now) =>
         chat == active || (chat == lastAnswered && now - answeredAt < AnswerShownTime);
+
+    public bool AnsweredWithin(TimeSpan time, DateTime now) => lastAnswered is { Status: ChatStatus.Done } && now - answeredAt < time;
 
     /// <summary>Claude reads attached files itself, so it needs their paths; images travel inside the message and are only named.</summary>
     public static string WithAttachments(string text, IReadOnlyList<string> files, IReadOnlyList<string> images)
@@ -66,12 +67,12 @@ public sealed class Conversation : IClaudeListener
         try
         {
             var result = await claude.SendAsync(prompt, images ?? [], sessionId, this, cancellation.Token);
-            (chat.Answer, chat.Status, sessionId) = (result.Text, result.IsError ? ChatStatus.Error : ChatStatus.Done, result.SessionId);
+            // An answer that arrived just before Stop is kept.
+            var stopped = result.IsError && cancellation.IsCancellationRequested;
+            (chat.Answer, chat.Status) = stopped ? ("Afbrudt.", ChatStatus.Error) : (result.Text, result.IsError ? ChatStatus.Error : ChatStatus.Done);
+            // A turn that had to be killed ends without a result, but its session still exists.
+            sessionId = result.SessionId ?? (stopped ? sessionId : null);
             Cost = result.Cost ?? Cost;
-        }
-        catch (OperationCanceledException)
-        {
-            (chat.Answer, chat.Status) = ("Afbrudt.", ChatStatus.Error);
         }
         catch (Exception exception) when (exception is Win32Exception or IOException or InvalidOperationException)
         {
@@ -82,7 +83,6 @@ public sealed class Conversation : IClaudeListener
             (run, active, lastAnswered, answeredAt) = (null, null, chat, DateTime.UtcNow);
             webTools.Clear();
             Save();
-            Answered?.Invoke(chat);
             Changed?.Invoke();
         }
     }
@@ -90,8 +90,6 @@ public sealed class Conversation : IClaudeListener
     public void Reset()
     {
         Cancel();
-        foreach (var request in Chats.SelectMany(chat => chat.Requests))
-            request.Cancel();
         Chats.Clear();
         (sessionId, Cost) = (null, 0);
         Save();
@@ -112,8 +110,10 @@ public sealed class Conversation : IClaudeListener
 
     public void ToolStarted(ToolUse tool)
     {
-        if (tool.IsWeb && webTools.Add(tool.Id))
-            Changed?.Invoke();
+        active?.Activity.Add(tool.Description);
+        if (tool.IsWeb)
+            webTools.Add(tool.Id);
+        Changed?.Invoke();
     }
 
     public void ToolFinished(ToolResult result)
@@ -122,25 +122,24 @@ public sealed class Conversation : IClaudeListener
             Changed?.Invoke();
     }
 
-    public Task<bool> AskPermissionAsync(PermissionRequest request, CancellationToken cancellationToken) =>
-        AskAsync(active!, request.ToolName, request.Details, cancellationToken);
-
-    async Task<bool> AskAsync(ChatItem chat, string title, string details, CancellationToken cancellationToken)
+    public async Task<bool> AskPermissionAsync(PermissionRequest request, CancellationToken cancellationToken)
     {
-        var request = new UserRequest(title, details);
-        chat.Requests.Add(request);
+        var chat = active!;
+        var question = new UserRequest(request.ToolName, request.Details);
+        chat.Requests.Add(question);
         Changed?.Invoke();
         try
         {
-            using var registration = cancellationToken.Register(request.Cancel);
-            return await request.Answer;
+            using var registration = cancellationToken.Register(question.Cancel);
+            return await question.Answer;
         }
         finally
         {
-            chat.Requests.Remove(request);
+            chat.Requests.Remove(question);
             Changed?.Invoke();
         }
     }
 
-    void Save() => store.Save(new SavedChats(sessionId, [.. Chats.Select(chat => chat.ToRecord())], Cost));
+    // The running chat is saved once it finishes; saved half-way it would come back as a chat that chews forever.
+    void Save() => store.Save(new SavedChats(sessionId, [.. Chats.Where(chat => chat != active).Select(chat => chat.ToRecord())], Cost));
 }

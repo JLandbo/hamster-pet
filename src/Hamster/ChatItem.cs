@@ -40,6 +40,9 @@ public sealed class ChatItem : INotifyPropertyChanged
 
     public ObservableCollection<UserRequest> Requests { get; } = [];
 
+    /// <summary>What claude did for this chat, one line per tool; only kept while the pet runs.</summary>
+    public ObservableCollection<string> Activity { get; } = [];
+
     public bool NeedsAction => Requests.Count > 0;
 
     public string DisplayAnswer => Status == ChatStatus.Busy ? "Tygger…" : Answer;

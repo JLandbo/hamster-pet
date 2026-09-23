@@ -1,5 +1,4 @@
 using Overlay = (string[] Glyph, int X, int Y);
-using Pixel = (int X, int Y, char Color);
 
 namespace Hamster;
 
@@ -58,22 +57,20 @@ public static partial class Sprites
     static readonly string[] Sparkle = [".y.", "ywy", ".y."];
     static readonly string[] Speed = [".eeee", "", "eeeee", "", "..eee"];
 
-    static readonly Pixel[] EyesClosed = [(5, 7, 'c'), (6, 7, 'c'), (14, 7, 'c'), (15, 7, 'c')];
-    static readonly Pixel[] EyesHappy =
-        [(4, 8, 'h'), (5, 8, 'c'), (6, 8, 'c'), (7, 8, 'h'), (13, 8, 'h'), (14, 8, 'c'), (15, 8, 'c'), (16, 8, 'h')];
-    static readonly Pixel[] MouthOpen = [(9, 10, 'h')];
-    static readonly Pixel[] Blush = [(2, 10, 'p'), (3, 10, 'p'), (18, 10, 'p'), (19, 10, 'p')];
-    // Two round lenses, the bridge between them, and the arm tucked under the hamster's left ear.
-    static readonly Pixel[] Glasses =
-    [
-        (4, 5, 'k'), (5, 5, 'k'), (6, 5, 'k'), (7, 5, 'k'), (3, 6, 'k'), (3, 7, 'k'), (3, 8, 'k'), (3, 9, 'k'),
-        (8, 6, 'k'), (8, 7, 'k'), (8, 8, 'k'), (8, 9, 'k'), (4, 10, 'k'), (5, 10, 'k'), (6, 10, 'k'), (7, 10, 'k'),
-        (13, 5, 'k'), (14, 5, 'k'), (15, 5, 'k'), (16, 5, 'k'), (12, 6, 'k'), (12, 7, 'k'), (12, 8, 'k'), (12, 9, 'k'),
-        (17, 6, 'k'), (17, 7, 'k'), (17, 8, 'k'), (17, 9, 'k'), (13, 10, 'k'), (14, 10, 'k'), (15, 10, 'k'), (16, 10, 'k'),
-        (9, 7, 'k'), (10, 7, 'k'), (11, 7, 'k'),
-        (18, 6, 'k'), (19, 6, 'k'), (20, 6, 'k'),
-    ];
-    static readonly Pixel[] Glint = [(4, 6, 'w')];
+    static readonly Overlay EyesClosed = (["cc.......cc"], 5, 7);
+    static readonly Overlay EyesHappy = (["hcch.....hcch"], 4, 8);
+    static readonly Overlay MouthOpen = (["h"], 9, 10);
+    static readonly Overlay Blush = (["pp..............pp"], 2, 10);
+    static readonly Overlay Glint = (["w"], 4, 6);
+    static readonly Overlay Glasses =
+    ([
+        ".kkkk.....kkkk",
+        "k....k...k....kkkk",
+        "k....kkkkk....k",
+        "k....k...k....k",
+        "k....k...k....k",
+        ".kkkk.....kkkk",
+    ], 3, 5);
 
     // Declared after the sprite data above, because static initializers run in textual order.
     public static IReadOnlyDictionary<Mood, Frame[]> Animations { get; } = BuildAnimations();
@@ -95,22 +92,8 @@ public static partial class Sprites
                 new(Compose(Squash(sleepy), overlays: [(ZSmall, 31, 8), (ZBig, 35, 3)]), 700),
                 new(Compose(sleepy, overlays: [(ZBig, 35, 3)]), 700),
             ],
-            [Mood.Awake] =
-            [
-                new(Compose(Body), 600),
-                new(Compose(Body, dy: -1), 600),
-                new(Compose(Body), 600),
-                new(Compose(Body, dy: -1), 600),
-                new(Compose(sleepy), 150),
-            ],
-            [Mood.Curious] =
-            [
-                new(Compose(openMouth), 600),
-                new(Compose(openMouth, dy: -1), 600),
-                new(Compose(openMouth), 600),
-                new(Compose(openMouth, dy: -1), 600),
-                new(Compose(Edit(sleepy, MouthOpen)), 150),
-            ],
+            [Mood.Awake] = Idle(Body),
+            [Mood.Curious] = Idle(openMouth),
             [Mood.Giggle] =
             [
                 new(Compose(giggly, dy: -2, overlays: [(Heart, 33, 4)]), 150),
@@ -150,31 +133,30 @@ public static partial class Sprites
         };
     }
 
-    static string[] Edit(string[] rows, params Pixel[][] edits)
+    static Frame[] Idle(string[] face) =>
+    [
+        new(Compose(face), 600),
+        new(Compose(face, dy: -1), 600),
+        new(Compose(face), 600),
+        new(Compose(face, dy: -1), 600),
+        new(Compose(Edit(face, EyesClosed)), 150),
+    ];
+
+    // Paints the glyphs over the rows; '.' in a glyph leaves the pixel below it.
+    static string[] Edit(string[] rows, params Overlay[] overlays)
     {
         var grid = rows.Select(row => row.ToCharArray()).ToArray();
-        foreach (var (x, y, color) in edits.SelectMany(pixels => pixels))
-            grid[y][x] = color;
+        foreach (var (glyph, left, top) in overlays)
+            for (var y = 0; y < glyph.Length; y++)
+                for (var x = 0; x < glyph[y].Length; x++)
+                    if (glyph[y][x] != '.')
+                        grid[top + y][left + x] = glyph[y][x];
         return [.. grid.Select(row => new string(row))];
     }
 
     // Dropping one leg row makes the body sink a pixel - reads as breathing.
-    static string[] Squash(string[] rows) => [new string('.', rows[0].Length), .. rows[..26], .. rows[27..]];
+    static string[] Squash(string[] rows) => [new string('.', rows[0].Length), .. rows[..^2], rows[^1]];
 
-    static string[] Compose(string[] body, int dx = 0, int dy = 0, params Overlay[] overlays)
-    {
-        var grid = Enumerable.Range(0, Height).Select(_ => Enumerable.Repeat('.', Width).ToArray()).ToArray();
-        Stamp(grid, body, BodyLeft + dx, Height - body.Length + dy);
-        foreach (var (glyph, x, y) in overlays)
-            Stamp(grid, glyph, x, y);
-        return [.. grid.Select(row => new string(row))];
-    }
-
-    static void Stamp(char[][] grid, string[] glyph, int left, int top)
-    {
-        for (var y = 0; y < glyph.Length; y++)
-            for (var x = 0; x < glyph[y].Length; x++)
-                if (glyph[y][x] != '.' && top + y is >= 0 and < Height)
-                    grid[top + y][left + x] = glyph[y][x];
-    }
+    static string[] Compose(string[] body, int dx = 0, int dy = 0, params Overlay[] overlays) =>
+        Edit([.. Enumerable.Repeat(new string('.', Width), Height)], [(body, BodyLeft + dx, Height - body.Length + dy), .. overlays]);
 }

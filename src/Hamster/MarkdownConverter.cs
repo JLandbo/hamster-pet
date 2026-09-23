@@ -4,15 +4,10 @@ using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Media;
 using Markdig;
-using Markdig.Extensions.Tables;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Block = System.Windows.Documents.Block;
 using Inline = System.Windows.Documents.Inline;
-using List = System.Windows.Documents.List;
-using Table = System.Windows.Documents.Table;
-using TableCell = System.Windows.Documents.TableCell;
-using TableRow = System.Windows.Documents.TableRow;
 
 namespace Hamster;
 
@@ -74,7 +69,7 @@ public sealed class MarkdownConverter : IValueConverter
         var list = new List
         {
             MarkerStyle = source.IsOrdered ? TextMarkerStyle.Decimal : TextMarkerStyle.Disc,
-            StartIndex = int.TryParse(source.OrderedStart, out var start) ? start : 1,
+            StartIndex = int.TryParse(source.OrderedStart, out var start) && start > 0 ? start : 1,
             Padding = new(22, 0, 0, 0),
         };
         foreach (var item in source.OfType<ListItemBlock>())
@@ -112,7 +107,7 @@ public sealed class MarkdownConverter : IValueConverter
 
     static Span Span(ContainerInline? source, Span span)
     {
-        span.Inlines.AddRange((source ?? []).Select(ToInline));
+        span.Inlines.AddRange(source?.Select(ToInline) ?? []);
         return span;
     }
 
@@ -127,7 +122,9 @@ public sealed class MarkdownConverter : IValueConverter
         AutolinkInline link => new Run(link.Url),
         HtmlEntityInline entity => new Run(entity.Transcoded.ToString()),
         HtmlInline html => new Run(html.Tag),
-        // Links and anything else show their text only.
+        LinkInline { IsImage: false } link when Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" =>
+            Span(link, new Hyperlink { NavigateUri = uri, ToolTip = uri.AbsoluteUri }),
+        // Other links and anything else show their text only.
         ContainerInline container => Span(container, new Span()),
         _ => new Run(inline.ToString()),
     };

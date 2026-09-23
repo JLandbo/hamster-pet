@@ -25,7 +25,21 @@ public sealed class JsonFile<T>(string path, T empty)
 
     public void Save(T value)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, JsonSerializer.Serialize(value, Options));
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            // Written aside and moved over the old file, so a crash or power cut mid-write can't leave half a file.
+            var temporary = path + ".tmp";
+            using (var file = File.Create(temporary))
+            {
+                JsonSerializer.Serialize(file, value, Options);
+                file.Flush(flushToDisk: true);
+            }
+            File.Move(temporary, path, overwrite: true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A locked or read-only file must not crash the pet; the next save tries again.
+        }
     }
 }

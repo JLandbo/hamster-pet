@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -8,6 +9,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
+using System.Windows.Navigation;
 using System.Windows.Threading;
 
 namespace Hamster;
@@ -37,7 +39,7 @@ public partial class MainWindow : Window
     int frame;
     bool pressed, dragging, chatsExpanded = true, uiShown = true;
     Point dragStart;
-    DateTime pressedAt, giggleUntil, celebrateUntil, lastMove, lastActivity = DateTime.UtcNow;
+    DateTime pressedAt, giggleUntil, lastMove, lastActivity = DateTime.UtcNow;
     double centerX, bottom;
     double? readingOffset;
 
@@ -51,15 +53,16 @@ public partial class MainWindow : Window
         Choose(EffortButton, claude.Effort);
         Choose(ModeButton, claude.PermissionMode);
         var area = SystemParameters.WorkArea;
-        placement = new JsonFile<Placement>(Path.Combine(data, "placement.json"), new Placement(area.Right - 120, area.Bottom - 4));
+        placement = new JsonFile<Placement>(Path.Combine(data, "placement.json"), new Placement(area.Right - Width / 2, area.Bottom - 4));
         conversation.Changed += Conversation_Changed;
-        conversation.Answered += Conversation_Answered;
         timer.Tick += (_, _) =>
         {
             UpdateChatList();
             FadeWhenIdle();
             Animate();
         };
+        // Before Loaded, so the hamster has its first frame, and with it its size, when the window is placed.
+        Animate();
     }
 
     PetStatus Status => new(
@@ -69,7 +72,7 @@ public partial class MainWindow : Window
         WaitingForUser: conversation.IsWaitingForUser,
         BrowsingWeb: conversation.IsBrowsingWeb,
         Busy: conversation.IsBusy,
-        Celebrating: DateTime.UtcNow < celebrateUntil,
+        Celebrating: conversation.AnsweredWithin(HappyTime, DateTime.UtcNow),
         Hovered: Pet.IsMouseOver,
         Awake: InputBox.Visibility == Visibility.Visible || DateTime.UtcNow - lastActivity < AwakeTime);
 
@@ -110,15 +113,16 @@ public partial class MainWindow : Window
 
     void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        var screen = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop + Pet.ActualHeight,
-            SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight - Pet.ActualHeight);
+        // The hamster itself must end up on a screen: it stands right of the window's centre, with its feet at the bottom.
+        var petLeft = Pet.TranslatePoint(new Point(), this).X - ActualWidth / 2;
+        var screen = new Rect(SystemParameters.VirtualScreenLeft - petLeft, SystemParameters.VirtualScreenTop + Pet.ActualHeight,
+            SystemParameters.VirtualScreenWidth - Pet.ActualWidth, SystemParameters.VirtualScreenHeight - Pet.ActualHeight);
         (centerX, bottom) = placement.Load().ClampedTo(screen);
         UpdateToolbar();
         UpdateChatList();
         FitChatHeight();
         Place();
         ScrollToNewest();
-        Animate();
     }
 
     // The window has a fixed size with the content at the bottom, because resizing a transparent window makes everything flicker.
@@ -160,12 +164,6 @@ public partial class MainWindow : Window
     {
         CostText.Text = conversation.Cost.ToString("$0.00", CultureInfo.InvariantCulture);
         StopButton.Visibility = conversation.IsBusy ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    void Conversation_Answered(ChatItem chat)
-    {
-        if (chat.Status == ChatStatus.Done)
-            celebrateUntil = DateTime.UtcNow + HappyTime;
     }
 
     void UpdateChatList()
@@ -279,9 +277,8 @@ public partial class MainWindow : Window
             Input.Clear();
             ClearAttachments();
             HideInput();
-            var sending = conversation.SendAsync(prompt, images);
             ScrollToNewest();
-            await sending;
+            await conversation.SendAsync(prompt, images);
         }
     }
 
@@ -354,7 +351,10 @@ public partial class MainWindow : Window
         ToggleChats.Content = chatsExpanded ? CollapseIcon : ExpandIcon;
         Touch();
         UpdateChatList();
-        ScrollTo(chatsExpanded ? readingOffset : null);
+        if (chatsExpanded && readingOffset is { } offset)
+            ChatScroll.ScrollToVerticalOffset(offset);
+        else
+            ScrollToNewest();
         Animate();
     }
 
@@ -370,7 +370,26 @@ public partial class MainWindow : Window
     void Stop_Click(object sender, RoutedEventArgs e) => conversation.Cancel();
 
     // The Claude app registers the claude:// protocol, so its install path doesn't matter.
-    void OpenClaude_Click(object sender, RoutedEventArgs e) => Process.Start(new ProcessStartInfo("claude://") { UseShellExecute = true });
+    void OpenClaude_Click(object sender, RoutedEventArgs e) => Open("claude://", "Kunne ikke åbne Claude-appen. Er den installeret?");
+
+    void Open(string target, string failure)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+        }
+        catch (Win32Exception)
+        {
+            MessageBox.Show(this, failure, "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    // Outside a NavigationWindow a hyperlink only asks to navigate; the browser has to be opened here.
+    void Link_RequestNavigate(object sender, RequestNavigateEventArgs e)
+    {
+        Open(e.Uri.AbsoluteUri, $"Kunne ikke åbne {e.Uri.AbsoluteUri}");
+        e.Handled = true;
+    }
 
     // A left click opens the button's list of choices too, not only a right click.
     void ShowChoices_Click(object sender, RoutedEventArgs e)
@@ -381,11 +400,11 @@ public partial class MainWindow : Window
         choices.IsOpen = true;
     }
 
-    void Model_Click(object sender, RoutedEventArgs e) => claude.Model = Choose(ModelButton, (string)((MenuItem)sender).Tag);
+    void Model_Click(object sender, RoutedEventArgs e) => claude.Model = Choose(ModelButton, (string)((MenuItem)e.OriginalSource).Tag);
 
-    void Effort_Click(object sender, RoutedEventArgs e) => claude.Effort = Choose(EffortButton, (string)((MenuItem)sender).Tag);
+    void Effort_Click(object sender, RoutedEventArgs e) => claude.Effort = Choose(EffortButton, (string)((MenuItem)e.OriginalSource).Tag);
 
-    void Mode_Click(object sender, RoutedEventArgs e) => claude.PermissionMode = Choose(ModeButton, (string)((MenuItem)sender).Tag);
+    void Mode_Click(object sender, RoutedEventArgs e) => claude.PermissionMode = Choose(ModeButton, (string)((MenuItem)e.OriginalSource).Tag);
 
     /// <summary>Ticks the choice with this value and shows it on the button.</summary>
     static string Choose(Button button, string value)
@@ -414,14 +433,6 @@ public partial class MainWindow : Window
             e.Handled = true;
     }
 
-    void ScrollToNewest() => ScrollTo(null);
-
-    // After layout, so newly added bubbles are included; null means the newest chat.
-    void ScrollTo(double? offset) => Dispatcher.InvokeAsync(() =>
-    {
-        if (offset is { } position)
-            ChatScroll.ScrollToVerticalOffset(position);
-        else
-            ChatScroll.ScrollToEnd();
-    }, DispatcherPriority.Loaded);
+    // ScrollViewer scrolls on its next layout pass, so newly added bubbles are included.
+    void ScrollToNewest() => ChatScroll.ScrollToEnd();
 }

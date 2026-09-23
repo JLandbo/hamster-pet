@@ -15,6 +15,7 @@ public interface IClaudeListener
 
 public interface IClaudeClient
 {
+    /// <summary>Cancelling stops the turn, and claude's result for the stopped turn is still returned.</summary>
     Task<ClaudeResult> SendAsync(string prompt, IReadOnlyList<ImageAttachment> images, string? sessionId, IClaudeListener listener, CancellationToken cancellationToken);
 }
 
@@ -25,6 +26,7 @@ public sealed class ClaudeClient(string workingDirectory) : IClaudeClient
     public const string DefaultEffort = "xhigh";
     // Claude Code's config value for Manual mode.
     public const string DefaultPermissionMode = "default";
+    static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
 
     public string Model { get; set; } = DefaultModel;
     public string Effort { get; set; } = DefaultEffort;
@@ -33,7 +35,10 @@ public sealed class ClaudeClient(string workingDirectory) : IClaudeClient
     public async Task<ClaudeResult> SendAsync(string prompt, IReadOnlyList<ImageAttachment> images, string? sessionId, IClaudeListener listener, CancellationToken cancellationToken)
     {
         using var process = Start(sessionId);
-        using var kill = cancellationToken.Register(() => TryKill(process));
+        // Killed only if it doesn't stop when asked to: killing right away would lose what the stopped turn cost.
+        using var killer = new CancellationTokenSource();
+        using var kill = killer.Token.Register(() => TryKill(process));
+        using var stop = cancellationToken.Register(() => killer.CancelAfter(StopTimeout));
         var errors = process.StandardError.ReadToEndAsync(CancellationToken.None);
 
         ClaudeResult? result;
@@ -46,7 +51,7 @@ public sealed class ClaudeClient(string workingDirectory) : IClaudeClient
             // claude keeps waiting for input until stdin closes, also when something above failed.
             process.StandardInput.Close();
         }
-        await process.WaitForExitAsync(cancellationToken);
+        await process.WaitForExitAsync();
         if (result is not null)
             return result;
 
@@ -60,10 +65,13 @@ public sealed class ClaudeClient(string workingDirectory) : IClaudeClient
     {
         input = TextWriter.Synchronized(input);
         var pending = new ConcurrentDictionary<string, CancellationTokenSource>();
-        Send(input, ClaudeProtocol.UserMessage(prompt, images));
+        // Off the UI thread: with images the first message is large, and the write blocks until claude has read it.
+        await Task.Run(() => Send(input, ClaudeProtocol.UserMessage(prompt, images)));
+        using var interrupt = cancellationToken.Register(() => Interrupt(input));
         try
         {
-            while (await output.ReadLineAsync(cancellationToken) is { } line)
+            // Read until claude's result, also after cancelling, since the result of a stopped turn carries its cost.
+            while (await output.ReadLineAsync() is { } line)
             {
                 foreach (var message in ClaudeProtocol.Parse(line))
                 {
@@ -112,6 +120,18 @@ public sealed class ClaudeClient(string workingDirectory) : IClaudeClient
         }
     }
 
+    static void Interrupt(TextWriter input)
+    {
+        try
+        {
+            Send(input, ClaudeProtocol.Interrupt);
+        }
+        catch (IOException)
+        {
+            // claude already exited.
+        }
+    }
+
     // One Write per message, so the synchronized writer never interleaves two messages.
     static void Send(TextWriter input, string json)
     {
@@ -143,9 +163,9 @@ public sealed class ClaudeClient(string workingDirectory) : IClaudeClient
         {
             process.Kill(entireProcessTree: true);
         }
-        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception)
+        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception or AggregateException)
         {
-            // Already exited.
+            // Already exited, or part of its process tree could not be killed; nothing more to do.
         }
     }
 }
