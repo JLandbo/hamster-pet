@@ -102,8 +102,7 @@ public sealed class ConversationTests : IDisposable
     public void AskPermissionAsync_WhenAsked_ThenWaitsForUser()
     {
         // Arrange
-        claude.Reply = async (listener, _) =>
-            new ClaudeResult("session-1", $"{await listener.AskPermissionAsync(Request(), CancellationToken.None)}", IsError: false);
+        claude.Reply = AskingPermission;
 
         // Act
         _ = conversation.SendAsync("hej");
@@ -116,8 +115,7 @@ public sealed class ConversationTests : IDisposable
     public async Task AskPermissionAsync_WhenUserAllows_ThenClaudeGetsYes()
     {
         // Arrange
-        claude.Reply = async (listener, _) =>
-            new ClaudeResult("session-1", $"{await listener.AskPermissionAsync(Request(), CancellationToken.None)}", IsError: false);
+        claude.Reply = AskingPermission;
         var sending = conversation.SendAsync("hej");
 
         // Act
@@ -173,8 +171,7 @@ public sealed class ConversationTests : IDisposable
     public async Task AskPermissionAsync_WhenUserDenies_ThenActivityShowsIt()
     {
         // Arrange
-        claude.Reply = async (listener, _) =>
-            new ClaudeResult("session-1", $"{await listener.AskPermissionAsync(Request(), CancellationToken.None)}", IsError: false);
+        claude.Reply = AskingPermission;
         var sending = conversation.SendAsync("hej");
 
         // Act
@@ -508,6 +505,9 @@ public sealed class ConversationTests : IDisposable
     static PermissionRequest Request() => new("req-1", "Bash", new JsonObject { ["command"] = "dir" });
 
     static readonly ClaudeResult Answered = new("session-1", "Svar", IsError: false);
+
+    static async Task<ClaudeResult> AskingPermission(IClaudeListener listener, CancellationToken _) =>
+        Answered with { Text = $"{await listener.AskPermissionAsync(Request(), CancellationToken.None)}" };
     static readonly ClaudeResult Stopped = new("session-1", "error_during_execution", IsError: true, Cost: 0.2m);
 
     static Task<ClaudeResult> UntilStopped(CancellationToken cancellationToken, ClaudeResult result)

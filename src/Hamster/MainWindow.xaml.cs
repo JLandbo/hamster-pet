@@ -47,11 +47,12 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         var data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Hamster");
-        claude = new ClaudeClient(Path.Combine(data, "workspace"));
+        claude = new ClaudeClient(Path.Combine(data, "workspace"), new JsonFile<ClaudeSettings>(Path.Combine(data, "settings.json"), ClaudeSettings.Default));
         conversation = new Conversation(claude, new JsonFile<SavedChats>(Path.Combine(data, "chats.json"), SavedChats.Empty));
-        Choose(ModelButton, claude.Model);
-        Choose(EffortButton, claude.Effort);
-        Choose(ModeButton, claude.PermissionMode);
+        Choose(ModelButton, claude.Settings.Model);
+        Choose(EffortButton, claude.Settings.Effort);
+        Choose(ModeButton, claude.Settings.PermissionMode);
+        ToggleChats.Content = CollapseIcon;
         var area = SystemParameters.WorkArea;
         placement = new JsonFile<Placement>(Path.Combine(data, "placement.json"), new Placement(area.Right - Width / 2, area.Bottom - 4));
         conversation.Changed += Conversation_Changed;
@@ -391,14 +392,18 @@ public partial class MainWindow : Window
         choices.IsOpen = true;
     }
 
-    void Model_Click(object sender, RoutedEventArgs e) => claude.Model = Choose(ModelButton, (string)((MenuItem)e.OriginalSource).Tag);
+    void Model_Click(object sender, RoutedEventArgs e) =>
+        claude.Settings = claude.Settings with { Model = Choose(ModelButton, (string)((MenuItem)e.OriginalSource).Tag) };
 
-    void Effort_Click(object sender, RoutedEventArgs e) => claude.Effort = Choose(EffortButton, (string)((MenuItem)e.OriginalSource).Tag);
+    void Effort_Click(object sender, RoutedEventArgs e) =>
+        claude.Settings = claude.Settings with { Effort = Choose(EffortButton, (string)((MenuItem)e.OriginalSource).Tag) };
 
-    void Mode_Click(object sender, RoutedEventArgs e) => claude.PermissionMode = Choose(ModeButton, (string)((MenuItem)e.OriginalSource).Tag);
+    void Mode_Click(object sender, RoutedEventArgs e) =>
+        claude.Settings = claude.Settings with { PermissionMode = Choose(ModeButton, (string)((MenuItem)e.OriginalSource).Tag) };
 
     static string Choose(Button button, string value)
     {
+        button.Content = value;
         foreach (var item in button.ContextMenu.Items.OfType<MenuItem>())
         {
             item.IsChecked = (string)item.Tag == value;

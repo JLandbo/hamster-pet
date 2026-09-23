@@ -18,17 +18,19 @@ public interface IClaudeClient
     Task<ClaudeResult> SendAsync(string prompt, IReadOnlyList<ImageAttachment> images, string? sessionId, IClaudeListener listener, CancellationToken cancellationToken);
 }
 
-public sealed class ClaudeClient(string workingDirectory) : IClaudeClient
+public sealed class ClaudeClient(string workingDirectory, JsonFile<ClaudeSettings> store) : IClaudeClient
 {
-    // Full model id rather than the "opus" alias, so a newer Opus doesn't replace it silently.
-    public const string DefaultModel = "claude-opus-5-5";
-    public const string DefaultEffort = "xhigh";
-    public const string DefaultPermissionMode = "default";
     static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
 
-    public string Model { get; set; } = DefaultModel;
-    public string Effort { get; set; } = DefaultEffort;
-    public string PermissionMode { get; set; } = DefaultPermissionMode;
+    public ClaudeSettings Settings
+    {
+        get;
+        set
+        {
+            field = value;
+            store.Save(value);
+        }
+    } = store.Load();
 
     public async Task<ClaudeResult> SendAsync(string prompt, IReadOnlyList<ImageAttachment> images, string? sessionId, IClaudeListener listener, CancellationToken cancellationToken)
     {
@@ -139,7 +141,7 @@ public sealed class ClaudeClient(string workingDirectory) : IClaudeClient
     Process Start(string? sessionId)
     {
         Directory.CreateDirectory(workingDirectory);
-        return Process.Start(new ProcessStartInfo("claude", ClaudeProtocol.Arguments(sessionId, Model, Effort, PermissionMode))
+        return Process.Start(new ProcessStartInfo("claude", ClaudeProtocol.Arguments(sessionId, Settings))
         {
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,

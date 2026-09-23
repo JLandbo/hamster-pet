@@ -289,7 +289,7 @@
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button Content="&#xE8A7;" ToolTip="Åbn Claude-appen" Click="OpenClaude_Click" Style="{StaticResource IconButton}" />
                     <Button Content="&#xE70F;" ToolTip="Skriv" Click="Write_Click" Style="{StaticResource IconButton}" />
-                    <Button x:Name="ToggleChats" Content="&#xE70D;" ToolTip="Vis/skjul chats" Click="ToggleChats_Click" Style="{StaticResource IconButton}" />
+                    <Button x:Name="ToggleChats" ToolTip="Vis/skjul chats" Click="ToggleChats_Click" Style="{StaticResource IconButton}" />
                     <Button x:Name="StopButton" Content="&#xE71A;" ToolTip="Stop" Click="Stop_Click" Style="{StaticResource IconButton}" Visibility="Collapsed" />
                 </StackPanel>
             </DockPanel>

@@ -3,7 +3,7 @@ using System.Threading.Channels;
 
 namespace Hamster.Tests;
 
-public class ClaudeClientTests
+public sealed class ClaudeClientTests : IDisposable
 {
     const string Permission = """{"type":"control_request","request_id":"req-1","request":{"subtype":"can_use_tool","tool_name":"WebFetch","input":{"url":"https://example.com"}}}""";
     const string Withdrawal = """{"type":"control_cancel_request","request_id":"req-1"}""";
@@ -12,26 +12,35 @@ public class ClaudeClientTests
     const string Stopped = """{"type":"result","subtype":"error_during_execution","is_error":true,"session_id":"session-1","total_cost_usd":0.2}""";
     const string Result = """{"type":"result","subtype":"success","is_error":false,"result":"Svar","session_id":"session-1"}""";
 
+    readonly string settingsFile = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
+
     static CancellationToken Token => TestContext.Current.CancellationToken;
 
+    JsonFile<ClaudeSettings> Store() => new(settingsFile, ClaudeSettings.Default);
+
+    public void Dispose() => File.Delete(settingsFile);
+
     [Fact]
-    public void Constructor_WhenCreated_ThenUsesOpus55WithXhighEffort()
+    public void Settings_WhenNothingSaved_ThenOpus55WithXhighInManualMode()
     {
         // Act
-        var client = new ClaudeClient("workspace");
+        var client = new ClaudeClient("workspace", Store());
 
         // Assert
-        Assert.Equal(("claude-opus-5-5", "xhigh"), (client.Model, client.Effort));
+        Assert.Equal(new ClaudeSettings("claude-opus-5-5", "xhigh", "default"), client.Settings);
     }
 
     [Fact]
-    public void Constructor_WhenCreated_ThenUsesManualMode()
+    public void Settings_WhenChanged_ThenTheNextStartUsesThem()
     {
+        // Arrange
+        new ClaudeClient("workspace", Store()).Settings = new("claude-sonnet-5", "low", "plan");
+
         // Act
-        var client = new ClaudeClient("workspace");
+        var restarted = new ClaudeClient("workspace", Store());
 
         // Assert
-        Assert.Equal("default", client.PermissionMode);
+        Assert.Equal(new ClaudeSettings("claude-sonnet-5", "low", "plan"), restarted.Settings);
     }
 
     [Fact]

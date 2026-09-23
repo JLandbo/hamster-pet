@@ -26,16 +26,16 @@ public sealed record ClaudeResult(string? SessionId, string Text, bool IsError, 
 
 public static class ClaudeProtocol
 {
-    public static string[] Arguments(string? sessionId, string model, string effort, string permissionMode) =>
+    public static string[] Arguments(string? sessionId, ClaudeSettings settings) =>
     [
         "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-        "--permission-prompt-tool", "stdio", "--permission-mode", permissionMode,
+        "--permission-prompt-tool", "stdio", "--permission-mode", settings.PermissionMode,
         // Settings written into the workspace must not be able to silence the permission bubbles.
         "--setting-sources", "user",
-        "--model", model, "--effort", effort,
+        "--model", settings.Model, "--effort", settings.Effort,
         .. (sessionId is null ? Array.Empty<string>() : ["--resume", sessionId]),
         // Only tools that ask first or only read. Skill and the tools that act without asking are left out, and AskUserQuestion has no UI.
-        "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,Monitor,ToolSearch,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Workflow,TaskStop,ListAgents,CronList,ReportFindings,ShareOnboardingGuide",
+        "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,Monitor,ToolSearch,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Workflow,TaskStop,ListAgents,CronList,ReportFindings",
     ];
 
     static readonly string[] DetailFields = ["file_path", "notebook_path", "command", "url", "query", "pattern", "description"];

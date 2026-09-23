@@ -218,14 +218,14 @@ public class ClaudeProtocolTests
     public void Arguments_WhenNoSession_ThenStartsNewSessionWithHostPermissions()
     {
         // Act
-        var arguments = ClaudeProtocol.Arguments(null, "claude-opus-5-5", "xhigh", "default");
+        var arguments = ClaudeProtocol.Arguments(null, ClaudeSettings.Default);
 
         // Assert
         Assert.Equal(
             ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
              "--permission-prompt-tool", "stdio", "--permission-mode", "default", "--setting-sources", "user",
              "--model", "claude-opus-5-5", "--effort", "xhigh",
-             "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,Monitor,ToolSearch,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Workflow,TaskStop,ListAgents,CronList,ReportFindings,ShareOnboardingGuide"],
+             "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,Monitor,ToolSearch,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Workflow,TaskStop,ListAgents,CronList,ReportFindings"],
             arguments);
     }
 
@@ -233,7 +233,7 @@ public class ClaudeProtocolTests
     public void Arguments_WhenSessionExists_ThenResumesIt()
     {
         // Act
-        var arguments = ClaudeProtocol.Arguments("session-1", "claude-opus-5-5", "xhigh", "default");
+        var arguments = ClaudeProtocol.Arguments("session-1", ClaudeSettings.Default);
 
         // Assert
         Assert.Equal("session-1", arguments[Array.IndexOf(arguments, "--resume") + 1]);
@@ -243,7 +243,7 @@ public class ClaudeProtocolTests
     public void Arguments_WhenAutoModeChosen_ThenPassesIt()
     {
         // Act
-        var arguments = ClaudeProtocol.Arguments(null, "claude-opus-5-5", "xhigh", "auto");
+        var arguments = ClaudeProtocol.Arguments(null, ClaudeSettings.Default with { PermissionMode = "auto" });
 
         // Assert
         Assert.Equal("auto", arguments[Array.IndexOf(arguments, "--permission-mode") + 1]);
