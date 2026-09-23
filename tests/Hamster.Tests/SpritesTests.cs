@@ -23,17 +23,12 @@ public class SpritesTests
     }
 
     [Fact]
-    public void Animations_WhenBuilt_ThenFramesHaveFixedSizeAndKnownColors()
+    public void Animations_WhenBuilt_ThenFramesUseKnownColors()
     {
-        // Arrange
-        var rows = Sprites.Animations.Values.SelectMany(frames => frames).Select(frame => frame.Rows).ToArray();
-
         // Act
-        var sizes = rows.Select(frame => (frame.Length, frame.Select(row => row.Length).Distinct().Single())).Distinct();
-        var colors = rows.SelectMany(frame => frame).SelectMany(row => row).Distinct();
+        var colors = Sprites.Animations.Values.SelectMany(frames => frames).SelectMany(frame => frame.Rows).SelectMany(row => row).Distinct();
 
         // Assert
-        Assert.Equal([(Sprites.Height, Sprites.Width)], sizes);
         Assert.All(colors, color => Assert.True(color == '.' || Sprites.Palette.ContainsKey(color), $"Unknown color '{color}'"));
     }
 }

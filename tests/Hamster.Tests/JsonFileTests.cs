@@ -51,4 +51,18 @@ public sealed class JsonFileTests : IDisposable
         // Assert
         Assert.Equal(("session-1", chat, 0.5m), (chats.SessionId, Assert.Single(chats.Chats), chats.Cost));
     }
+
+    [Fact]
+    public void Save_WhenFileIsLocked_ThenDoesNotThrow()
+    {
+        // Arrange
+        Store().Save(SavedChats.Empty);
+        using var locked = new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        // Act
+        var exception = Record.Exception(() => Store().Save(SavedChats.Empty));
+
+        // Assert
+        Assert.Null(exception);
+    }
 }

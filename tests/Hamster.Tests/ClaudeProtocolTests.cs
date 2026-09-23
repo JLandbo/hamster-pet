@@ -4,18 +4,19 @@ namespace Hamster.Tests;
 
 public class ClaudeProtocolTests
 {
-    const string PermissionLine = """{"type":"control_request","request_id":"req-1","request":{"subtype":"can_use_tool","tool_name":"WebFetch","display_name":"WebFetch","input":{"url":"https://example.com","prompt":"Titel?"},"description":"https://example.com","tool_use_id":"toolu_1"}}""";
+    const string PermissionLine = """{"type":"control_request","request_id":"req-1","request":{"subtype":"can_use_tool","tool_name":"WebFetch","display_name":"Fetch","input":{"url":"https://example.com","prompt":"Titel?"},"description":"https://example.com","tool_use_id":"toolu_1"}}""";
 
-    static PermissionRequest Permission => (PermissionRequest)ClaudeProtocol.Parse(PermissionLine)[0];
+    static PermissionRequest Permission => (PermissionRequest)ClaudeProtocol.Parse(PermissionLine).Single();
 
     [Fact]
     public void Parse_WhenCanUseToolRequest_ThenReturnsPermissionRequest()
     {
         // Act
-        var request = Assert.IsType<PermissionRequest>(Assert.Single(ClaudeProtocol.Parse(PermissionLine)));
+        var events = ClaudeProtocol.Parse(PermissionLine);
 
         // Assert
-        Assert.Equal(("req-1", "WebFetch", "url: https://example.com" + Environment.NewLine + "prompt: Titel?"),
+        var request = Assert.IsType<PermissionRequest>(Assert.Single(events));
+        Assert.Equal(("req-1", "Fetch", "url: https://example.com" + Environment.NewLine + "prompt: Titel?"),
             (request.RequestId, request.ToolName, request.Details));
     }
 
@@ -30,6 +31,35 @@ public class ClaudeProtocolTests
 
         // Assert
         Assert.Equal([new ToolUse("toolu_1", "WebSearch")], events);
+    }
+
+    [Theory]
+    [InlineData("""{"file_path":"C:\\hamster\\Mood.cs","offset":10}""", @"C:\hamster\Mood.cs")]
+    [InlineData("""{"command":"git log","description":"Viser historik"}""", "git log")]
+    [InlineData("""{"url":"https://example.com","prompt":"Titel?"}""", "https://example.com")]
+    [InlineData("""{"todos":[]}""", "")]
+    public void Parse_WhenToolHasInput_ThenDetailIsWhatItWorksOn(string input, string expected)
+    {
+        // Arrange
+        var line = """{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_1","name":"Tool","input":""" + input + "}]}}";
+
+        // Act
+        var events = ClaudeProtocol.Parse(line);
+
+        // Assert
+        Assert.Equal(expected, Assert.IsType<ToolUse>(Assert.Single(events)).Detail);
+    }
+
+    [Theory]
+    [InlineData("", "Read")]
+    [InlineData("git status\ngit log", "Read: git status git log")]
+    public void Description_WhenToolUsed_ThenOneLineWithNameAndDetail(string detail, string expected)
+    {
+        // Act
+        var description = new ToolUse("toolu_1", "Read", detail).Description;
+
+        // Assert
+        Assert.Equal(expected, description);
     }
 
     [Theory]
@@ -78,10 +108,10 @@ public class ClaudeProtocolTests
         const string line = """{"type":"result","subtype":"success","is_error":false,"result":"ok","session_id":"s1","total_cost_usd":0.4970334}""";
 
         // Act
-        var result = Assert.IsType<ClaudeResult>(Assert.Single(ClaudeProtocol.Parse(line)));
+        var events = ClaudeProtocol.Parse(line);
 
         // Assert
-        Assert.Equal(0.4970334m, result.Cost);
+        Assert.Equal(0.4970334m, Assert.IsType<ClaudeResult>(Assert.Single(events)).Cost);
     }
 
     [Fact]
@@ -180,8 +210,9 @@ public class ClaudeProtocolTests
         // Assert
         Assert.Equal(
             ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-             "--permission-prompt-tool", "stdio", "--permission-mode", "default",
-             "--model", "claude-opus-5-5", "--effort", "xhigh", "--disallowedTools", "AskUserQuestion"],
+             "--permission-prompt-tool", "stdio", "--permission-mode", "default", "--setting-sources", "user",
+             "--model", "claude-opus-5-5", "--effort", "xhigh",
+             "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,Monitor,ToolSearch,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Workflow,TaskStop,ListAgents,CronList,ReportFindings,ShareOnboardingGuide"],
             arguments);
     }
 

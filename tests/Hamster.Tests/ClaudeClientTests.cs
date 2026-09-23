@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Threading.Channels;
 
 namespace Hamster.Tests;
 
@@ -8,6 +9,7 @@ public class ClaudeClientTests
     const string Withdrawal = """{"type":"control_cancel_request","request_id":"req-1"}""";
     const string WebSearch = """{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_1","name":"WebSearch","input":{}}]}}""";
     const string SearchDone = """{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"..."}]}}""";
+    const string Stopped = """{"type":"result","subtype":"error_during_execution","is_error":true,"session_id":"session-1","total_cost_usd":0.2}""";
     const string Result = """{"type":"result","subtype":"success","is_error":false,"result":"Svar","session_id":"session-1"}""";
 
     static CancellationToken Token => TestContext.Current.CancellationToken;
@@ -81,29 +83,33 @@ public class ClaudeClientTests
     }
 
     [Fact]
-    public async Task ConverseAsync_WhenPermissionWithdrawn_ThenCancelsTheQuestionRightAway()
+    public async Task ConverseAsync_WhenPermissionWithdrawn_ThenCancelsTheQuestionRightAwayAndAnswersNothing()
     {
         // Arrange
         var listener = new FakeListener(allow: null);
+        var input = new StringWriter();
 
         // Act
-        await ClaudeClient.ConverseAsync(Output(Permission, Withdrawal, WebSearch, Result), new StringWriter(), "hej", [], listener, Token);
+        await ClaudeClient.ConverseAsync(Output(Permission, Withdrawal, WebSearch, Result), input, "hej", [], listener, Token);
 
         // Assert
         Assert.True(listener.QuestionCancelledBeforeNextTool);
+        Assert.Single(Lines(input));
     }
 
     [Fact]
-    public async Task ConverseAsync_WhenResultArrivesWhileAsking_ThenCancelsTheQuestion()
+    public async Task ConverseAsync_WhenResultArrivesWhileAsking_ThenCancelsTheQuestionAndAnswersNothing()
     {
         // Arrange
         var listener = new FakeListener(allow: null);
+        var input = new StringWriter();
 
         // Act
-        await ClaudeClient.ConverseAsync(Output(Permission, Result), new StringWriter(), "hej", [], listener, Token);
+        await ClaudeClient.ConverseAsync(Output(Permission, Result), input, "hej", [], listener, Token);
 
         // Assert
         Assert.True(listener.Question.IsCancellationRequested);
+        Assert.Single(Lines(input));
     }
 
     [Fact]
@@ -120,9 +126,38 @@ public class ClaudeClientTests
         Assert.Equal([new ToolResult("toolu_1")], listener.Finished);
     }
 
+    [Fact(Timeout = 5_000)]
+    public async Task ConverseAsync_WhenCancelled_ThenAsksClaudeToStopAndReturnsItsResult()
+    {
+        // Arrange
+        var output = new LineReader();
+        var input = new StringWriter();
+        using var stop = new CancellationTokenSource();
+        var conversing = ClaudeClient.ConverseAsync(output, input, "hej", [], new FakeListener(), stop.Token);
+
+        // Act
+        stop.Cancel();
+        output.Add(Stopped);
+        var result = await conversing.WaitAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(ClaudeProtocol.Interrupt, Lines(input)[^1]);
+        Assert.Equal(new ClaudeResult("session-1", "error_during_execution", IsError: true, Cost: 0.2m), result);
+    }
+
     static StringReader Output(params string[] lines) => new(string.Join('\n', lines));
 
     static string[] Lines(StringWriter input) => input.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+    // Hands out lines as the test adds them, like claude's stdout.
+    sealed class LineReader : TextReader
+    {
+        readonly Channel<string> lines = Channel.CreateUnbounded<string>();
+
+        public void Add(string line) => lines.Writer.TryWrite(line);
+
+        public override async Task<string?> ReadLineAsync() => await lines.Reader.ReadAsync();
+    }
 
     sealed class FakeListener(bool? allow = true) : IClaudeListener
     {
@@ -144,8 +179,10 @@ public class ClaudeClientTests
             Question = cancellationToken;
             if (allow is { } answer)
                 return answer;
-            await Task.Delay(Timeout.Infinite, cancellationToken);
-            return false;
+            // Cancelled inline (unlike Task.Delay), so whatever happens to a cancelled question happens before ConverseAsync returns.
+            var never = new TaskCompletionSource<bool>();
+            using var registration = cancellationToken.Register(() => never.TrySetCanceled(cancellationToken));
+            return await never.Task;
         }
     }
 }

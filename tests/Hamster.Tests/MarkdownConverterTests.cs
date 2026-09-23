@@ -76,5 +76,37 @@ public class MarkdownConverterTests
         Assert.Equal(2, list.ListItems.Count);
     }
 
+    [Fact]
+    public void Render_WhenOrderedListStartsAtZero_ThenStartsAtOne()
+    {
+        // Act
+        var document = MarkdownConverter.Render("0. nul\n1. en");
+
+        // Assert
+        Assert.Equal(1, Assert.IsType<List>(Assert.Single(document.Blocks)).StartIndex);
+    }
+
+    [Fact]
+    public void Render_WhenWebLink_ThenHyperlinkToTheUrl()
+    {
+        // Act
+        var document = MarkdownConverter.Render("[Markdig](https://github.com/xoofx/markdig)");
+
+        // Assert
+        var link = Assert.IsType<Hyperlink>(Assert.IsType<Span>(((Paragraph)document.Blocks.Single()).Inlines.Single()).Inlines.Single());
+        Assert.Equal((new Uri("https://github.com/xoofx/markdig"), "Markdig"), (link.NavigateUri, Text(link)));
+    }
+
+    [Fact]
+    public void Render_WhenLinkIsNotAWebAddress_ThenOnlyItsText()
+    {
+        // Act
+        var document = MarkdownConverter.Render("[noter](noter.md)");
+
+        // Assert
+        var inline = Assert.IsType<Span>(((Paragraph)document.Blocks.Single()).Inlines.Single()).Inlines.Single();
+        Assert.Equal((false, "noter"), (inline is Hyperlink, Text(inline)));
+    }
+
     static string Text(TextElement element) => new TextRange(element.ContentStart, element.ContentEnd).Text;
 }
