@@ -271,8 +271,11 @@
                 <Button x:Name="ModeButton" DockPanel.Dock="Left" ToolTip="Mode" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
                     <Button.ContextMenu>
                         <ContextMenu Style="{StaticResource ChoiceMenu}">
+                            <MenuItem Header="plan" Tag="plan" Click="Mode_Click" />
                             <MenuItem Header="manual" Tag="default" Click="Mode_Click" />
+                            <MenuItem Header="auto edit" Tag="acceptEdits" Click="Mode_Click" />
                             <MenuItem Header="auto" Tag="auto" Click="Mode_Click" />
+                            <MenuItem Header="bypass" Tag="bypassPermissions" Click="Mode_Click" />
                         </ContextMenu>
                     </Button.ContextMenu>
                 </Button>

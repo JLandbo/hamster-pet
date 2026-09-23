@@ -20,7 +20,7 @@ public partial class MainWindow : Window
     static readonly TimeSpan AwakeTime = TimeSpan.FromMinutes(1);
     static readonly TimeSpan MovingTime = TimeSpan.FromMilliseconds(200);
     static readonly TimeSpan ClickTime = TimeSpan.FromMilliseconds(300);
-    static readonly TimeSpan IdleTime = TimeSpan.FromSeconds(30);
+    static readonly TimeSpan IdleTime = TimeSpan.FromSeconds(60);
     const string CollapseIcon = "\uE70D";
     const string ExpandIcon = "\uE70E";
 
