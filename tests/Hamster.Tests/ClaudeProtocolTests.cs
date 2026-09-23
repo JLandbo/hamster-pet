@@ -1,0 +1,207 @@
+using System.Text.Json.Nodes;
+
+namespace Hamster.Tests;
+
+public class ClaudeProtocolTests
+{
+    const string PermissionLine = """{"type":"control_request","request_id":"req-1","request":{"subtype":"can_use_tool","tool_name":"WebFetch","display_name":"WebFetch","input":{"url":"https://example.com","prompt":"Titel?"},"description":"https://example.com","tool_use_id":"toolu_1"}}""";
+
+    static PermissionRequest Permission => (PermissionRequest)ClaudeProtocol.Parse(PermissionLine)[0];
+
+    [Fact]
+    public void Parse_WhenCanUseToolRequest_ThenReturnsPermissionRequest()
+    {
+        // Act
+        var request = Assert.IsType<PermissionRequest>(Assert.Single(ClaudeProtocol.Parse(PermissionLine)));
+
+        // Assert
+        Assert.Equal(("req-1", "WebFetch", "url: https://example.com" + Environment.NewLine + "prompt: Titel?"),
+            (request.RequestId, request.ToolName, request.Details));
+    }
+
+    [Fact]
+    public void Parse_WhenAssistantUsesTool_ThenReturnsToolUse()
+    {
+        // Arrange
+        const string line = """{"type":"assistant","message":{"content":[{"type":"text","text":"Jeg søger."},{"type":"tool_use","id":"toolu_1","name":"WebSearch","input":{}}]}}""";
+
+        // Act
+        var events = ClaudeProtocol.Parse(line);
+
+        // Assert
+        Assert.Equal([new ToolUse("toolu_1", "WebSearch")], events);
+    }
+
+    [Theory]
+    [InlineData("WebSearch", true)]
+    [InlineData("WebFetch", true)]
+    [InlineData("Bash", false)]
+    public void IsWeb_WhenToolNamed_ThenOnlyWebToolsCount(string name, bool expected)
+    {
+        // Act
+        var isWeb = new ToolUse("toolu_1", name).IsWeb;
+
+        // Assert
+        Assert.Equal(expected, isWeb);
+    }
+
+    [Fact]
+    public void Parse_WhenToolResult_ThenReturnsToolResult()
+    {
+        // Arrange
+        const string line = """{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"Example Domain"}]}}""";
+
+        // Act
+        var events = ClaudeProtocol.Parse(line);
+
+        // Assert
+        Assert.Equal([new ToolResult("toolu_1")], events);
+    }
+
+    [Fact]
+    public void Parse_WhenResult_ThenReturnsTextAndSession()
+    {
+        // Arrange
+        const string line = """{"type":"result","subtype":"success","is_error":false,"result":"Hej!","session_id":"session-1"}""";
+
+        // Act
+        var events = ClaudeProtocol.Parse(line);
+
+        // Assert
+        Assert.Equal([new ClaudeResult("session-1", "Hej!", IsError: false)], events);
+    }
+
+    [Fact]
+    public void Parse_WhenResultHasCost_ThenReturnsIt()
+    {
+        // Arrange
+        const string line = """{"type":"result","subtype":"success","is_error":false,"result":"ok","session_id":"s1","total_cost_usd":0.4970334}""";
+
+        // Act
+        var result = Assert.IsType<ClaudeResult>(Assert.Single(ClaudeProtocol.Parse(line)));
+
+        // Assert
+        Assert.Equal(0.4970334m, result.Cost);
+    }
+
+    [Fact]
+    public void Parse_WhenErrorResultWithoutText_ThenFallsBackToSubtype()
+    {
+        // Arrange
+        const string line = """{"type":"result","subtype":"error_during_execution","is_error":true,"session_id":"session-1"}""";
+
+        // Act
+        var events = ClaudeProtocol.Parse(line);
+
+        // Assert
+        Assert.Equal([new ClaudeResult("session-1", "error_during_execution", IsError: true)], events);
+    }
+
+    [Fact]
+    public void Parse_WhenCancelRequest_ThenReturnsCancelRequest()
+    {
+        // Act
+        var events = ClaudeProtocol.Parse("""{"type":"control_cancel_request","request_id":"req-1"}""");
+
+        // Assert
+        Assert.Equal([new CancelRequest("req-1")], events);
+    }
+
+    [Theory]
+    [InlineData("""{"type":"system","subtype":"init","session_id":"s1","mcp_servers":[]}""")]
+    [InlineData("null")]
+    [InlineData("not json")]
+    public void Parse_WhenIrrelevantLine_ThenReturnsNothing(string line)
+    {
+        // Act
+        var events = ClaudeProtocol.Parse(line);
+
+        // Assert
+        Assert.Empty(events);
+    }
+
+    [Fact]
+    public void Allow_WhenCalled_ThenEchoesRequestAndInput()
+    {
+        // Act
+        var line = ClaudeProtocol.Allow(Permission);
+
+        // Assert
+        Assert.Equal("""{"type":"control_response","response":{"subtype":"success","request_id":"req-1","response":{"behavior":"allow","updatedInput":{"url":"https://example.com","prompt":"Titel?"}}}}""", line);
+    }
+
+    [Fact]
+    public void Deny_WhenCalled_ThenReturnsDenyBehavior()
+    {
+        // Act
+        var line = ClaudeProtocol.Deny(Permission);
+
+        // Assert
+        Assert.Equal("""{"type":"control_response","response":{"subtype":"success","request_id":"req-1","response":{"behavior":"deny","message":"Brugeren afviste."}}}""", line);
+    }
+
+    [Fact]
+    public void UserMessage_WhenCalled_ThenMatchesWireFormat()
+    {
+        // Act
+        var line = ClaudeProtocol.UserMessage("hej", []);
+
+        // Assert
+        Assert.Equal("""{"type":"user","message":{"role":"user","content":"hej"},"parent_tool_use_id":null,"session_id":""}""", line);
+    }
+
+    [Fact]
+    public void UserMessage_WhenImageAttached_ThenSendsItInsideTheMessage()
+    {
+        // Act
+        var line = ClaudeProtocol.UserMessage("hej", [new ImageAttachment("a.png", "image/png", [1, 2, 3])]);
+
+        // Assert
+        Assert.Equal("""{"type":"user","message":{"role":"user","content":[{"type":"text","text":"hej"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AQID"}}]},"parent_tool_use_id":null,"session_id":""}""", line);
+    }
+
+    [Fact]
+    public void UserMessage_WhenPromptHasNewlines_ThenStaysOnOneLine()
+    {
+        // Act
+        var line = ClaudeProtocol.UserMessage("hej\næblegrød", []);
+
+        // Assert
+        Assert.DoesNotContain('\n', line);
+        Assert.Equal("hej\næblegrød", (string?)JsonNode.Parse(line)!["message"]!["content"]);
+    }
+
+    [Fact]
+    public void Arguments_WhenNoSession_ThenStartsNewSessionWithHostPermissions()
+    {
+        // Act
+        var arguments = ClaudeProtocol.Arguments(null, "claude-opus-5-5", "xhigh", "default");
+
+        // Assert
+        Assert.Equal(
+            ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+             "--permission-prompt-tool", "stdio", "--permission-mode", "default",
+             "--model", "claude-opus-5-5", "--effort", "xhigh", "--disallowedTools", "AskUserQuestion"],
+            arguments);
+    }
+
+    [Fact]
+    public void Arguments_WhenSessionExists_ThenResumesIt()
+    {
+        // Act
+        var arguments = ClaudeProtocol.Arguments("session-1", "claude-opus-5-5", "xhigh", "default");
+
+        // Assert
+        Assert.Equal("session-1", arguments[Array.IndexOf(arguments, "--resume") + 1]);
+    }
+
+    [Fact]
+    public void Arguments_WhenAutoModeChosen_ThenPassesIt()
+    {
+        // Act
+        var arguments = ClaudeProtocol.Arguments(null, "claude-opus-5-5", "xhigh", "auto");
+
+        // Assert
+        Assert.Equal("auto", arguments[Array.IndexOf(arguments, "--permission-mode") + 1]);
+    }
+}
