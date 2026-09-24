@@ -21,6 +21,19 @@ public class ClaudeProtocolTests
     }
 
     [Fact]
+    public void Parse_WhenCanUseToolRequestHasNoDisplayName_ThenToolNameIsShown()
+    {
+        // Arrange
+        const string line = """{"type":"control_request","request_id":"req-1","request":{"subtype":"can_use_tool","tool_name":"WebFetch","input":{},"tool_use_id":"toolu_1"}}""";
+
+        // Act
+        var request = (PermissionRequest)ClaudeProtocol.Parse(line).Single();
+
+        // Assert
+        Assert.Equal("WebFetch", request.ToolName);
+    }
+
+    [Fact]
     public void Parse_WhenAssistantUsesTool_ThenReturnsToolUse()
     {
         // Arrange
@@ -267,7 +280,7 @@ public class ClaudeProtocolTests
              "--permission-prompt-tool", "stdio", "--permission-mode", "default", "--setting-sources", "user",
              "--settings", """{"permissions":{"ask":["Skill"]}}""",
              "--model", "claude-opus-5-5", "--effort", "xhigh", "--append-system-prompt", ClaudeProtocol.PetInstructions,
-             "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,Monitor,ToolSearch,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Workflow,TaskStop,ListAgents,CronList,ReportFindings,Skill"],
+             "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,ToolSearch,EnterPlanMode,ExitPlanMode,Workflow,TaskStop,ListAgents,CronList,ReportFindings,Skill"],
             arguments);
     }
 
@@ -289,6 +302,17 @@ public class ClaudeProtocolTests
 
         // Assert
         Assert.Equal("session-1", arguments[Array.IndexOf(arguments, "--resume") + 1]);
+    }
+
+    [Fact]
+    public void Arguments_WhenModelAndEffortChosen_ThenPassesThem()
+    {
+        // Act
+        var arguments = ClaudeProtocol.Arguments(null, ClaudeSettings.Default with { Model = "claude-sonnet-5", Effort = "low" });
+
+        // Assert
+        Assert.Equal(("claude-sonnet-5", "low"),
+            (arguments[Array.IndexOf(arguments, "--model") + 1], arguments[Array.IndexOf(arguments, "--effort") + 1]));
     }
 
     [Fact]

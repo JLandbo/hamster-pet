@@ -96,6 +96,7 @@ public sealed class ConversationTests : IDisposable
         // Assert
         Assert.Equal([null, "session-1"], claude.Sessions);
         Assert.Equal(["hej", "igen"], restarted.Chats.Select(chat => chat.Prompt));
+        Assert.Equal(("Svar", ChatStatus.Done), (restarted.Chats[0].Answer, restarted.Chats[0].Status));
     }
 
     [Fact]
@@ -168,7 +169,7 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact(Timeout = 5_000)]
-    public async Task AskPermissionAsync_WhenUserDenies_ThenActivityShowsIt()
+    public async Task AskPermissionAsync_WhenUserDenies_ThenCommandsShowIt()
     {
         // Arrange
         claude.Reply = AskingPermission;
@@ -190,6 +191,21 @@ public sealed class ConversationTests : IDisposable
 
         // Act
         conversation.Reset();
+        await conversation.SendAsync("forfra");
+
+        // Assert
+        Assert.Equal([null, null], claude.Sessions);
+        Assert.Single(conversation.Chats);
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenClear_ThenForgetsChatsAndSessionWithoutAskingClaude()
+    {
+        // Arrange
+        await conversation.SendAsync("hej");
+
+        // Act
+        await conversation.SendAsync("/clear");
         await conversation.SendAsync("forfra");
 
         // Assert
@@ -405,11 +421,11 @@ public sealed class ConversationTests : IDisposable
         await conversation.SendAsync("hej");
 
         // Assert
-        Assert.True(conversation.Chats[0].NeedsLogin);
+        Assert.Equal((true, "Du er ikke logget ind i claude."), (conversation.Chats[0].NeedsLogin, conversation.Chats[0].Answer));
     }
 
     [Fact]
-    public async Task UsageReported_WhenTurnEnds_ThenRestoredAfterRestart()
+    public async Task Constructor_WhenUsageWasSaved_ThenRestoresUsage()
     {
         // Arrange
         claude.Reply = (listener, _) =>

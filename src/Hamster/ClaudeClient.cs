@@ -150,6 +150,7 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
             StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
+            Environment = { ["CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"] = "1" },
         })!;
     }
 

@@ -2,11 +2,11 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
@@ -346,15 +346,26 @@ public partial class MainWindow : Window
             ImageAttachment[] images = [.. attachedImages];
             Input.Clear();
             ClearAttachments();
-            LeaveInput();
             ScrollToNewest();
             await conversation.SendAsync(prompt, images);
         }
-        else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && Clipboard.ContainsImage() && Clipboard.GetImage() is { } image)
+        else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && ClipboardImage() is { } image)
         {
             e.Handled = true;
             attachedImages.Add(new ImageAttachment("screenshot.png", "image/png", EncodePng(image)));
             UpdateAttachments();
+        }
+    }
+
+    static BitmapSource? ClipboardImage()
+    {
+        try
+        {
+            return Clipboard.ContainsImage() && !Clipboard.ContainsText() ? Clipboard.GetImage() : null;
+        }
+        catch (ExternalException)
+        {
+            return null;
         }
     }
 

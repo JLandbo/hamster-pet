@@ -57,6 +57,11 @@ public sealed class Conversation : IClaudeListener
     {
         if (IsBusy)
             return;
+        if (prompt == "/clear")
+        {
+            Reset();
+            return;
+        }
         var chat = active = new ChatItem(prompt);
         Chats.Add(chat);
         while (Chats.Count > MaxChats)

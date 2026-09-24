@@ -35,13 +35,13 @@ public sealed class ClaudeClientTests : IDisposable
     public void Settings_WhenChanged_ThenTheNextStartUsesThem()
     {
         // Arrange
-        new ClaudeClient("workspace", "instructions.txt", Store()).Settings = new("claude-sonnet-5", "low", "plan");
+        new ClaudeClient("workspace", "instructions.txt", Store()).Settings = new("claude-sonnet-5", "low", "plan", @"C:\projekt");
 
         // Act
         var restarted = new ClaudeClient("workspace", "instructions.txt", Store());
 
         // Assert
-        Assert.Equal(new ClaudeSettings("claude-sonnet-5", "low", "plan"), restarted.Settings);
+        Assert.Equal(new ClaudeSettings("claude-sonnet-5", "low", "plan", @"C:\projekt"), restarted.Settings);
     }
 
     [Fact]
