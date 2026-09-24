@@ -16,9 +16,9 @@ public sealed class Conversation : IClaudeListener
     readonly HashSet<string> webTools = [];
     readonly Dictionary<string, ChatItem> waiting = [];
     readonly Dictionary<string, ChatItem> toolChats = [];
-    string? sessionId, turnMessage;
+    string? sessionId;
     ChatItem? turn, lastAnswered;
-    bool turnRunning, stopping;
+    bool turnRunning, autonomous, stopping;
 
     public Conversation(IClaudeClient claude, JsonFile<SavedChats> store)
     {
@@ -93,6 +93,7 @@ public sealed class Conversation : IClaudeListener
             if (!waiting.Remove(id))
                 return;
             (chat.Answer, chat.Status) = ($"Kunne ikke tale med claude: {exception.Message}", ChatStatus.Error);
+            MarkAnswered(chat, stopped: false);
             Save();
             Changed?.Invoke();
         }
@@ -103,11 +104,8 @@ public sealed class Conversation : IClaudeListener
         Chats.Clear();
         waiting.Clear();
         toolChats.Clear();
-        webTools.Clear();
-        (turn, turnMessage, lastAnswered, turnRunning, stopping) = (null, null, null, false, false);
-        (sessionId, Cost, BackgroundTasks) = (null, 0, 0);
-        Save();
-        Changed?.Invoke();
+        (lastAnswered, sessionId, Cost, BackgroundTasks, AnsweredAt) = (null, null, 0, 0, default);
+        EndTurn();
         _ = StartAsync();
     }
 
@@ -120,6 +118,8 @@ public sealed class Conversation : IClaudeListener
             claude.Withdraw(id);
         if (id is not null)
             waiting.Remove(id);
+        if (chat == lastAnswered)
+            (lastAnswered, AnsweredAt) = (null, default);
         Remove(chat);
         Save();
         Changed?.Invoke();
@@ -137,7 +137,7 @@ public sealed class Conversation : IClaudeListener
     {
         if (turnRunning)
             return;
-        (turnRunning, turnMessage) = (true, messageId);
+        (turnRunning, autonomous) = (true, messageId is null);
         turn = messageId is null ? null : waiting.GetValueOrDefault(messageId);
         Changed?.Invoke();
     }
@@ -206,7 +206,7 @@ public sealed class Conversation : IClaudeListener
             if (waiting.Remove(id, out var chat))
                 answered.Add(chat);
 
-        var target = answered.FirstOrDefault() ?? turn ?? (Autonomous && result.Text.Length > 0 ? Add(new ChatItem(BackgroundPrompt)) : null);
+        var target = answered.FirstOrDefault() ?? turn ?? (autonomous && result.Text.Length > 0 ? Add(new ChatItem(BackgroundPrompt)) : null);
         if (target is not null)
             Finish(target, result, stopped);
         foreach (var chat in answered.Skip(1))
@@ -222,33 +222,40 @@ public sealed class Conversation : IClaudeListener
         if (result.Cost is { } cost)
             Cost = result.SessionId is not null && result.SessionId == sessionId ? Math.Max(Cost, cost) : cost;
         sessionId = failedToStart ? null : result.SessionId ?? sessionId;
-        (turn, turnMessage, turnRunning, stopping) = (null, null, false, false);
-        if (target is not null)
-            (lastAnswered, AnsweredAt) = (target, DateTime.UtcNow);
-        webTools.Clear();
-        Save();
-        Changed?.Invoke();
+        MarkAnswered(target, stopped);
+        EndTurn();
     }
 
     public void Exited(string error)
     {
         var result = new ClaudeResult(null, error, IsError: true);
+        MarkAnswered(turn ?? waiting.Values.FirstOrDefault(), stopping);
         foreach (var chat in waiting.Values)
             Finish(chat, result, stopping);
         if (turn is { Status: ChatStatus.Busy })
             Finish(turn, result, stopping);
         waiting.Clear();
-        (turn, turnMessage, turnRunning, stopping, BackgroundTasks) = (null, null, false, false, 0);
+        BackgroundTasks = 0;
+        EndTurn();
+    }
+
+    void EndTurn()
+    {
+        (turn, turnRunning, autonomous, stopping) = (null, false, false, false);
         webTools.Clear();
         Save();
         Changed?.Invoke();
     }
 
-    bool Autonomous => turnRunning && turnMessage is null;
+    void MarkAnswered(ChatItem? chat, bool stopped)
+    {
+        if (chat is not null && !stopped && Chats.Contains(chat))
+            (lastAnswered, AnsweredAt) = (chat, DateTime.UtcNow);
+    }
 
     ChatItem? ChatFor(string? toolUseId) =>
         toolUseId is not null && toolChats.TryGetValue(toolUseId, out var chat) && Chats.Contains(chat) ? chat
-        : turn ?? (Autonomous ? turn = Add(new ChatItem(BackgroundPrompt)) : Chats.LastOrDefault());
+        : turn ?? (autonomous ? turn = Add(new ChatItem(BackgroundPrompt)) : Chats.LastOrDefault());
 
     ChatItem Add(ChatItem chat)
     {

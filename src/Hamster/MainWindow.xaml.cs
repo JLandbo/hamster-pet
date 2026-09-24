@@ -97,7 +97,7 @@ public partial class MainWindow : Window
         Busy: conversation.IsBusy,
         Celebrating: conversation.AnsweredWithin(HappyTime, DateTime.UtcNow),
         Failed: conversation.FailedWithin(SadTime, DateTime.UtcNow),
-        Typing: Input.IsKeyboardFocused,
+        Typing: Input.IsKeyboardFocused && Input.Text.Length > 0,
         BackgroundWork: conversation.BackgroundTasks > 0,
         Hovered: Pet.IsMouseOver,
         Awake: Input.IsKeyboardFocused || DateTime.UtcNow - lastActivity < AwakeTime);
