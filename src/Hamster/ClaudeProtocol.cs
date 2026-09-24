@@ -36,18 +36,18 @@ public sealed record Usage(double FiveHour, double SevenDay) : ClaudeEvent;
 
 public static class ClaudeProtocol
 {
-    public const string PetInstructions = "Appen viser selv de kilder, du har søgt i og hentet. Skriv derfor ikke en kilde- eller kildeliste-sektion i svaret. Nævn ikke MCP-servere eller connectors, der mangler godkendelse, medmindre brugeren beder om noget, der kræver dem.";
+    public const string PetInstructions = "Appen viser selv de kilder, du har søgt i og hentet. Skriv derfor ikke en kilde- eller kildeliste-sektion i svaret. Nævn ikke MCP-servere eller connectors, der mangler godkendelse, medmindre brugeren beder om noget, der kræver dem. Når brugeren beder om en påmindelse, så brug CronCreate med en prompt, der beder dig om kun at skrive påmindelsen til brugeren, når den affyres.";
 
     public static string[] Arguments(string? sessionId, ClaudeSettings settings, string instructions = "") =>
     [
         "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
         "--permission-prompt-tool", "stdio", "--permission-mode", settings.PermissionMode,
         "--setting-sources", "user",
-        "--settings", """{"permissions":{"ask":["Skill"]}}""",
+        "--settings", """{"permissions":{"ask":["Skill","CronCreate"]}}""",
         "--model", settings.Model, "--effort", settings.Effort,
         .. (sessionId is null ? Array.Empty<string>() : ["--resume", sessionId]),
         "--append-system-prompt", string.IsNullOrWhiteSpace(instructions) ? PetInstructions : $"{PetInstructions}\n\n{instructions}",
-        "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,ToolSearch,EnterPlanMode,ExitPlanMode,Workflow,TaskStop,ListAgents,CronList,ReportFindings,Skill",
+        "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,ToolSearch,EnterPlanMode,ExitPlanMode,Workflow,TaskStop,ListAgents,CronList,CronCreate,CronDelete,ReportFindings,Skill",
     ];
 
     static readonly string[] DetailFields = ["file_path", "notebook_path", "command", "url", "query", "pattern", "skill", "description"];

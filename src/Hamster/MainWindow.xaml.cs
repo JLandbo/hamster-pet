@@ -11,6 +11,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Threading;
+using Hamster.Actions;
 using Microsoft.Win32;
 
 namespace Hamster;
@@ -23,6 +24,7 @@ public partial class MainWindow : Window
     static readonly TimeSpan GiggleTime = TimeSpan.FromSeconds(1.5);
     static readonly TimeSpan HappyTime = TimeSpan.FromSeconds(4);
     static readonly TimeSpan SadTime = TimeSpan.FromSeconds(4);
+    const double TiredUsage = 0.9;
     static readonly TimeSpan AwakeTime = TimeSpan.FromMinutes(1);
     static readonly TimeSpan MovingTime = TimeSpan.FromMilliseconds(200);
     static readonly TimeSpan ClickTime = TimeSpan.FromMilliseconds(300);
@@ -100,6 +102,7 @@ public partial class MainWindow : Window
         Typing: Input.IsKeyboardFocused && Input.Text.Length > 0,
         HasNews: conversation.AnsweredAt > newsSeenAt,
         BackgroundWork: conversation.BackgroundTasks > 0,
+        Tired: conversation.Usage?.FiveHour >= TiredUsage,
         Hovered: Pet.IsMouseOver,
         Awake: Input.IsKeyboardFocused || DateTime.UtcNow - lastActivity < AwakeTime);
 
@@ -220,7 +223,7 @@ public partial class MainWindow : Window
         CostText.Text = conversation.Cost.ToString("$0.00", CultureInfo.InvariantCulture);
         StopButton.Visibility = conversation.IsBusy ? Visibility.Visible : Visibility.Collapsed;
         TasksText.Text = $"{conversation.BackgroundTasks} kører";
-        TasksText.Visibility = conversation.BackgroundTasks > 0 ? Visibility.Visible : Visibility.Collapsed;
+        TasksText.Visibility = conversation.BackgroundTasks > 0 && !conversation.IsBusy ? Visibility.Visible : Visibility.Collapsed;
         clock.IsEnabled = conversation.IsBusy;
     }
 
@@ -386,6 +389,27 @@ public partial class MainWindow : Window
         catch (ExternalException)
         {
             return null;
+        }
+    }
+
+    async void Snip_Click(object sender, RoutedEventArgs e)
+    {
+        SnipButton.IsEnabled = false;
+        try
+        {
+            if (await ScreenSnip.CaptureAsync() is not { } image)
+                return;
+            attachedImages.Add(new ImageAttachment("screenshot.png", "image/png", EncodePng(image)));
+            UpdateAttachments();
+            FocusInput();
+        }
+        catch (Win32Exception)
+        {
+            MessageBox.Show(this, "Kunne ikke åbne Windows' klippeværktøj.", "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            SnipButton.IsEnabled = true;
         }
     }
 

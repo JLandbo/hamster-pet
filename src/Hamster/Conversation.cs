@@ -7,7 +7,7 @@ namespace Hamster;
 public sealed class Conversation : IClaudeListener
 {
     public const int MaxChats = 100;
-    public const string BackgroundPrompt = "Baggrundsopgave";
+    public const string BackgroundPrompt = "Fra Claude";
     public const string AnsweredAbove = "Besvaret sammen med beskeden ovenfor.";
     public static readonly TimeSpan AnswerShownTime = TimeSpan.FromSeconds(30);
 
@@ -137,8 +137,8 @@ public sealed class Conversation : IClaudeListener
     {
         if (turnRunning)
             return;
-        (turnRunning, autonomous) = (true, messageId is null);
         turn = messageId is null ? null : waiting.GetValueOrDefault(messageId);
+        (turnRunning, autonomous) = (true, turn is null);
         Changed?.Invoke();
     }
 

@@ -378,9 +378,10 @@
                             </Button.ContextMenu>
                         </Button>
                         <Button x:Name="ToggleChats" Grid.Row="1" Grid.Column="1" ToolTip="Vis/skjul chats" Click="ToggleChats_Click" Style="{StaticResource IconButton}" />
-                        <Button x:Name="StopButton" Grid.Row="1" Grid.Column="2" Content="&#xE71A;" ToolTip="Stop" Click="Stop_Click" Style="{StaticResource IconButton}" Visibility="Collapsed" />
+                        <Button x:Name="SnipButton" Grid.Row="1" Grid.Column="2" Content="&#xE8C6;" ToolTip="Klip fra skærmen" Click="Snip_Click" Style="{StaticResource IconButton}" />
+                        <Button x:Name="StopButton" Grid.Row="1" Grid.Column="3" Content="&#xE71A;" ToolTip="Stop" Click="Stop_Click" Style="{StaticResource IconButton}" Visibility="Collapsed" />
                         <TextBlock x:Name="TasksText" Grid.Row="1" Grid.Column="3" ToolTip="Baggrundsopgaver, der kører" Foreground="{StaticResource Muted}"
-                            FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6,0" Visibility="Collapsed" />
+                            FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
                     </Grid>
                 </StackPanel>
             </Border>

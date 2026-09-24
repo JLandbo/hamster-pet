@@ -1,6 +1,6 @@
 namespace Hamster;
 
-public enum Mood { Sleep, Awake, Curious, Spin, Research, Happy, Alert, Giggle, Run, Dangle, Dance, Sad, Listen, News }
+public enum Mood { Sleep, Awake, Curious, Spin, Research, Happy, Alert, Giggle, Run, Dangle, Dance, Sad, Listen, News, Tired }
 
 public static class MoodTransition
 {
@@ -23,6 +23,7 @@ public readonly record struct PetStatus(
     bool Typing = false,
     bool HasNews = false,
     bool BackgroundWork = false,
+    bool Tired = false,
     bool Hovered = false,
     bool Awake = false)
 {
@@ -39,6 +40,7 @@ public readonly record struct PetStatus(
         { Typing: true } => Mood.Listen,
         { HasNews: true } => Mood.News,
         { BackgroundWork: true } => Mood.Dance,
+        { Tired: true, Hovered: true } or { Tired: true, Awake: true } => Mood.Tired,
         { Hovered: true } => Mood.Curious,
         { Awake: true } => Mood.Awake,
         _ => Mood.Sleep,

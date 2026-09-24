@@ -581,19 +581,17 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
-    public async Task ResultReceived_WhenADeletedMessageRunsAnyway_ThenAddsNoChat()
+    public async Task ResultReceived_WhenAReminderFires_ThenShowsItInANewChat()
     {
         // Arrange
-        claude.Reply = Silent;
-        await conversation.SendAsync("slet mig");
-        conversation.Delete(conversation.Chats[0]);
-        claude.Listener.TurnStarted(claude.Ids[0]);
+        await conversation.SendAsync("hej");
+        claude.Listener.TurnStarted("reminder-id");
 
         // Act
-        claude.Listener.ResultReceived(Answered with { Answers = [claude.Ids[0]] });
+        claude.Listener.ResultReceived(new ClaudeResult("session-1", "Husk at drikke vand!", IsError: false));
 
         // Assert
-        Assert.Empty(conversation.Chats);
+        Assert.Equal((Conversation.BackgroundPrompt, "Husk at drikke vand!"), (conversation.Chats[^1].Prompt, conversation.Chats[^1].Answer));
     }
 
     [Fact]

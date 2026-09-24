@@ -280,9 +280,9 @@ public class ClaudeProtocolTests
         Assert.Equal(
             ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
              "--permission-prompt-tool", "stdio", "--permission-mode", "default", "--setting-sources", "user",
-             "--settings", """{"permissions":{"ask":["Skill"]}}""",
+             "--settings", """{"permissions":{"ask":["Skill","CronCreate"]}}""",
              "--model", "claude-opus-5-5", "--effort", "xhigh", "--append-system-prompt", ClaudeProtocol.PetInstructions,
-             "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,ToolSearch,EnterPlanMode,ExitPlanMode,Workflow,TaskStop,ListAgents,CronList,ReportFindings,Skill"],
+             "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,ToolSearch,EnterPlanMode,ExitPlanMode,Workflow,TaskStop,ListAgents,CronList,CronCreate,CronDelete,ReportFindings,Skill"],
             arguments);
     }
 
