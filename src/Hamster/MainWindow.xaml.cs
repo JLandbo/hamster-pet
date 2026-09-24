@@ -184,7 +184,7 @@ public partial class MainWindow : Window
     void Root_SizeChanged(object sender, SizeChangedEventArgs e) => FitChatHeight();
 
     void FitChatHeight() =>
-        ChatScroll.MaxHeight = Math.Clamp(Math.Min(placement.Bottom - SystemParameters.WorkArea.Top, ActualHeight) - (Root.ActualHeight - ChatScroll.ActualHeight),
+        ChatScroll.Height = Math.Clamp(Math.Min(placement.Bottom - SystemParameters.WorkArea.Top, ActualHeight) - (Root.ActualHeight - ChatScroll.ActualHeight),
             0, placement.ChatHeight);
 
     void Window_Closed(object sender, EventArgs e) => claude.End();
@@ -289,7 +289,7 @@ public partial class MainWindow : Window
     void ResizeGrip_DragStarted(object sender, DragStartedEventArgs e)
     {
         beforeFullScreen = null;
-        resizeStart = (Mouse.GetPosition(this), Root.ActualWidth, ChatScroll.MaxHeight);
+        resizeStart = (Mouse.GetPosition(this), Root.ActualWidth, ChatScroll.Height);
     }
 
     void ResizeGrip_DragDelta(object sender, DragDeltaEventArgs e)

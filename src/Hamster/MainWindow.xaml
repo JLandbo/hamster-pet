@@ -183,7 +183,6 @@
 
         <Style x:Key="ResizeGrip" TargetType="Thumb">
             <Setter Property="Cursor" Value="SizeNWSE" />
-            <Setter Property="Opacity" Value="0" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Thumb">
@@ -193,20 +192,12 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
-                    <Setter Property="Opacity" Value="1" />
-                </DataTrigger>
-                <Trigger Property="IsDragging" Value="True">
-                    <Setter Property="Opacity" Value="1" />
-                </Trigger>
-            </Style.Triggers>
         </Style>
     </Window.Resources>
 
     <StackPanel x:Name="Root" HorizontalAlignment="Right" VerticalAlignment="Bottom" SizeChanged="Root_SizeChanged">
         <Grid x:Name="ChatArea">
-            <ScrollViewer x:Name="ChatScroll" Background="#01000000" Focusable="False" Margin="0,10,0,0"
+            <ScrollViewer x:Name="ChatScroll" Focusable="False" Margin="0,10,0,0"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                           PreviewMouseWheel="ChatScroll_PreviewMouseWheel">
                 <ScrollViewer.Template>
@@ -219,7 +210,7 @@
                         </Grid>
                     </ControlTemplate>
                 </ScrollViewer.Template>
-                <ItemsControl x:Name="ChatList" Margin="8,0">
+                <ItemsControl x:Name="ChatList" Padding="8,0" VerticalAlignment="Bottom" Background="#01000000">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type local:ChatItem}">
                             <Border x:Name="Bubble" Margin="0,0,0,5" Padding="14,10" CornerRadius="14"
