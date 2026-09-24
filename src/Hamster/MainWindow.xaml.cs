@@ -226,7 +226,7 @@ public partial class MainWindow : Window
 
     void UpdateNews()
     {
-        if (IsMouseOver)
+        if (IsMouseOver || Input.IsKeyboardFocused)
             newsSeenAt = DateTime.UtcNow;
     }
 
@@ -349,6 +349,7 @@ public partial class MainWindow : Window
 
     void Input_KeyDown(object sender, KeyEventArgs e)
     {
+        UpdateNews();
         Touch();
         if (e.Key == Key.Escape)
             LeaveInput();
