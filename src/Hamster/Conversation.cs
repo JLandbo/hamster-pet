@@ -67,12 +67,10 @@ public sealed class Conversation : IClaudeListener
         {
             var resetsAtStart = resets;
             var result = await claude.SendAsync(prompt, images ?? [], sessionId, this, cancellation.Token);
-            // An answer that arrived just before Stop is kept.
             var stopped = result.IsError && cancellation.IsCancellationRequested;
             chat.NeedsLogin = !stopped && result.NeedsLogin;
             chat.Answer = stopped ? "Afbrudt." : chat.NeedsLogin ? "Du er ikke logget ind i claude." : result.Text;
             chat.Status = result.IsError ? ChatStatus.Error : ChatStatus.Done;
-            // After "Ny samtale" the turn's session and cost belong to the thrown-away conversation.
             if (resetsAtStart == resets)
             {
                 sessionId = result.SessionId ?? (stopped ? sessionId : null);
@@ -155,6 +153,5 @@ public sealed class Conversation : IClaudeListener
         Changed?.Invoke();
     }
 
-    // Saved half-way, the running chat would come back chewing forever.
     void Save() => store.Save(new SavedChats(sessionId, [.. Chats.Where(chat => chat != active).Select(chat => chat.ToRecord())], Cost, Usage));
 }

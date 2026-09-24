@@ -204,7 +204,6 @@ public sealed class ClaudeClientTests : IDisposable
             Question = cancellationToken;
             if (allow is { } answer)
                 return answer;
-            // Cancelled inline (unlike Task.Delay), so whatever happens to a cancelled question happens before ConverseAsync returns.
             var never = new TaskCompletionSource<bool>();
             using var registration = cancellationToken.Register(() => never.TrySetCanceled(cancellationToken));
             return await never.Task;

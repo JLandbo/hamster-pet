@@ -16,7 +16,6 @@ public sealed class MarkdownConverter : IValueConverter
     static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UsePipeTables().UseAutoLinks().Build();
     public static readonly FontFamily CodeFont = new("Cascadia Mono, Consolas");
     static readonly Thickness Spacing = new(0, 8, 0, 0);
-    // Resource keys from MainWindow.xaml, resolved once the document is shown.
     const string Shade = "Edge";
     const string Emphasis = "Text";
 
@@ -94,7 +93,6 @@ public sealed class MarkdownConverter : IValueConverter
             rows.Rows.Add(tableRow);
         }
         var table = new Table { CellSpacing = 0, RowGroups = { rows } };
-        // Flow tables can't size columns to their content, so the width is shared by each column's longest word.
         var columns = rows.Rows.SelectMany(row => row.Cells.Index()).GroupBy(cell => cell.Index, cell => LongestWord(cell.Item));
         foreach (var column in columns)
             table.Columns.Add(new TableColumn { Width = new(Math.Max(1, column.Max()), GridUnitType.Star) });

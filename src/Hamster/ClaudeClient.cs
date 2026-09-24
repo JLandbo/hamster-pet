@@ -37,7 +37,6 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
     {
         var instructions = File.Exists(instructionsFile) ? await File.ReadAllTextAsync(instructionsFile, CancellationToken.None) : "";
         using var process = Start(sessionId, instructions);
-        // Killed only if it doesn't stop when asked to: killing right away would lose what the stopped turn cost.
         using var killer = new CancellationTokenSource();
         using var kill = killer.Token.Register(() => TryKill(process));
         using var stop = cancellationToken.Register(() => killer.CancelAfter(StopTimeout));
@@ -50,7 +49,6 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
         }
         finally
         {
-            // claude keeps waiting for input until stdin closes, also when something above failed.
             process.StandardInput.Close();
         }
         await process.WaitForExitAsync();
@@ -66,12 +64,10 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
     {
         input = TextWriter.Synchronized(input);
         var pending = new ConcurrentDictionary<string, CancellationTokenSource>();
-        // Off the UI thread: with images the message is large, and the write blocks until claude reads it.
         await Task.Run(() => Send(input, ClaudeProtocol.UserMessage(prompt, images)));
         using var interrupt = cancellationToken.Register(() => Interrupt(input));
         try
         {
-            // No token: after Stop, claude's result still comes and carries the turn's cost.
             while (await output.ReadLineAsync() is { } line)
             {
                 foreach (var message in ClaudeProtocol.Parse(line))
@@ -86,7 +82,6 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
                             break;
                         case PermissionRequest request:
                             var withdrawal = pending[request.RequestId] = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                            // Not awaited: Claude may withdraw the request while the user is still deciding.
                             _ = AnswerAsync(request, listener, input, pending, withdrawal.Token);
                             break;
                         case CancelRequest cancel when pending.TryRemove(cancel.RequestId, out var withdrawn):
@@ -120,7 +115,6 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
         }
         catch (Exception exception) when (exception is OperationCanceledException or IOException)
         {
-            // Withdrawn, cancelled, or claude already exited - nobody is waiting for the answer.
         }
     }
 
@@ -132,11 +126,9 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
         }
         catch (IOException)
         {
-            // claude already exited.
         }
     }
 
-    // One Write per message, so the synchronized writer never interleaves two messages.
     static void Send(TextWriter input, string json)
     {
         input.Write(json + '\n');
@@ -155,7 +147,6 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            // Encoding.UTF8 would prefix stdin with a BOM and break claude's first JSON line.
             StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
@@ -170,7 +161,6 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
         }
         catch (Exception exception) when (exception is InvalidOperationException or Win32Exception or AggregateException)
         {
-            // Already exited.
         }
     }
 }

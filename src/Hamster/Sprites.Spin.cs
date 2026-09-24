@@ -2,7 +2,6 @@ namespace Hamster;
 
 public static partial class Sprites
 {
-    // A method rather than a field, because static initializers across partial files run in no guaranteed order.
     static IEnumerable<string[]> SpinBodies() =>
         SpinSource.ReplaceLineEndings("\n").Split("\n\n").Select(frame => frame.Split('\n')).Prepend(Body);
 

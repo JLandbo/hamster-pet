@@ -21,13 +21,11 @@ public sealed record PermissionRequest(string RequestId, string ToolName, JsonOb
 
 public sealed record CancelRequest(string RequestId) : ClaudeEvent;
 
-/// <param name="Cost">Claude's estimate in USD, accumulated over the whole session.</param>
 public sealed record ClaudeResult(string? SessionId, string Text, bool IsError, decimal? Cost = null) : ClaudeEvent
 {
     public bool NeedsLogin => IsError && Text.Contains("/login");
 }
 
-/// <summary>The used share of the five-hour and weekly limits, from 0 to 1.</summary>
 public sealed record Usage(double FiveHour, double SevenDay) : ClaudeEvent;
 
 public static class ClaudeProtocol
@@ -38,14 +36,11 @@ public static class ClaudeProtocol
     [
         "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
         "--permission-prompt-tool", "stdio", "--permission-mode", settings.PermissionMode,
-        // Settings written into the workspace must not be able to silence the permission bubbles.
         "--setting-sources", "user",
-        // A skill may use its allowed-tools without asking, so calling the skill has to ask first.
         "--settings", """{"permissions":{"ask":["Skill"]}}""",
         "--model", settings.Model, "--effort", settings.Effort,
         .. (sessionId is null ? Array.Empty<string>() : ["--resume", sessionId]),
         "--append-system-prompt", string.IsNullOrWhiteSpace(instructions) ? PetInstructions : $"{PetInstructions}\n\n{instructions}",
-        // No tool that acts without asking, and no AskUserQuestion, which the pet has no UI for.
         "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,Monitor,ToolSearch,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Workflow,TaskStop,ListAgents,CronList,ReportFindings,Skill",
     ];
 

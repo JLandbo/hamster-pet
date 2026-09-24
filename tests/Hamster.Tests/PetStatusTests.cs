@@ -2,7 +2,6 @@ namespace Hamster.Tests;
 
 public class PetStatusTests
 {
-    // Each case also sets every lower-priority flag, so the whole priority order is proven.
     public static TheoryData<PetStatus, Mood> Cases()
     {
         var awake = new PetStatus(Awake: true);

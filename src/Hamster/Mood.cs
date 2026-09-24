@@ -4,10 +4,6 @@ public enum Mood { Sleep, Awake, Curious, Spin, Research, Happy, Alert, Giggle, 
 
 public static class MoodTransition
 {
-    /// <summary>
-    /// The roll only ends seamlessly back on its feet, so it finishes its cycle before another mood takes over,
-    /// unless the user grabs the hamster.
-    /// </summary>
     public static Mood Next(Mood current, int framesShown, Mood wanted) =>
         current == Mood.Spin && wanted != current && wanted is not (Mood.Dangle or Mood.Run)
             && framesShown % Sprites.Animations[Mood.Spin].Length != 0

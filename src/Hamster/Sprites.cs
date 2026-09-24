@@ -71,7 +71,6 @@ public static partial class Sprites
         ".kkkk.....kkkk",
     ], 3, 5);
 
-    // Declared after the sprite data above, because static initializers run in textual order.
     public static IReadOnlyDictionary<Mood, Frame[]> Animations { get; } = BuildAnimations();
 
     static Dictionary<Mood, Frame[]> BuildAnimations()

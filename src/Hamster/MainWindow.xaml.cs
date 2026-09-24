@@ -25,7 +25,8 @@ public partial class MainWindow : Window
     static readonly TimeSpan AwakeTime = TimeSpan.FromMinutes(1);
     static readonly TimeSpan MovingTime = TimeSpan.FromMilliseconds(200);
     static readonly TimeSpan ClickTime = TimeSpan.FromMilliseconds(300);
-    static readonly TimeSpan IdleTime = TimeSpan.FromSeconds(60);
+    static readonly TimeSpan ChatsIdleTime = TimeSpan.FromSeconds(60);
+    static readonly TimeSpan ToolbarIdleTime = TimeSpan.FromSeconds(2);
     const string CollapseIcon = "\uE70D";
     const string ExpandIcon = "\uE70E";
 
@@ -42,9 +43,9 @@ public partial class MainWindow : Window
 
     Mood mood;
     int frame;
-    bool pressed, dragging, chatsExpanded = true, uiShown = true;
+    bool pressed, dragging, chatsExpanded = true, chatsShown = true, toolbarShown = true;
     Point dragStart;
-    DateTime pressedAt, giggleUntil, lastMove, lastActivity = DateTime.UtcNow;
+    DateTime pressedAt, giggleUntil, lastMove, lastActivity = DateTime.UtcNow, lastTouch = DateTime.UtcNow;
     Placement placement;
     Placement? beforeFullScreen;
     (Point Mouse, double Width, double ChatHeight) resizeStart;
@@ -54,7 +55,6 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        // Resizing a transparent window makes everything flicker, so the window covers the screen and only its content changes size.
         (Width, Height) = (SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
         var data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Hamster");
         instructionsFile = Path.Combine(data, "instructions.txt");
@@ -79,7 +79,6 @@ public partial class MainWindow : Window
             foreach (var chat in conversation.Chats)
                 chat.RefreshElapsed();
         };
-        // Before Loaded: without a frame the hamster has no size when the window is placed.
         Animate();
     }
 
@@ -94,7 +93,7 @@ public partial class MainWindow : Window
         Busy: conversation.IsBusy,
         Celebrating: conversation.AnsweredWithin(HappyTime, DateTime.UtcNow),
         Hovered: Pet.IsMouseOver,
-        Awake: InputBox.Visibility == Visibility.Visible || DateTime.UtcNow - lastActivity < AwakeTime);
+        Awake: Input.IsKeyboardFocused || DateTime.UtcNow - lastActivity < AwakeTime);
 
     void Animate()
     {
@@ -111,24 +110,31 @@ public partial class MainWindow : Window
 
     void Touch()
     {
-        lastActivity = DateTime.UtcNow;
+        lastTouch = lastActivity = DateTime.UtcNow;
         FadeWhenIdle();
     }
 
+    bool MenuOpen => new[] { ModelButton, EffortButton, ModeButton, MoreButton }.Any(button => button.ContextMenu.IsOpen);
+
     void FadeWhenIdle()
     {
-        var show = InputBox.Visibility == Visibility.Visible || DateTime.UtcNow - lastActivity < IdleTime;
-        if (show == uiShown)
-            return;
-        uiShown = show;
-        var duration = TimeSpan.FromMilliseconds(show ? 200 : 600);
-        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
-        var fade = new DoubleAnimation(show ? 1 : 0, duration);
-        Toolbar.BeginAnimation(OpacityProperty, fade);
-        ChatArea.BeginAnimation(OpacityProperty, fade);
-        IdleOffset.BeginAnimation(TranslateTransform.YProperty,
-            new DoubleAnimation(show ? 0 : Toolbar.ActualHeight + Toolbar.Margin.Top, duration) { EasingFunction = ease });
+        var now = DateTime.UtcNow;
+        var typing = Input.IsKeyboardFocused;
+        if ((typing || now - lastActivity < ChatsIdleTime) != chatsShown)
+        {
+            chatsShown = !chatsShown;
+            Fade(ChatArea, chatsShown);
+        }
+        if ((typing || Input.Text.Length > 0 || IsMouseOver || MenuOpen || now - lastTouch < ToolbarIdleTime) != toolbarShown)
+        {
+            toolbarShown = !toolbarShown;
+            Fade(Toolbar, toolbarShown);
+        }
     }
+
+    static TimeSpan FadeTime(bool show) => TimeSpan.FromMilliseconds(show ? 200 : 600);
+
+    static void Fade(UIElement element, bool show) => element.BeginAnimation(OpacityProperty, new DoubleAnimation(show ? 1 : 0, FadeTime(show)));
 
     void Window_Loaded(object sender, RoutedEventArgs e)
     {
@@ -159,11 +165,10 @@ public partial class MainWindow : Window
         FitChatHeight();
     }
 
-    // Narrower than its buttons, the toolbar would overlap them.
     double NarrowestWidth()
     {
-        Toolbar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        return Toolbar.DesiredSize.Width;
+        Buttons.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return Root.ActualWidth - Buttons.ActualWidth + Buttons.DesiredSize.Width;
     }
 
     void Place()
@@ -174,7 +179,6 @@ public partial class MainWindow : Window
 
     void Root_SizeChanged(object sender, SizeChangedEventArgs e) => FitChatHeight();
 
-    // Up to the top of the screen, and never above the window's own top, which would cut off the chats and the resize grip.
     void FitChatHeight() =>
         ChatScroll.MaxHeight = Math.Clamp(Math.Min(placement.Bottom - SystemParameters.WorkArea.Top, ActualHeight) - (Root.ActualHeight - ChatScroll.ActualHeight),
             0, placement.ChatHeight);
@@ -190,7 +194,8 @@ public partial class MainWindow : Window
 
     void Conversation_Changed()
     {
-        Touch();
+        lastActivity = DateTime.UtcNow;
+        FadeWhenIdle();
         var following = IsAtBottom;
         UpdateToolbar();
         UpdateChatList();
@@ -246,12 +251,10 @@ public partial class MainWindow : Window
                 return;
             dragging = true;
         }
-        // Moving the window under a still cursor raises MouseMove too; only real movement counts as running.
         if (offset.Length < 1)
             return;
         placement = placement with { Right = placement.Right + offset.X, Bottom = placement.Bottom + offset.Y };
         Place();
-        // The sprite faces left, so mirror it when running right.
         if (Math.Abs(offset.X) >= 1)
             Facing.ScaleX = offset.X > 0 ? -1 : 1;
         lastMove = DateTime.UtcNow;
@@ -309,55 +312,50 @@ public partial class MainWindow : Window
         ScrollToNewest();
     }
 
-    void Write_Click(object sender, RoutedEventArgs e)
+    void FocusInput()
     {
-        if (InputBox.Visibility == Visibility.Visible)
-            HideInput();
-        else
-            ShowInput();
-    }
-
-    void ShowInput()
-    {
-        InputBox.Visibility = Visibility.Visible;
         Activate();
         Keyboard.Focus(Input);
         Touch();
         Animate();
     }
 
-    void HideInput()
+    void LeaveInput()
     {
-        InputBox.Visibility = Visibility.Hidden;
+        FocusManager.SetFocusedElement(this, null);
+        Keyboard.ClearFocus();
         Touch();
         Animate();
     }
 
-    async void Input_KeyDown(object sender, KeyEventArgs e)
+    void Input_KeyDown(object sender, KeyEventArgs e)
     {
         Touch();
         if (e.Key == Key.Escape)
-            HideInput();
-        else if (e.Key == Key.Enter && (Input.Text.Trim().Length > 0 || attachedFiles.Count + attachedImages.Count > 0) && !conversation.IsBusy)
+            LeaveInput();
+    }
+
+    async void Input_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && Keyboard.Modifiers != ModifierKeys.Shift)
         {
             e.Handled = true;
+            if ((Input.Text.Trim().Length == 0 && attachedFiles.Count + attachedImages.Count == 0) || conversation.IsBusy)
+                return;
             var prompt = Conversation.WithAttachments(Input.Text.Trim(), attachedFiles, attachedImages);
             ImageAttachment[] images = [.. attachedImages];
             Input.Clear();
             ClearAttachments();
-            HideInput();
+            LeaveInput();
             ScrollToNewest();
             await conversation.SendAsync(prompt, images);
         }
-    }
-
-    void Input_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.V || Keyboard.Modifiers != ModifierKeys.Control || !Clipboard.ContainsImage() || Clipboard.GetImage() is not { } image)
-            return;
-        e.Handled = true;
-        attachedImages.Add(new ImageAttachment("screenshot.png", "image/png", EncodePng(image)));
-        UpdateAttachments();
+        else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && Clipboard.ContainsImage() && Clipboard.GetImage() is { } image)
+        {
+            e.Handled = true;
+            attachedImages.Add(new ImageAttachment("screenshot.png", "image/png", EncodePng(image)));
+            UpdateAttachments();
+        }
     }
 
     static byte[] EncodePng(BitmapSource image)
@@ -391,7 +389,7 @@ public partial class MainWindow : Window
                 attachedFiles.Add(file);
         }
         UpdateAttachments();
-        ShowInput();
+        FocusInput();
     }
 
     void ClearAttachments_Click(object sender, RoutedEventArgs e) => ClearAttachments();
@@ -428,7 +426,6 @@ public partial class MainWindow : Window
 
     void ChatScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        // The answer viewers would otherwise swallow the wheel.
         ChatScroll.ScrollToVerticalOffset(ChatScroll.VerticalOffset - e.Delta / 3.0);
         e.Handled = true;
     }
@@ -510,7 +507,6 @@ public partial class MainWindow : Window
         choices.IsOpen = true;
     }
 
-    // The click that closes an open menu also reaches its button, which would open the menu again straight away.
     void Choices_Closed(object sender, RoutedEventArgs e) =>
         closedByItsButton = ((ContextMenu)sender).PlacementTarget is Button button && Mouse.LeftButton == MouseButtonState.Pressed
             && new Rect(button.RenderSize).Contains(Mouse.GetPosition(button)) ? button : null;
@@ -544,7 +540,6 @@ public partial class MainWindow : Window
 
     void Deny_Click(object sender, RoutedEventArgs e) => ((UserRequest)((FrameworkElement)sender).DataContext).Respond(false);
 
-    // Clicking an answer focuses it, and WPF would then scroll the whole answer into view under the cursor.
     void Answer_RequestBringIntoView(object sender, RequestBringIntoViewEventArgs e)
     {
         if (e.TargetObject == sender)

@@ -33,7 +33,6 @@ public sealed class JsonFile<T>(string path, T empty)
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            // Moved into place, so a crash mid-write can't leave half a file.
             var temporary = path + ".tmp";
             using (var file = File.Create(temporary))
             {

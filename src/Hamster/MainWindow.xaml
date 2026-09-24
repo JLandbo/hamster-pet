@@ -21,7 +21,6 @@
         <DropShadowEffect x:Key="Shadow" BlurRadius="12" ShadowDepth="2" Opacity="0.35" />
         <BooleanToVisibilityConverter x:Key="VisibleWhenTrue" />
         <local:MarkdownConverter x:Key="Markdown" />
-        <!-- The theme would give flow documents Georgia, justified text and page padding. -->
         <Style TargetType="FlowDocument">
             <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
             <Setter Property="FontSize" Value="13" />
@@ -34,7 +33,6 @@
 
         <Style TargetType="ScrollBar">
             <Setter Property="Width" Value="6" />
-            <!-- The Windows theme gives scrollbars a 17 px minimum, which would cover the edge of the bubbles. -->
             <Setter Property="MinWidth" Value="0" />
             <Setter Property="Opacity" Value="0" />
             <Setter Property="Template">
@@ -207,114 +205,191 @@
     </Window.Resources>
 
     <StackPanel x:Name="Root" HorizontalAlignment="Right" VerticalAlignment="Bottom" SizeChanged="Root_SizeChanged">
-        <StackPanel>
-            <StackPanel.RenderTransform>
-                <TranslateTransform x:Name="IdleOffset" />
-            </StackPanel.RenderTransform>
-            <Grid x:Name="ChatArea">
-                <ScrollViewer x:Name="ChatScroll" Background="#01000000" Focusable="False" Margin="0,10,0,0"
-                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                              PreviewMouseWheel="ChatScroll_PreviewMouseWheel">
-                    <!-- The system template reserves a 17 px column for the scrollbar; here the slim one overlays the margin instead,
-                         so the bubbles are exactly as wide as the toolbar. -->
-                    <ScrollViewer.Template>
-                        <ControlTemplate TargetType="ScrollViewer">
-                            <!-- The almost invisible background catches the mouse between the bubbles; without it the wheel goes to the window behind. -->
-                            <Grid Background="{TemplateBinding Background}">
-                                <ScrollContentPresenter />
-                                <ScrollBar x:Name="PART_VerticalScrollBar" HorizontalAlignment="Right"
-                                           Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}"
-                                           Value="{TemplateBinding VerticalOffset}" Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" />
-                            </Grid>
-                        </ControlTemplate>
-                    </ScrollViewer.Template>
-                    <ItemsControl x:Name="ChatList" Margin="8,0">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type local:ChatItem}">
-                                <Border x:Name="Bubble" Margin="0,0,0,5" Padding="14,10" CornerRadius="14"
-                                        Background="{StaticResource Surface}" BorderBrush="{StaticResource Edge}" BorderThickness="1">
-                                    <StackPanel>
-                                        <DockPanel>
-                                            <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="Slet besked" Click="DeleteChat_Click"
-                                                    Style="{StaticResource SmallIconButton}" Margin="6,-2,-6,0" VerticalAlignment="Top" />
-                                            <Ellipse x:Name="Dot" DockPanel.Dock="Left" Width="8" Height="8" Margin="0,6,8,0"
-                                                     VerticalAlignment="Top" Fill="#6FA8FF" />
-                                            <TextBlock Text="{Binding Prompt}" Foreground="{StaticResource Text}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                        </DockPanel>
-                                        <ItemsControl ItemsSource="{Binding ToolGroups}" Margin="16,0,0,0">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate DataType="{x:Type local:ToolGroup}">
-                                                    <StackPanel x:Name="Group" Margin="0,4,0,0">
-                                                        <ToggleButton x:Name="Fold" Style="{StaticResource FoldButton}">
-                                                            <TextBlock><Run Text="{Binding Title, Mode=OneTime}" /> (<Run Text="{Binding Lines.Count, Mode=OneWay}" />)</TextBlock>
-                                                        </ToggleButton>
-                                                        <ItemsControl ItemsSource="{Binding Lines}" Margin="14,0,0,0"
-                                                                      Visibility="{Binding IsChecked, ElementName=Fold, Converter={StaticResource VisibleWhenTrue}}">
-                                                            <ItemsControl.ItemTemplate>
-                                                                <DataTemplate>
-                                                                    <TextBlock Text="{Binding}" ToolTip="{Binding}" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"
-                                                                               Foreground="{StaticResource Muted}" FontFamily="{x:Static local:MarkdownConverter.CodeFont}" FontSize="11" />
-                                                                </DataTemplate>
-                                                            </ItemsControl.ItemTemplate>
-                                                        </ItemsControl>
+        <Grid x:Name="ChatArea">
+            <ScrollViewer x:Name="ChatScroll" Background="#01000000" Focusable="False" Margin="0,10,0,0"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          PreviewMouseWheel="ChatScroll_PreviewMouseWheel">
+                <ScrollViewer.Template>
+                    <ControlTemplate TargetType="ScrollViewer">
+                        <Grid Background="{TemplateBinding Background}">
+                            <ScrollContentPresenter />
+                            <ScrollBar x:Name="PART_VerticalScrollBar" HorizontalAlignment="Right"
+                                       Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}"
+                                       Value="{TemplateBinding VerticalOffset}" Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" />
+                        </Grid>
+                    </ControlTemplate>
+                </ScrollViewer.Template>
+                <ItemsControl x:Name="ChatList" Margin="8,0">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type local:ChatItem}">
+                            <Border x:Name="Bubble" Margin="0,0,0,5" Padding="14,10" CornerRadius="14"
+                                    Background="{StaticResource Surface}" BorderBrush="{StaticResource Edge}" BorderThickness="1">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="Slet besked" Click="DeleteChat_Click"
+                                                Style="{StaticResource SmallIconButton}" Margin="6,-2,-6,0" VerticalAlignment="Top" />
+                                        <Ellipse x:Name="Dot" DockPanel.Dock="Left" Width="8" Height="8" Margin="0,6,8,0"
+                                                 VerticalAlignment="Top" Fill="#6FA8FF" />
+                                        <TextBlock Text="{Binding Prompt}" Foreground="{StaticResource Text}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    </DockPanel>
+                                    <ItemsControl ItemsSource="{Binding ToolGroups}" Margin="16,0,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type local:ToolGroup}">
+                                                <StackPanel x:Name="Group" Margin="0,4,0,0">
+                                                    <ToggleButton x:Name="Fold" Style="{StaticResource FoldButton}">
+                                                        <TextBlock><Run Text="{Binding Title, Mode=OneTime}" /> (<Run Text="{Binding Lines.Count, Mode=OneWay}" />)</TextBlock>
+                                                    </ToggleButton>
+                                                    <ItemsControl ItemsSource="{Binding Lines}" Margin="14,0,0,0"
+                                                                  Visibility="{Binding IsChecked, ElementName=Fold, Converter={StaticResource VisibleWhenTrue}}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding}" ToolTip="{Binding}" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"
+                                                                           Foreground="{StaticResource Muted}" FontFamily="{x:Static local:MarkdownConverter.CodeFont}" FontSize="11" />
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding Lines.Count}" Value="0">
+                                                        <Setter TargetName="Group" Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <FlowDocumentScrollViewer Document="{Binding DisplayAnswer, Converter={StaticResource Markdown}}" Margin="16,4,0,0"
+                                                              VerticalScrollBarVisibility="Disabled" FocusVisualStyle="{x:Null}"
+                                                              RequestBringIntoView="Answer_RequestBringIntoView" Hyperlink.RequestNavigate="Link_RequestNavigate"
+                                                              Foreground="{StaticResource Muted}" />
+                                    <Button Content="Log ind" Click="Login_Click" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Margin="16,8,0,0"
+                                            Visibility="{Binding NeedsLogin, Converter={StaticResource VisibleWhenTrue}}" />
+                                    <ItemsControl ItemsSource="{Binding Requests}" Margin="16,0,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type local:UserRequest}">
+                                                <StackPanel Margin="0,10,0,0">
+                                                    <TextBlock Text="Kræver din tilladelse" Foreground="{StaticResource Attention}" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding Title}" Foreground="{StaticResource Text}" Margin="0,4,0,2" TextWrapping="Wrap" />
+                                                    <TextBlock Text="{Binding Details}" Foreground="{StaticResource Muted}" TextWrapping="Wrap"
+                                                               FontFamily="{x:Static local:MarkdownConverter.CodeFont}" FontSize="12" />
+                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                                                        <Button Content="Afvis" Click="Deny_Click" Style="{StaticResource PillButton}" />
+                                                        <Button Content="Tillad" Click="Allow_Click" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" />
                                                     </StackPanel>
-                                                    <DataTemplate.Triggers>
-                                                        <DataTrigger Binding="{Binding Lines.Count}" Value="0">
-                                                            <Setter TargetName="Group" Property="Visibility" Value="Collapsed" />
-                                                        </DataTrigger>
-                                                    </DataTemplate.Triggers>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                        <FlowDocumentScrollViewer Document="{Binding DisplayAnswer, Converter={StaticResource Markdown}}" Margin="16,4,0,0"
-                                                                  VerticalScrollBarVisibility="Disabled" FocusVisualStyle="{x:Null}"
-                                                                  RequestBringIntoView="Answer_RequestBringIntoView" Hyperlink.RequestNavigate="Link_RequestNavigate"
-                                                                  Foreground="{StaticResource Muted}" />
-                                        <Button Content="Log ind" Click="Login_Click" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Margin="16,8,0,0"
-                                                Visibility="{Binding NeedsLogin, Converter={StaticResource VisibleWhenTrue}}" />
-                                        <ItemsControl ItemsSource="{Binding Requests}" Margin="16,0,0,0">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate DataType="{x:Type local:UserRequest}">
-                                                    <StackPanel Margin="0,10,0,0">
-                                                        <TextBlock Text="Kræver din tilladelse" Foreground="{StaticResource Attention}" FontWeight="SemiBold" />
-                                                        <TextBlock Text="{Binding Title}" Foreground="{StaticResource Text}" Margin="0,4,0,2" TextWrapping="Wrap" />
-                                                        <TextBlock Text="{Binding Details}" Foreground="{StaticResource Muted}" TextWrapping="Wrap"
-                                                                   FontFamily="{x:Static local:MarkdownConverter.CodeFont}" FontSize="12" />
-                                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-                                                            <Button Content="Afvis" Click="Deny_Click" Style="{StaticResource PillButton}" />
-                                                            <Button Content="Tillad" Click="Allow_Click" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" />
-                                                        </StackPanel>
-                                                    </StackPanel>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
-                                </Border>
-                                <DataTemplate.Triggers>
-                                    <DataTrigger Binding="{Binding Status}" Value="Busy">
-                                        <Setter TargetName="Dot" Property="Fill" Value="#E08F60" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding Status}" Value="Error">
-                                        <Setter TargetName="Dot" Property="Fill" Value="#FF6B6B" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding NeedsLogin}" Value="True">
-                                        <Setter TargetName="Dot" Property="Fill" Value="{StaticResource Attention}" />
-                                        <Setter TargetName="Bubble" Property="BorderBrush" Value="{StaticResource Attention}" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding NeedsAction}" Value="True">
-                                        <Setter TargetName="Dot" Property="Fill" Value="{StaticResource Attention}" />
-                                        <Setter TargetName="Bubble" Property="BorderBrush" Value="{StaticResource Attention}" />
-                                    </DataTrigger>
-                                </DataTemplate.Triggers>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
-                <Thumb Style="{StaticResource ResizeGrip}" HorizontalAlignment="Left" VerticalAlignment="Top" ToolTip="Træk for at ændre størrelsen"
-                       DragStarted="ResizeGrip_DragStarted" DragDelta="ResizeGrip_DragDelta" DragCompleted="ResizeGrip_DragCompleted" />
-            </Grid>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding Status}" Value="Busy">
+                                    <Setter TargetName="Dot" Property="Fill" Value="#E08F60" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Status}" Value="Error">
+                                    <Setter TargetName="Dot" Property="Fill" Value="#FF6B6B" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding NeedsLogin}" Value="True">
+                                    <Setter TargetName="Dot" Property="Fill" Value="{StaticResource Attention}" />
+                                    <Setter TargetName="Bubble" Property="BorderBrush" Value="{StaticResource Attention}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding NeedsAction}" Value="True">
+                                    <Setter TargetName="Dot" Property="Fill" Value="{StaticResource Attention}" />
+                                    <Setter TargetName="Bubble" Property="BorderBrush" Value="{StaticResource Attention}" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+            <Thumb Style="{StaticResource ResizeGrip}" HorizontalAlignment="Left" VerticalAlignment="Top" ToolTip="Træk for at ændre størrelsen"
+                   DragStarted="ResizeGrip_DragStarted" DragDelta="ResizeGrip_DragDelta" DragCompleted="ResizeGrip_DragCompleted" />
+        </Grid>
 
-            <Image x:Name="Pet" Width="160" Height="144" Margin="0,4,8,0" HorizontalAlignment="Right" Cursor="Hand"
+        <Grid x:Name="PetRow" Margin="0,4,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border x:Name="Toolbar" VerticalAlignment="Bottom" Margin="8,0,-8,0" Padding="4" CornerRadius="16"
+                    Background="{StaticResource Surface}" BorderBrush="{StaticResource Edge}" BorderThickness="1" Effect="{StaticResource Shadow}">
+                <StackPanel>
+                    <Border Margin="4,4,4,2" Padding="4,5" CornerRadius="10" Background="{StaticResource Edge}">
+                        <DockPanel>
+                            <Button x:Name="AttachmentChip" DockPanel.Dock="Left" Visibility="Collapsed" Click="ClearAttachments_Click"
+                                    Style="{StaticResource PillButton}" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Top">
+                                <TextBlock FontSize="11">
+                                    <Run FontFamily="{StaticResource IconFont}" Text="&#xE723;" />
+                                    <Run x:Name="AttachmentCount" />
+                                </TextBlock>
+                            </Button>
+                            <TextBox x:Name="Input" Background="Transparent" BorderThickness="0" Foreground="{StaticResource Text}"
+                                     CaretBrush="{StaticResource Text}" TextWrapping="Wrap" AcceptsReturn="True" KeyDown="Input_KeyDown" PreviewKeyDown="Input_PreviewKeyDown"
+                                     MaxLines="3" VerticalScrollBarVisibility="Auto" />
+                        </DockPanel>
+                    </Border>
+                    <Grid x:Name="Buttons">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Button x:Name="ModelButton" Grid.Row="0" Grid.Column="0" ToolTip="Model" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
+                            <Button.ContextMenu>
+                                <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Model_Click">
+                                    <MenuItem Header="Fable 5.1" Tag="claude-fable-5-1" />
+                                    <MenuItem Header="Opus 5.5" Tag="claude-opus-5-5" />
+                                    <MenuItem Header="Sonnet 5" Tag="claude-sonnet-5" />
+                                    <MenuItem Header="Haiku 4.5" Tag="claude-haiku-4-5-20251001" />
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+                        <Button x:Name="EffortButton" Grid.Row="0" Grid.Column="1" ToolTip="Effort" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
+                            <Button.ContextMenu>
+                                <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Effort_Click">
+                                    <MenuItem Header="low" Tag="low" />
+                                    <MenuItem Header="medium" Tag="medium" />
+                                    <MenuItem Header="high" Tag="high" />
+                                    <MenuItem Header="xhigh" Tag="xhigh" />
+                                    <MenuItem Header="max" Tag="max" />
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+                        <Button x:Name="ModeButton" Grid.Row="0" Grid.Column="2" ToolTip="Mode" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
+                            <Button.ContextMenu>
+                                <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Mode_Click">
+                                    <MenuItem Header="plan" Tag="plan" />
+                                    <MenuItem Header="manual" Tag="default" />
+                                    <MenuItem Header="auto edit" Tag="acceptEdits" />
+                                    <MenuItem Header="auto" Tag="auto" />
+                                    <MenuItem Header="bypass" Tag="bypassPermissions" />
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+                        <TextBlock x:Name="CostText" Grid.Row="0" Grid.Column="3" ToolTip="Claudes estimerede pris for samtalen" Foreground="{StaticResource Muted}"
+                            FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6,0" />
+                        <Button x:Name="MoreButton" Grid.Row="1" Grid.Column="0" Content="&#xE712;" ToolTip="Mere" Click="ShowChoices_Click" Style="{StaticResource IconButton}">
+                            <Button.ContextMenu>
+                                <ContextMenu Style="{StaticResource ChoiceMenu}" Opened="MoreMenu_Opened">
+                                    <MenuItem x:Name="FullScreenItem" Header="Fuld skærm" Click="FullScreen_Click" />
+                                    <MenuItem x:Name="FolderItem" Click="Folder_Click" />
+                                    <MenuItem x:Name="NoFolderItem" Header="Ingen mappe (chat)" Click="NoFolder_Click" />
+                                    <MenuItem Header="Instruktioner…" Click="Instructions_Click" />
+                                    <MenuItem Header="Åbn Claude-appen" Click="OpenClaude_Click" />
+                                    <MenuItem x:Name="UsageItem" IsEnabled="False" />
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+                        <Button x:Name="ToggleChats" Grid.Row="1" Grid.Column="1" ToolTip="Vis/skjul chats" Click="ToggleChats_Click" Style="{StaticResource IconButton}" />
+                        <Button x:Name="StopButton" Grid.Row="1" Grid.Column="2" Content="&#xE71A;" ToolTip="Stop" Click="Stop_Click" Style="{StaticResource IconButton}" Visibility="Collapsed" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+            <Image x:Name="Pet" Grid.Column="1" VerticalAlignment="Bottom" Width="160" Height="144" Margin="0,0,8,0" Cursor="Hand"
                    RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5"
                    MouseLeftButtonDown="Pet_MouseLeftButtonDown" MouseMove="Pet_MouseMove" MouseLeftButtonUp="Pet_MouseLeftButtonUp"
                    LostMouseCapture="Pet_LostMouseCapture" MouseEnter="Pet_MouseEnterOrLeave" MouseLeave="Pet_MouseEnterOrLeave">
@@ -328,80 +403,6 @@
                     </ContextMenu>
                 </Image.ContextMenu>
             </Image>
-        </StackPanel>
-
-        <Border x:Name="Toolbar" Margin="8,6,8,0" Padding="4" CornerRadius="16"
-                Background="{StaticResource Surface}" BorderBrush="{StaticResource Edge}" BorderThickness="1" Effect="{StaticResource Shadow}">
-            <DockPanel LastChildFill="False">
-                <TextBlock x:Name="CostText" DockPanel.Dock="Left" ToolTip="Claudes estimerede pris for samtalen" Foreground="{StaticResource Muted}"
-                           FontSize="11" VerticalAlignment="Center" Margin="10,0,2,0" />
-                <Button x:Name="ModelButton" DockPanel.Dock="Left" ToolTip="Model" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
-                    <Button.ContextMenu>
-                        <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Model_Click">
-                            <MenuItem Header="Fable 5.1" Tag="claude-fable-5-1" />
-                            <MenuItem Header="Opus 5.5" Tag="claude-opus-5-5" />
-                            <MenuItem Header="Sonnet 5" Tag="claude-sonnet-5" />
-                            <MenuItem Header="Haiku 4.5" Tag="claude-haiku-4-5-20251001" />
-                        </ContextMenu>
-                    </Button.ContextMenu>
-                </Button>
-                <Button x:Name="EffortButton" DockPanel.Dock="Left" ToolTip="Effort" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
-                    <Button.ContextMenu>
-                        <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Effort_Click">
-                            <MenuItem Header="low" Tag="low" />
-                            <MenuItem Header="medium" Tag="medium" />
-                            <MenuItem Header="high" Tag="high" />
-                            <MenuItem Header="xhigh" Tag="xhigh" />
-                            <MenuItem Header="max" Tag="max" />
-                        </ContextMenu>
-                    </Button.ContextMenu>
-                </Button>
-                <Button x:Name="ModeButton" DockPanel.Dock="Left" ToolTip="Mode" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
-                    <Button.ContextMenu>
-                        <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Mode_Click">
-                            <MenuItem Header="plan" Tag="plan" />
-                            <MenuItem Header="manual" Tag="default" />
-                            <MenuItem Header="auto edit" Tag="acceptEdits" />
-                            <MenuItem Header="auto" Tag="auto" />
-                            <MenuItem Header="bypass" Tag="bypassPermissions" />
-                        </ContextMenu>
-                    </Button.ContextMenu>
-                </Button>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                    <Button Content="&#xE712;" ToolTip="Mere" Click="ShowChoices_Click" Style="{StaticResource IconButton}">
-                        <Button.ContextMenu>
-                            <ContextMenu Style="{StaticResource ChoiceMenu}" Opened="MoreMenu_Opened">
-                                <MenuItem x:Name="FullScreenItem" Header="Fuld skærm" Click="FullScreen_Click" />
-                                <MenuItem x:Name="FolderItem" Click="Folder_Click" />
-                                <MenuItem x:Name="NoFolderItem" Header="Ingen mappe (chat)" Click="NoFolder_Click" />
-                                <MenuItem Header="Instruktioner…" Click="Instructions_Click" />
-                                <MenuItem Header="Åbn Claude-appen" Click="OpenClaude_Click" />
-                                <MenuItem x:Name="UsageItem" IsEnabled="False" />
-                            </ContextMenu>
-                        </Button.ContextMenu>
-                    </Button>
-                    <Button Content="&#xE70F;" ToolTip="Skriv" Click="Write_Click" Style="{StaticResource IconButton}" />
-                    <Button x:Name="ToggleChats" ToolTip="Vis/skjul chats" Click="ToggleChats_Click" Style="{StaticResource IconButton}" />
-                    <Button x:Name="StopButton" Content="&#xE71A;" ToolTip="Stop" Click="Stop_Click" Style="{StaticResource IconButton}" Visibility="Collapsed" />
-                </StackPanel>
-            </DockPanel>
-        </Border>
-
-        <!-- Hidden, not collapsed: its space stays reserved, so showing it doesn't push the hamster up. -->
-        <Border x:Name="InputBox" Margin="8,6,8,4" Padding="12,8" CornerRadius="14" Visibility="Hidden"
-                Background="{StaticResource Surface}" BorderBrush="{StaticResource Edge}" BorderThickness="1" Effect="{StaticResource Shadow}">
-            <DockPanel>
-                <Button x:Name="AttachmentChip" DockPanel.Dock="Left" Visibility="Collapsed" Click="ClearAttachments_Click"
-                        Style="{StaticResource PillButton}" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Top">
-                    <TextBlock FontSize="11">
-                        <Run FontFamily="{StaticResource IconFont}" Text="&#xE723;" />
-                        <Run x:Name="AttachmentCount" />
-                    </TextBlock>
-                </Button>
-                <TextBox x:Name="Input" Background="Transparent" BorderThickness="0" Foreground="{StaticResource Text}"
-                         CaretBrush="{StaticResource Text}" TextWrapping="Wrap" KeyDown="Input_KeyDown" PreviewKeyDown="Input_PreviewKeyDown"
-                         MaxHeight="160" VerticalScrollBarVisibility="Auto" />
-            </DockPanel>
-        </Border>
+        </Grid>
     </StackPanel>
 </Window>
