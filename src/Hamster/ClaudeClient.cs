@@ -35,7 +35,8 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
 
     public async Task<ClaudeResult> SendAsync(string prompt, IReadOnlyList<ImageAttachment> images, string? sessionId, IClaudeListener listener, CancellationToken cancellationToken)
     {
-        using var process = Start(sessionId);
+        var instructions = File.Exists(instructionsFile) ? await File.ReadAllTextAsync(instructionsFile, CancellationToken.None) : "";
+        using var process = Start(sessionId, instructions);
         // Killed only if it doesn't stop when asked to: killing right away would lose what the stopped turn cost.
         using var killer = new CancellationTokenSource();
         using var kill = killer.Token.Register(() => TryKill(process));
@@ -142,10 +143,10 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
         input.Flush();
     }
 
-    Process Start(string? sessionId)
+    Process Start(string? sessionId, string instructions)
     {
         Directory.CreateDirectory(workspace);
-        var arguments = ClaudeProtocol.Arguments(sessionId, Settings, File.Exists(instructionsFile) ? instructionsFile : null);
+        var arguments = ClaudeProtocol.Arguments(sessionId, Settings, instructions);
         return Process.Start(new ProcessStartInfo("claude", arguments)
         {
             WorkingDirectory = Settings.WorkingDirectory ?? workspace,

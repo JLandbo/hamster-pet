@@ -32,7 +32,9 @@ public sealed record Usage(double FiveHour, double SevenDay) : ClaudeEvent;
 
 public static class ClaudeProtocol
 {
-    public static string[] Arguments(string? sessionId, ClaudeSettings settings, string? instructionsFile = null) =>
+    public const string PetInstructions = "Appen viser selv de kilder, du har søgt i og hentet. Skriv derfor ikke en kilde- eller kildeliste-sektion i svaret.";
+
+    public static string[] Arguments(string? sessionId, ClaudeSettings settings, string instructions = "") =>
     [
         "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
         "--permission-prompt-tool", "stdio", "--permission-mode", settings.PermissionMode,
@@ -42,7 +44,7 @@ public static class ClaudeProtocol
         "--settings", """{"permissions":{"ask":["Skill"]}}""",
         "--model", settings.Model, "--effort", settings.Effort,
         .. (sessionId is null ? Array.Empty<string>() : ["--resume", sessionId]),
-        .. (instructionsFile is null ? Array.Empty<string>() : ["--append-system-prompt-file", instructionsFile]),
+        "--append-system-prompt", string.IsNullOrWhiteSpace(instructions) ? PetInstructions : $"{PetInstructions}\n\n{instructions}",
         // No tool that acts without asking, and no AskUserQuestion, which the pet has no UI for.
         "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,Monitor,ToolSearch,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Workflow,TaskStop,ListAgents,CronList,ReportFindings,Skill",
     ];

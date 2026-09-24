@@ -266,19 +266,19 @@ public class ClaudeProtocolTests
             ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
              "--permission-prompt-tool", "stdio", "--permission-mode", "default", "--setting-sources", "user",
              "--settings", """{"permissions":{"ask":["Skill"]}}""",
-             "--model", "claude-opus-5-5", "--effort", "xhigh",
+             "--model", "claude-opus-5-5", "--effort", "xhigh", "--append-system-prompt", ClaudeProtocol.PetInstructions,
              "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,Monitor,ToolSearch,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Workflow,TaskStop,ListAgents,CronList,ReportFindings,Skill"],
             arguments);
     }
 
     [Fact]
-    public void Arguments_WhenInstructionsFileGiven_ThenAppendsItToTheSystemPrompt()
+    public void Arguments_WhenInstructionsGiven_ThenAppendsThemAfterThePetsOwn()
     {
         // Act
-        var arguments = ClaudeProtocol.Arguments(null, ClaudeSettings.Default, "instructions.txt");
+        var arguments = ClaudeProtocol.Arguments(null, ClaudeSettings.Default, "Svar kort.");
 
         // Assert
-        Assert.Equal("instructions.txt", arguments[Array.IndexOf(arguments, "--append-system-prompt-file") + 1]);
+        Assert.Equal($"{ClaudeProtocol.PetInstructions}\n\nSvar kort.", arguments[Array.IndexOf(arguments, "--append-system-prompt") + 1]);
     }
 
     [Fact]
