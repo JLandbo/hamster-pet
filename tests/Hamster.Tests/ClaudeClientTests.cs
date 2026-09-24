@@ -10,6 +10,7 @@ public sealed class ClaudeClientTests : IDisposable
     const string WebSearch = """{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_1","name":"WebSearch","input":{}}]}}""";
     const string SearchDone = """{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"..."}]}}""";
     const string Stopped = """{"type":"result","subtype":"error_during_execution","is_error":true,"session_id":"session-1","total_cost_usd":0.2}""";
+    const string RateLimit = """{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","unifiedWindows":{"five_hour":{"utilization":0.03},"seven_day":{"utilization":0.59}}}}""";
     const string Result = """{"type":"result","subtype":"success","is_error":false,"result":"Svar","session_id":"session-1"}""";
 
     readonly string settingsFile = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
@@ -24,7 +25,7 @@ public sealed class ClaudeClientTests : IDisposable
     public void Settings_WhenNothingSaved_ThenOpus55WithXhighInManualMode()
     {
         // Act
-        var client = new ClaudeClient("workspace", Store());
+        var client = new ClaudeClient("workspace", "instructions.txt", Store());
 
         // Assert
         Assert.Equal(new ClaudeSettings("claude-opus-5-5", "xhigh", "default"), client.Settings);
@@ -34,10 +35,10 @@ public sealed class ClaudeClientTests : IDisposable
     public void Settings_WhenChanged_ThenTheNextStartUsesThem()
     {
         // Arrange
-        new ClaudeClient("workspace", Store()).Settings = new("claude-sonnet-5", "low", "plan");
+        new ClaudeClient("workspace", "instructions.txt", Store()).Settings = new("claude-sonnet-5", "low", "plan");
 
         // Act
-        var restarted = new ClaudeClient("workspace", Store());
+        var restarted = new ClaudeClient("workspace", "instructions.txt", Store());
 
         // Assert
         Assert.Equal(new ClaudeSettings("claude-sonnet-5", "low", "plan"), restarted.Settings);
@@ -135,6 +136,19 @@ public sealed class ClaudeClientTests : IDisposable
         Assert.Equal([new ToolResult("toolu_1")], listener.Finished);
     }
 
+    [Fact]
+    public async Task ConverseAsync_WhenRateLimitArrives_ThenReportsUsage()
+    {
+        // Arrange
+        var listener = new FakeListener();
+
+        // Act
+        await ClaudeClient.ConverseAsync(Output(RateLimit, Result), new StringWriter(), "hej", [], listener, Token);
+
+        // Assert
+        Assert.Equal([new Usage(0.03, 0.59)], listener.Usages);
+    }
+
     [Fact(Timeout = 5_000)]
     public async Task ConverseAsync_WhenCancelled_ThenAsksClaudeToStopAndReturnsItsResult()
     {
@@ -172,6 +186,7 @@ public sealed class ClaudeClientTests : IDisposable
         public CancellationToken Question { get; private set; }
         public List<ToolUse> Started { get; } = [];
         public List<ToolResult> Finished { get; } = [];
+        public List<Usage> Usages { get; } = [];
         public bool QuestionCancelledBeforeNextTool { get; private set; }
 
         public void ToolStarted(ToolUse tool)
@@ -181,6 +196,8 @@ public sealed class ClaudeClientTests : IDisposable
         }
 
         public void ToolFinished(ToolResult result) => Finished.Add(result);
+
+        public void UsageReported(Usage usage) => Usages.Add(usage);
 
         public async Task<bool> AskPermissionAsync(PermissionRequest request, CancellationToken cancellationToken)
         {

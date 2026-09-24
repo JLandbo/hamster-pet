@@ -37,6 +37,7 @@ public class ClaudeProtocolTests
     [InlineData("""{"file_path":"C:\\hamster\\Mood.cs","offset":10}""", @"C:\hamster\Mood.cs")]
     [InlineData("""{"command":"git log","description":"Viser historik"}""", "git log")]
     [InlineData("""{"url":"https://example.com","prompt":"Titel?"}""", "https://example.com")]
+    [InlineData("""{"skill":"flow-next:prime"}""", "flow-next:prime")]
     [InlineData("""{"todos":[]}""", "")]
     public void Parse_WhenToolHasInput_ThenDetailIsWhatItWorksOn(string input, string expected)
     {
@@ -112,6 +113,46 @@ public class ClaudeProtocolTests
 
         // Assert
         Assert.Equal(0.4970334m, Assert.IsType<ClaudeResult>(Assert.Single(events)).Cost);
+    }
+
+    [Fact]
+    public void Parse_WhenRateLimitEvent_ThenReturnsUsage()
+    {
+        // Arrange
+        const string line = """{"type":"rate_limit_event","rate_limit_info":{"unifiedWindows":{"five_hour":{"utilization":0.03},"seven_day":{"utilization":0.59}}}}""";
+
+        // Act
+        var events = ClaudeProtocol.Parse(line);
+
+        // Assert
+        Assert.Equal([new Usage(0.03, 0.59)], events);
+    }
+
+    [Fact]
+    public void Parse_WhenRateLimitEventHasNoWindows_ThenReturnsNothing()
+    {
+        // Arrange
+        const string line = """{"type":"rate_limit_event","rate_limit_info":{"status":"allowed"}}""";
+
+        // Act
+        var events = ClaudeProtocol.Parse(line);
+
+        // Assert
+        Assert.Empty(events);
+    }
+
+    [Theory]
+    [InlineData("Not logged in · Please run /login", true, true)]
+    [InlineData("Invalid API key · Please run /login", true, true)]
+    [InlineData("Se /login-siden i appen", false, false)]
+    [InlineData("Reached maximum number of turns (1)", true, false)]
+    public void NeedsLogin_WhenResultArrives_ThenOnlyForLoginErrors(string text, bool isError, bool expected)
+    {
+        // Act
+        var needsLogin = new ClaudeResult("session-1", text, isError).NeedsLogin;
+
+        // Assert
+        Assert.Equal(expected, needsLogin);
     }
 
     [Fact]
@@ -225,8 +266,18 @@ public class ClaudeProtocolTests
             ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
              "--permission-prompt-tool", "stdio", "--permission-mode", "default", "--setting-sources", "user",
              "--model", "claude-opus-5-5", "--effort", "xhigh",
-             "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,Monitor,ToolSearch,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Workflow,TaskStop,ListAgents,CronList,ReportFindings"],
+             "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,Monitor,ToolSearch,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Workflow,TaskStop,ListAgents,CronList,ReportFindings,Skill"],
             arguments);
+    }
+
+    [Fact]
+    public void Arguments_WhenInstructionsFileGiven_ThenAppendsItToTheSystemPrompt()
+    {
+        // Act
+        var arguments = ClaudeProtocol.Arguments(null, ClaudeSettings.Default, "instructions.txt");
+
+        // Assert
+        Assert.Equal("instructions.txt", arguments[Array.IndexOf(arguments, "--append-system-prompt-file") + 1]);
     }
 
     [Fact]

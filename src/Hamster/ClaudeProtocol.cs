@@ -22,11 +22,17 @@ public sealed record PermissionRequest(string RequestId, string ToolName, JsonOb
 public sealed record CancelRequest(string RequestId) : ClaudeEvent;
 
 /// <param name="Cost">Claude's estimate in USD, accumulated over the whole session.</param>
-public sealed record ClaudeResult(string? SessionId, string Text, bool IsError, decimal? Cost = null) : ClaudeEvent;
+public sealed record ClaudeResult(string? SessionId, string Text, bool IsError, decimal? Cost = null) : ClaudeEvent
+{
+    public bool NeedsLogin => IsError && Text.Contains("/login");
+}
+
+/// <summary>The used share of the five-hour and weekly limits, from 0 to 1.</summary>
+public sealed record Usage(double FiveHour, double SevenDay) : ClaudeEvent;
 
 public static class ClaudeProtocol
 {
-    public static string[] Arguments(string? sessionId, ClaudeSettings settings) =>
+    public static string[] Arguments(string? sessionId, ClaudeSettings settings, string? instructionsFile = null) =>
     [
         "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
         "--permission-prompt-tool", "stdio", "--permission-mode", settings.PermissionMode,
@@ -34,11 +40,12 @@ public static class ClaudeProtocol
         "--setting-sources", "user",
         "--model", settings.Model, "--effort", settings.Effort,
         .. (sessionId is null ? Array.Empty<string>() : ["--resume", sessionId]),
-        // Only tools that ask first or only read. Skill and the tools that act without asking are left out, and AskUserQuestion has no UI.
-        "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,Monitor,ToolSearch,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Workflow,TaskStop,ListAgents,CronList,ReportFindings",
+        .. (instructionsFile is null ? Array.Empty<string>() : ["--append-system-prompt-file", instructionsFile]),
+        // No tool that acts without asking, and no AskUserQuestion, which the pet has no UI for.
+        "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,Monitor,ToolSearch,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Workflow,TaskStop,ListAgents,CronList,ReportFindings,Skill",
     ];
 
-    static readonly string[] DetailFields = ["file_path", "notebook_path", "command", "url", "query", "pattern", "description"];
+    static readonly string[] DetailFields = ["file_path", "notebook_path", "command", "url", "query", "pattern", "skill", "description"];
 
     public static IEnumerable<ClaudeEvent> Parse(string line)
     {
@@ -60,6 +67,7 @@ public static class ClaudeProtocol
             "user" => ContentBlocks(message, "tool_result").Select(block => new ToolResult((string)block["tool_use_id"]!)),
             "control_request" when (string?)message["request"]?["subtype"] == "can_use_tool" => [ToPermissionRequest(message)],
             "control_cancel_request" => [new CancelRequest((string)message["request_id"]!)],
+            "rate_limit_event" => UsageOf(message["rate_limit_info"]?["unifiedWindows"]),
             "result" => [new ClaudeResult(
                 (string?)message["session_id"],
                 ResultText(message),
@@ -118,6 +126,11 @@ public static class ClaudeProtocol
         ?? (message["errors"] is JsonArray { Count: > 0 } errors ? string.Join('\n', errors.Select(error => (string?)error)) : null)
         ?? (string?)message["subtype"]
         ?? "";
+
+    static IEnumerable<ClaudeEvent> UsageOf(JsonNode? windows) =>
+        (double?)windows?["five_hour"]?["utilization"] is { } fiveHour && (double?)windows?["seven_day"]?["utilization"] is { } sevenDay
+            ? [new Usage(fiveHour, sevenDay)]
+            : [];
 
     static PermissionRequest ToPermissionRequest(JsonNode message)
     {

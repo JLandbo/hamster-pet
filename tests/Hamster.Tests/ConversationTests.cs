@@ -179,7 +179,7 @@ public sealed class ConversationTests : IDisposable
         await sending.WaitAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal(["Afvist: Bash"], conversation.Chats[0].Activity);
+        Assert.Equal(["Afvist: Bash"], conversation.Chats[0].Commands.Lines);
     }
 
     [Fact]
@@ -376,13 +376,14 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
-    public async Task ToolStarted_WhenRunning_ThenChatShowsWhatClaudeDid()
+    public async Task ToolStarted_WhenRunning_ThenChatShowsCommandsAndSources()
     {
         // Arrange
         claude.Reply = (listener, _) =>
         {
             listener.ToolStarted(new ToolUse("toolu_1", "Read", "Mood.cs"));
-            listener.ToolStarted(new ToolUse("toolu_2", "Bash", "git log"));
+            listener.ToolStarted(new ToolUse("toolu_2", "WebSearch", "hamstere"));
+            listener.ToolStarted(new ToolUse("toolu_3", "Bash", "git log"));
             return Task.FromResult(Answered);
         };
 
@@ -390,7 +391,39 @@ public sealed class ConversationTests : IDisposable
         await conversation.SendAsync("hvad er nyt?");
 
         // Assert
-        Assert.Equal(["Read: Mood.cs", "Bash: git log"], conversation.Chats[0].Activity);
+        Assert.Equal(["Read: Mood.cs", "Bash: git log"], conversation.Chats[0].Commands.Lines);
+        Assert.Equal(["WebSearch: hamstere"], conversation.Chats[0].Sources.Lines);
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenNotLoggedIn_ThenChatOffersLogin()
+    {
+        // Arrange
+        claude.Reply = (_, _) => Task.FromResult(new ClaudeResult("session-1", "Not logged in · Please run /login", IsError: true));
+
+        // Act
+        await conversation.SendAsync("hej");
+
+        // Assert
+        Assert.True(conversation.Chats[0].NeedsLogin);
+    }
+
+    [Fact]
+    public async Task UsageReported_WhenTurnEnds_ThenRestoredAfterRestart()
+    {
+        // Arrange
+        claude.Reply = (listener, _) =>
+        {
+            listener.UsageReported(new Usage(0.03, 0.59));
+            return Task.FromResult(Answered);
+        };
+        await conversation.SendAsync("hej");
+
+        // Act
+        var restarted = new Conversation(claude, Store());
+
+        // Assert
+        Assert.Equal(new Usage(0.03, 0.59), restarted.Usage);
     }
 
     [Fact]

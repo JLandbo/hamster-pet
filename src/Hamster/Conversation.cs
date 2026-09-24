@@ -22,7 +22,7 @@ public sealed class Conversation : IClaudeListener
     {
         (this.claude, this.store) = (claude, store);
         var saved = store.Load();
-        (sessionId, Cost) = (saved.SessionId, saved.Cost);
+        (sessionId, Cost, Usage) = (saved.SessionId, saved.Cost, saved.Usage);
         foreach (var chat in saved.Chats)
             Chats.Add(ChatItem.From(chat));
     }
@@ -31,6 +31,7 @@ public sealed class Conversation : IClaudeListener
 
     public ObservableCollection<ChatItem> Chats { get; } = [];
     public decimal Cost { get; private set; }
+    public Usage? Usage { get; private set; }
     public bool IsBusy => run is not null;
     public bool IsBrowsingWeb => webTools.Count > 0;
     public bool IsWaitingForUser => Chats.Any(chat => chat.NeedsAction);
@@ -68,7 +69,9 @@ public sealed class Conversation : IClaudeListener
             var result = await claude.SendAsync(prompt, images ?? [], sessionId, this, cancellation.Token);
             // An answer that arrived just before Stop is kept.
             var stopped = result.IsError && cancellation.IsCancellationRequested;
-            (chat.Answer, chat.Status) = stopped ? ("Afbrudt.", ChatStatus.Error) : (result.Text, result.IsError ? ChatStatus.Error : ChatStatus.Done);
+            chat.NeedsLogin = !stopped && result.NeedsLogin;
+            chat.Answer = stopped ? "Afbrudt." : chat.NeedsLogin ? "Du er ikke logget ind i claude." : result.Text;
+            chat.Status = result.IsError ? ChatStatus.Error : ChatStatus.Done;
             // After "Ny samtale" the turn's session and cost belong to the thrown-away conversation.
             if (resetsAtStart == resets)
             {
@@ -112,9 +115,10 @@ public sealed class Conversation : IClaudeListener
 
     public void ToolStarted(ToolUse tool)
     {
-        active?.Activity.Add(tool.Description);
         if (tool.IsWeb)
             webTools.Add(tool.Id);
+        if (active is { } chat)
+            (tool.IsWeb ? chat.Sources : chat.Commands).Lines.Add(tool.Description);
         Changed?.Invoke();
     }
 
@@ -135,7 +139,7 @@ public sealed class Conversation : IClaudeListener
             using var registration = cancellationToken.Register(question.Cancel);
             var allowed = await question.Answer;
             if (!allowed)
-                chat.Activity.Add($"Afvist: {request.ToolName}");
+                chat.Commands.Lines.Add($"Afvist: {request.ToolName}");
             return allowed;
         }
         finally
@@ -145,6 +149,12 @@ public sealed class Conversation : IClaudeListener
         }
     }
 
+    public void UsageReported(Usage usage)
+    {
+        Usage = usage;
+        Changed?.Invoke();
+    }
+
     // Saved half-way, the running chat would come back chewing forever.
-    void Save() => store.Save(new SavedChats(sessionId, [.. Chats.Where(chat => chat != active).Select(chat => chat.ToRecord())], Cost));
+    void Save() => store.Save(new SavedChats(sessionId, [.. Chats.Where(chat => chat != active).Select(chat => chat.ToRecord())], Cost, Usage));
 }

@@ -11,6 +11,7 @@ public interface IClaudeListener
     void ToolStarted(ToolUse tool);
     void ToolFinished(ToolResult result);
     Task<bool> AskPermissionAsync(PermissionRequest request, CancellationToken cancellationToken);
+    void UsageReported(Usage usage);
 }
 
 public interface IClaudeClient
@@ -18,7 +19,7 @@ public interface IClaudeClient
     Task<ClaudeResult> SendAsync(string prompt, IReadOnlyList<ImageAttachment> images, string? sessionId, IClaudeListener listener, CancellationToken cancellationToken);
 }
 
-public sealed class ClaudeClient(string workingDirectory, JsonFile<ClaudeSettings> store) : IClaudeClient
+public sealed class ClaudeClient(string workspace, string instructionsFile, JsonFile<ClaudeSettings> store) : IClaudeClient
 {
     static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
 
@@ -90,6 +91,9 @@ public sealed class ClaudeClient(string workingDirectory, JsonFile<ClaudeSetting
                         case CancelRequest cancel when pending.TryRemove(cancel.RequestId, out var withdrawn):
                             withdrawn.Cancel();
                             break;
+                        case Usage usage:
+                            listener.UsageReported(usage);
+                            break;
                         case ClaudeResult result:
                             return result;
                     }
@@ -140,10 +144,11 @@ public sealed class ClaudeClient(string workingDirectory, JsonFile<ClaudeSetting
 
     Process Start(string? sessionId)
     {
-        Directory.CreateDirectory(workingDirectory);
-        return Process.Start(new ProcessStartInfo("claude", ClaudeProtocol.Arguments(sessionId, Settings))
+        Directory.CreateDirectory(workspace);
+        var arguments = ClaudeProtocol.Arguments(sessionId, Settings, File.Exists(instructionsFile) ? instructionsFile : null);
+        return Process.Start(new ProcessStartInfo("claude", arguments)
         {
-            WorkingDirectory = workingDirectory,
+            WorkingDirectory = Settings.WorkingDirectory ?? workspace,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardInput = true,

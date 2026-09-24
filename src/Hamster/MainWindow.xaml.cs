@@ -11,50 +11,62 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Threading;
+using Microsoft.Win32;
 
 namespace Hamster;
 
 public partial class MainWindow : Window
 {
-    const double MaxChatHeight = 900;
+    const double DefaultWidth = 396;
+    const double DefaultChatHeight = 900;
+    const double MinChatHeight = 120;
     static readonly TimeSpan GiggleTime = TimeSpan.FromSeconds(1.5);
     static readonly TimeSpan HappyTime = TimeSpan.FromSeconds(4);
     static readonly TimeSpan AwakeTime = TimeSpan.FromMinutes(1);
     static readonly TimeSpan MovingTime = TimeSpan.FromMilliseconds(200);
     static readonly TimeSpan ClickTime = TimeSpan.FromMilliseconds(300);
     static readonly TimeSpan IdleTime = TimeSpan.FromSeconds(60);
-    const string CollapseIcon = "\uE70D";
-    const string ExpandIcon = "\uE70E";
+    const string CollapseIcon = "";
+    const string ExpandIcon = "";
 
     readonly ClaudeClient claude;
     readonly Conversation conversation;
-    readonly JsonFile<Placement> placement;
+    readonly JsonFile<Placement> placementFile;
+    readonly string instructionsFile;
     readonly List<string> attachedFiles = [];
     readonly List<ImageAttachment> attachedImages = [];
     readonly Dictionary<Mood, BitmapSource[]> images = Sprites.Animations.ToDictionary(
         animation => animation.Key, animation => animation.Value.Select(frame => SpriteRenderer.Render(frame.Rows)).ToArray());
     readonly DispatcherTimer timer = new();
+    readonly DispatcherTimer clock = new() { Interval = TimeSpan.FromSeconds(1) };
 
     Mood mood;
     int frame;
     bool pressed, dragging, chatsExpanded = true, uiShown = true;
     Point dragStart;
     DateTime pressedAt, giggleUntil, lastMove, lastActivity = DateTime.UtcNow;
-    double centerX, bottom;
+    Placement placement;
+    Placement? beforeFullScreen;
+    (Point Mouse, double Width, double ChatHeight) resizeStart;
     double? readingOffset;
+    Button? closedByItsButton;
 
     public MainWindow()
     {
         InitializeComponent();
+        // Resizing a transparent window makes everything flicker, so the window covers the work area and only its content changes size.
+        (Width, Height) = (SystemParameters.WorkArea.Width, SystemParameters.WorkArea.Height);
         var data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Hamster");
-        claude = new ClaudeClient(Path.Combine(data, "workspace"), new JsonFile<ClaudeSettings>(Path.Combine(data, "settings.json"), ClaudeSettings.Default));
+        instructionsFile = Path.Combine(data, "instructions.txt");
+        claude = new ClaudeClient(Path.Combine(data, "workspace"), instructionsFile,
+            new JsonFile<ClaudeSettings>(Path.Combine(data, "settings.json"), ClaudeSettings.Default));
         conversation = new Conversation(claude, new JsonFile<SavedChats>(Path.Combine(data, "chats.json"), SavedChats.Empty));
+        placementFile = new JsonFile<Placement>(Path.Combine(data, "placement.json"), DefaultPlacement);
+        placement = placementFile.Load();
         Choose(ModelButton, claude.Settings.Model);
         Choose(EffortButton, claude.Settings.Effort);
         Choose(ModeButton, claude.Settings.PermissionMode);
         ToggleChats.Content = CollapseIcon;
-        var area = SystemParameters.WorkArea;
-        placement = new JsonFile<Placement>(Path.Combine(data, "placement.json"), new Placement(area.Right - Width / 2, area.Bottom - 4));
         conversation.Changed += Conversation_Changed;
         timer.Tick += (_, _) =>
         {
@@ -62,9 +74,16 @@ public partial class MainWindow : Window
             FadeWhenIdle();
             Animate();
         };
+        clock.Tick += (_, _) =>
+        {
+            foreach (var chat in conversation.Chats)
+                chat.RefreshElapsed();
+        };
         // Before Loaded: without a frame the hamster has no size when the window is placed.
         Animate();
     }
+
+    static Placement DefaultPlacement => new(SystemParameters.WorkArea.Right, SystemParameters.WorkArea.Bottom, DefaultWidth, DefaultChatHeight);
 
     PetStatus Status => new(
         Pressed: pressed,
@@ -106,36 +125,57 @@ public partial class MainWindow : Window
         var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
         var fade = new DoubleAnimation(show ? 1 : 0, duration);
         Toolbar.BeginAnimation(OpacityProperty, fade);
-        ChatScroll.BeginAnimation(OpacityProperty, fade);
+        ChatArea.BeginAnimation(OpacityProperty, fade);
         IdleOffset.BeginAnimation(TranslateTransform.YProperty,
             new DoubleAnimation(show ? 0 : Toolbar.ActualHeight + Toolbar.Margin.Top, duration) { EasingFunction = ease });
     }
 
     void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        var petLeft = Pet.TranslatePoint(new Point(), this).X - ActualWidth / 2;
-        var screen = new Rect(SystemParameters.VirtualScreenLeft - petLeft, SystemParameters.VirtualScreenTop + Pet.ActualHeight,
-            SystemParameters.VirtualScreenWidth - Pet.ActualWidth, SystemParameters.VirtualScreenHeight - Pet.ActualHeight);
-        (centerX, bottom) = placement.Load().ClampedTo(screen);
+        Apply(OnScreen(placement));
         UpdateToolbar();
         UpdateChatList();
-        FitChatHeight();
-        Place();
         ScrollToNewest();
     }
 
-    // The window has a fixed size with the content at the bottom, because resizing a transparent window makes everything flicker.
-    // Actual size, since Windows caps the height at roughly the screen height.
+    Placement OnScreen(Placement saved)
+    {
+        var pet = Pet.TranslatePoint(new Point(), this);
+        var (petLeftToRight, petTopToBottom) = (ActualWidth - pet.X, ActualHeight - pet.Y);
+        var corners = new Rect(SystemParameters.VirtualScreenLeft + petLeftToRight, SystemParameters.VirtualScreenTop + petTopToBottom,
+            SystemParameters.VirtualScreenWidth - Pet.ActualWidth, SystemParameters.VirtualScreenHeight - petTopToBottom);
+        return saved.ClampedTo(corners);
+    }
+
+    void Apply(Placement next)
+    {
+        placement = next with
+        {
+            Width = Math.Min(Math.Max(next.Width, NarrowestWidth()), ActualWidth),
+            ChatHeight = Math.Max(next.ChatHeight, MinChatHeight),
+        };
+        Root.Width = placement.Width;
+        Place();
+        FitChatHeight();
+    }
+
+    // Narrower than its buttons, the toolbar would overlap them.
+    double NarrowestWidth()
+    {
+        Toolbar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return Toolbar.DesiredSize.Width;
+    }
+
     void Place()
     {
-        Left = centerX - ActualWidth / 2;
-        Top = bottom - ActualHeight;
+        Left = placement.Right - ActualWidth;
+        Top = placement.Bottom - ActualHeight;
     }
 
     void Root_SizeChanged(object sender, SizeChangedEventArgs e) => FitChatHeight();
 
     void FitChatHeight() =>
-        ChatScroll.MaxHeight = Math.Clamp(bottom - SystemParameters.WorkArea.Top - (Root.ActualHeight - ChatScroll.ActualHeight), 0, MaxChatHeight);
+        ChatScroll.MaxHeight = Math.Clamp(placement.Bottom - SystemParameters.WorkArea.Top - (Root.ActualHeight - ChatScroll.ActualHeight), 0, placement.ChatHeight);
 
     void Window_Closed(object sender, EventArgs e) => conversation.Cancel();
 
@@ -161,6 +201,7 @@ public partial class MainWindow : Window
     {
         CostText.Text = conversation.Cost.ToString("$0.00", CultureInfo.InvariantCulture);
         StopButton.Visibility = conversation.IsBusy ? Visibility.Visible : Visibility.Collapsed;
+        clock.IsEnabled = conversation.IsBusy;
     }
 
     void UpdateChatList()
@@ -173,7 +214,7 @@ public partial class MainWindow : Window
             if (ChatList.ItemsSource is not ChatItem[] shown || !shown.SequenceEqual(current))
                 ChatList.ItemsSource = current;
         }
-        ChatScroll.Visibility = ChatList.HasItems ? Visibility.Visible : Visibility.Collapsed;
+        ChatArea.Visibility = ChatList.HasItems ? Visibility.Visible : Visibility.Collapsed;
     }
 
     bool IsAtBottom => ChatScroll.VerticalOffset >= ChatScroll.ScrollableHeight - 1;
@@ -206,7 +247,7 @@ public partial class MainWindow : Window
         // Moving the window under a still cursor raises MouseMove too; only real movement counts as running.
         if (offset.Length < 1)
             return;
-        (centerX, bottom) = (centerX + offset.X, bottom + offset.Y);
+        placement = placement with { Right = placement.Right + offset.X, Bottom = placement.Bottom + offset.Y };
         Place();
         // The sprite faces left, so mirror it when running right.
         if (Math.Abs(offset.X) >= 1)
@@ -229,11 +270,41 @@ public partial class MainWindow : Window
     void Pet_LostMouseCapture(object sender, MouseEventArgs e)
     {
         if (dragging)
-            placement.Save(new Placement(centerX, bottom));
+            placementFile.Save(beforeFullScreen ?? placement);
         (pressed, dragging) = (false, false);
         Facing.ScaleX = 1;
         FitChatHeight();
         Animate();
+    }
+
+    void ResizeGrip_DragStarted(object sender, DragStartedEventArgs e)
+    {
+        beforeFullScreen = null;
+        resizeStart = (Mouse.GetPosition(this), Root.ActualWidth, ChatScroll.ActualHeight);
+    }
+
+    void ResizeGrip_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        var moved = resizeStart.Mouse - Mouse.GetPosition(this);
+        Apply(placement with { Width = resizeStart.Width + moved.X, ChatHeight = resizeStart.ChatHeight + moved.Y });
+    }
+
+    void ResizeGrip_DragCompleted(object sender, DragCompletedEventArgs e) => placementFile.Save(placement);
+
+    void FullScreen_Click(object sender, RoutedEventArgs e)
+    {
+        if (beforeFullScreen is { } previous)
+        {
+            beforeFullScreen = null;
+            Apply(previous);
+        }
+        else
+        {
+            beforeFullScreen = placement;
+            Apply(DefaultPlacement with { Width = ActualWidth, ChatHeight = ActualHeight });
+        }
+        Touch();
+        ScrollToNewest();
     }
 
     void Write_Click(object sender, RoutedEventArgs e)
@@ -364,13 +435,53 @@ public partial class MainWindow : Window
 
     void Stop_Click(object sender, RoutedEventArgs e) => conversation.Cancel();
 
-    void OpenClaude_Click(object sender, RoutedEventArgs e) => Open("claude://", "Kunne ikke åbne Claude-appen. Er den installeret?");
+    void MoreMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        var folder = claude.Settings.WorkingDirectory;
+        FolderItem.Header = folder is null ? "Vælg mappe…" : $"Mappe: {new DirectoryInfo(folder).Name}";
+        FolderItem.ToolTip = folder;
+        FolderItem.IsChecked = folder is not null;
+        NoFolderItem.IsChecked = folder is null;
+        FullScreenItem.IsChecked = beforeFullScreen is not null;
+        UsageItem.Header = conversation.Usage is { } usage
+            ? $"Forbrug: 5 t {usage.FiveHour:P0} · uge {usage.SevenDay:P0}"
+            : "Forbrug vises efter første svar";
+    }
 
-    void Open(string target, string failure)
+    void Folder_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog { InitialDirectory = claude.Settings.WorkingDirectory ?? "" };
+        if (dialog.ShowDialog(this) == true)
+            UseFolder(dialog.FolderName);
+    }
+
+    void NoFolder_Click(object sender, RoutedEventArgs e) => UseFolder(null);
+
+    void UseFolder(string? folder)
+    {
+        if (folder == claude.Settings.WorkingDirectory)
+            return;
+        claude.Settings = claude.Settings with { WorkingDirectory = folder };
+        conversation.Reset();
+    }
+
+    void Instructions_Click(object sender, RoutedEventArgs e)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(instructionsFile)!);
+        File.AppendAllText(instructionsFile, "");
+        Open(new ProcessStartInfo(instructionsFile) { UseShellExecute = true }, "Kunne ikke åbne instruktionerne.");
+    }
+
+    void OpenClaude_Click(object sender, RoutedEventArgs e) =>
+        Open(new ProcessStartInfo("claude://") { UseShellExecute = true }, "Kunne ikke åbne Claude-appen. Er den installeret?");
+
+    void Login_Click(object sender, RoutedEventArgs e) => Open(new ProcessStartInfo("claude", "auth login"), "Kunne ikke starte claude. Er den installeret?");
+
+    void Open(ProcessStartInfo start, string failure)
     {
         try
         {
-            Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+            Process.Start(start);
         }
         catch (Win32Exception)
         {
@@ -380,17 +491,27 @@ public partial class MainWindow : Window
 
     void Link_RequestNavigate(object sender, RequestNavigateEventArgs e)
     {
-        Open(e.Uri.AbsoluteUri, $"Kunne ikke åbne {e.Uri.AbsoluteUri}");
+        Open(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }, $"Kunne ikke åbne {e.Uri.AbsoluteUri}");
         e.Handled = true;
     }
 
     void ShowChoices_Click(object sender, RoutedEventArgs e)
     {
+        if (sender == closedByItsButton)
+        {
+            closedByItsButton = null;
+            return;
+        }
         var choices = ((Button)sender).ContextMenu;
         choices.PlacementTarget = (UIElement)sender;
         choices.Placement = PlacementMode.Top;
         choices.IsOpen = true;
     }
+
+    // The click that closes an open menu also reaches its button, which would open the menu again straight away.
+    void Choices_Closed(object sender, RoutedEventArgs e) =>
+        closedByItsButton = ((ContextMenu)sender).PlacementTarget is Button button && Mouse.LeftButton == MouseButtonState.Pressed
+            && new Rect(button.RenderSize).Contains(Mouse.GetPosition(button)) ? button : null;
 
     void Model_Click(object sender, RoutedEventArgs e) =>
         claude.Settings = claude.Settings with { Model = Choose(ModelButton, (string)((MenuItem)e.OriginalSource).Tag) };
