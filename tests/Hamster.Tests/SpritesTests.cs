@@ -23,6 +23,21 @@ public class SpritesTests
     }
 
     [Fact]
+    public void Animations_WhenLoaded_ThenEveryFrameFillsTheCanvasAndLasts()
+    {
+        // Act
+        var frames = Sprites.Animations.Values.SelectMany(animation => animation);
+
+        // Assert
+        Assert.All(frames, frame =>
+        {
+            Assert.Equal(Sprites.Height, frame.Rows.Length);
+            Assert.All(frame.Rows, row => Assert.Equal(Sprites.Width, row.Length));
+            Assert.True(frame.Milliseconds > 0);
+        });
+    }
+
+    [Fact]
     public void Animations_WhenBuilt_ThenFramesUseKnownColors()
     {
         // Act

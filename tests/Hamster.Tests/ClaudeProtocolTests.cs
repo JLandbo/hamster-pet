@@ -395,6 +395,19 @@ public class ClaudeProtocolTests
     }
 
     [Fact]
+    public void Parse_WhenBackgroundTasksChange_ThenCountsTheRunningTasks()
+    {
+        // Arrange
+        const string line = """{"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"b1","task_type":"local_bash","description":"sleep"}]}""";
+
+        // Act
+        var events = ClaudeProtocol.Parse(line);
+
+        // Assert
+        Assert.Equal([new BackgroundTasksChanged(1)], events);
+    }
+
+    [Fact]
     public void Parse_WhenResultAnswersMessages_ThenListsThem()
     {
         // Arrange

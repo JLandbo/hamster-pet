@@ -756,6 +756,59 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
+    public void BackgroundTasksChanged_WhenTasksRun_ThenCountsThem()
+    {
+        // Act
+        conversation.BackgroundTasksChanged(2);
+
+        // Assert
+        Assert.Equal(2, conversation.BackgroundTasks);
+    }
+
+    [Fact]
+    public void Exited_WhenBackgroundTasksRan_ThenNoneRunAnymore()
+    {
+        // Arrange
+        conversation.BackgroundTasksChanged(2);
+
+        // Act
+        conversation.Exited("claude stoppede uventet");
+
+        // Assert
+        Assert.Equal(0, conversation.BackgroundTasks);
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task FailedWithin_WhenAnswered_ThenTrueOnlyForErrors(bool isError, bool expected)
+    {
+        // Arrange
+        claude.Reply = Answering(new ClaudeResult("session-1", "Svar", isError));
+        await conversation.SendAsync("hej");
+
+        // Act
+        var failed = conversation.FailedWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow);
+
+        // Assert
+        Assert.Equal(expected, failed);
+    }
+
+    [Fact]
+    public async Task ResultReceived_WhenNoChatGetsTheAnswer_ThenAnsweredAtStays()
+    {
+        // Arrange
+        await conversation.SendAsync("hej");
+        var answeredAt = conversation.AnsweredAt;
+
+        // Act
+        claude.Listener.ResultReceived(new ClaudeResult("session-1", "", IsError: false));
+
+        // Assert
+        Assert.Equal(answeredAt, conversation.AnsweredAt);
+    }
+
+    [Fact]
     public void ModeChanged_WhenClaudeSwitchesMode_ThenTellsTheWindow()
     {
         // Arrange

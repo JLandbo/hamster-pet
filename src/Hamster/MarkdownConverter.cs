@@ -18,6 +18,8 @@ public sealed class MarkdownConverter : IValueConverter
     static readonly Thickness Spacing = new(0, 8, 0, 0);
     const string Shade = "Edge";
     const string Emphasis = "Text";
+    const string Subtle = "Muted";
+    const string Icons = "IconFont";
 
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => Render((string)value);
 
@@ -34,8 +36,7 @@ public sealed class MarkdownConverter : IValueConverter
     {
         HeadingBlock heading => Themed(new Paragraph(Span(heading.Inline, new Bold())), TextElement.ForegroundProperty, Emphasis),
         ParagraphBlock paragraph => new Paragraph(Span(paragraph.Inline, new Span())),
-        CodeBlock code => Themed(new Paragraph(new Run(code.Lines.ToString())) { FontFamily = CodeFont, FontSize = 12, Padding = new(8, 6, 8, 6) },
-            TextElement.BackgroundProperty, Shade),
+        CodeBlock code => Code(code.Lines.ToString()),
         ListBlock list => List(list),
         Markdig.Extensions.Tables.Table table => Table(table),
         QuoteBlock quote => Themed(Section(quote, new Section { BorderThickness = new(3, 0, 0, 0), Padding = new(8, 0, 0, 0) }),
@@ -53,6 +54,23 @@ public sealed class MarkdownConverter : IValueConverter
             block.Margin = target.Count == 0 ? new(0) : Spacing;
             target.Add(block);
         }
+    }
+
+    static Section Code(string text)
+    {
+        var icon = new Run(ClipboardText.CopyIcon);
+        var copy = Themed(Themed(new Hyperlink(icon) { TextDecorations = null, ToolTip = "Kopiér" }, TextElement.ForegroundProperty, Subtle),
+            TextElement.FontFamilyProperty, Icons);
+        copy.Click += (_, _) => ClipboardText.Copy(text, glyph => icon.Text = glyph);
+        return Themed(new Section
+        {
+            Padding = new(8, 4, 8, 6),
+            Blocks =
+            {
+                new Paragraph(copy) { TextAlignment = TextAlignment.Right, FontSize = 11, Margin = new(0) },
+                new Paragraph(new Run(text)) { FontFamily = CodeFont, FontSize = 12, Margin = new(0) },
+            },
+        }, TextElement.BackgroundProperty, Shade);
     }
 
     static Section Section(ContainerBlock blocks, Section section)

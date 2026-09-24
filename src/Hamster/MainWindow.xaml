@@ -219,6 +219,8 @@
                                     <DockPanel>
                                         <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="Slet besked" Click="DeleteChat_Click"
                                                 Style="{StaticResource SmallIconButton}" Margin="6,-2,-6,0" VerticalAlignment="Top" />
+                                        <Button x:Name="Copy" DockPanel.Dock="Right" Content="&#xE8C8;" ToolTip="Kopiér svar" Click="CopyAnswer_Click"
+                                                Style="{StaticResource SmallIconButton}" Margin="6,-2,0,0" VerticalAlignment="Top" />
                                         <Ellipse x:Name="Dot" DockPanel.Dock="Left" Width="8" Height="8" Margin="0,6,8,0"
                                                  VerticalAlignment="Top" Fill="#6FA8FF" />
                                         <TextBlock Text="{Binding Prompt}" Foreground="{StaticResource Text}" FontWeight="SemiBold" TextWrapping="Wrap" />
@@ -275,6 +277,7 @@
                             <DataTemplate.Triggers>
                                 <DataTrigger Binding="{Binding Status}" Value="Busy">
                                     <Setter TargetName="Dot" Property="Fill" Value="#E08F60" />
+                                    <Setter TargetName="Copy" Property="Visibility" Value="Collapsed" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding Status}" Value="Error">
                                     <Setter TargetName="Dot" Property="Fill" Value="#FF6B6B" />
@@ -376,6 +379,8 @@
                         </Button>
                         <Button x:Name="ToggleChats" Grid.Row="1" Grid.Column="1" ToolTip="Vis/skjul chats" Click="ToggleChats_Click" Style="{StaticResource IconButton}" />
                         <Button x:Name="StopButton" Grid.Row="1" Grid.Column="2" Content="&#xE71A;" ToolTip="Stop" Click="Stop_Click" Style="{StaticResource IconButton}" Visibility="Collapsed" />
+                        <TextBlock x:Name="TasksText" Grid.Row="1" Grid.Column="3" ToolTip="Baggrundsopgaver, der kører" Foreground="{StaticResource Muted}"
+                            FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6,0" Visibility="Collapsed" />
                     </Grid>
                 </StackPanel>
             </Border>
@@ -393,6 +398,8 @@
                     </ContextMenu>
                 </Image.ContextMenu>
             </Image>
+            <Ellipse x:Name="NewsDot" Grid.Column="1" Width="10" Height="10" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="22,0,0,116"
+                     Fill="{StaticResource Attention}" Stroke="#1E1E1E" StrokeThickness="1.5" IsHitTestVisible="False" Visibility="Collapsed" />
         </Grid>
     </StackPanel>
 </Window>

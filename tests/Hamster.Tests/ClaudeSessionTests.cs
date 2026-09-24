@@ -11,6 +11,7 @@ public sealed class ClaudeSessionTests
     const string SearchDone = """{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"..."}]}}""";
     const string RateLimit = """{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","unifiedWindows":{"five_hour":{"utilization":0.03},"seven_day":{"utilization":0.59}}}}""";
     const string Started = """{"type":"command_lifecycle","command_uuid":"id-1","state":"started"}""";
+    const string Tasks = """{"type":"system","subtype":"background_tasks_changed","tasks":[]}""";
     const string Status = """{"type":"system","subtype":"status","status":null,"permissionMode":"plan"}""";
     const string Result = """{"type":"result","subtype":"success","is_error":false,"result":"Svar","session_id":"session-1","user_message_uuids":["id-1"]}""";
 
@@ -66,6 +67,19 @@ public sealed class ClaudeSessionTests
 
         // Assert
         Assert.Equal(["plan"], listener.Modes);
+    }
+
+    [Fact]
+    public async Task ReadAsync_WhenBackgroundTasksChange_ThenTellsHowManyRun()
+    {
+        // Arrange
+        var listener = new FakeListener();
+
+        // Act
+        await new ClaudeSession(Output(Tasks), new StringWriter(), listener).ReadAsync();
+
+        // Assert
+        Assert.Equal([0], listener.Tasks);
     }
 
     [Theory]
@@ -198,6 +212,7 @@ public sealed class ClaudeSessionTests
         public List<ToolResult> Finished { get; } = [];
         public List<Usage> Usages { get; } = [];
         public List<string> Modes { get; } = [];
+        public List<int> Tasks { get; } = [];
         public List<ClaudeResult> Results { get; } = [];
         public bool QuestionCancelledBeforeNextTool { get; private set; }
         public Task FirstResult => firstResult.Task;
@@ -215,6 +230,8 @@ public sealed class ClaudeSessionTests
         public void UsageReported(Usage usage) => Usages.Add(usage);
 
         public void ModeChanged(string mode) => Modes.Add(mode);
+
+        public void BackgroundTasksChanged(int count) => Tasks.Add(count);
 
         public void ResultReceived(ClaudeResult result)
         {

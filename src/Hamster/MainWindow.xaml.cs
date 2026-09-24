@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     const double MinChatHeight = 120;
     static readonly TimeSpan GiggleTime = TimeSpan.FromSeconds(1.5);
     static readonly TimeSpan HappyTime = TimeSpan.FromSeconds(4);
+    static readonly TimeSpan SadTime = TimeSpan.FromSeconds(4);
     static readonly TimeSpan AwakeTime = TimeSpan.FromMinutes(1);
     static readonly TimeSpan MovingTime = TimeSpan.FromMilliseconds(200);
     static readonly TimeSpan ClickTime = TimeSpan.FromMilliseconds(300);
@@ -45,7 +46,7 @@ public partial class MainWindow : Window
     int frame;
     bool pressed, dragging, chatsExpanded = true, chatsShown = true, toolbarShown = true;
     Point dragStart;
-    DateTime pressedAt, giggleUntil, lastMove, lastActivity = DateTime.UtcNow, lastTouch = DateTime.UtcNow;
+    DateTime pressedAt, giggleUntil, lastMove, lastActivity = DateTime.UtcNow, lastTouch = DateTime.UtcNow, newsSeenAt = DateTime.UtcNow;
     Placement placement;
     Placement? beforeFullScreen;
     (Point Mouse, double Width, double ChatHeight) resizeStart;
@@ -95,6 +96,9 @@ public partial class MainWindow : Window
         BrowsingWeb: conversation.IsBrowsingWeb,
         Busy: conversation.IsBusy,
         Celebrating: conversation.AnsweredWithin(HappyTime, DateTime.UtcNow),
+        Failed: conversation.FailedWithin(SadTime, DateTime.UtcNow),
+        Typing: Input.IsKeyboardFocused,
+        BackgroundWork: conversation.BackgroundTasks > 0,
         Hovered: Pet.IsMouseOver,
         Awake: Input.IsKeyboardFocused || DateTime.UtcNow - lastActivity < AwakeTime);
 
@@ -202,6 +206,7 @@ public partial class MainWindow : Window
         FadeWhenIdle();
         var following = IsAtBottom;
         UpdateToolbar();
+        UpdateNews();
         UpdateChatList();
         if (following)
             ScrollToNewest();
@@ -212,7 +217,16 @@ public partial class MainWindow : Window
     {
         CostText.Text = conversation.Cost.ToString("$0.00", CultureInfo.InvariantCulture);
         StopButton.Visibility = conversation.IsBusy ? Visibility.Visible : Visibility.Collapsed;
+        TasksText.Text = $"{conversation.BackgroundTasks} kører";
+        TasksText.Visibility = conversation.BackgroundTasks > 0 ? Visibility.Visible : Visibility.Collapsed;
         clock.IsEnabled = conversation.IsBusy;
+    }
+
+    void UpdateNews()
+    {
+        if (Pet.IsMouseOver)
+            newsSeenAt = DateTime.UtcNow;
+        NewsDot.Visibility = conversation.AnsweredAt > newsSeenAt ? Visibility.Visible : Visibility.Collapsed;
     }
 
     void UpdateChatList()
@@ -232,6 +246,7 @@ public partial class MainWindow : Window
 
     void Pet_MouseEnterOrLeave(object sender, MouseEventArgs e)
     {
+        UpdateNews();
         Touch();
         Animate();
     }
@@ -545,6 +560,12 @@ public partial class MainWindow : Window
                 button.Content = item.Header;
         }
         return value;
+    }
+
+    void CopyAnswer_Click(object sender, RoutedEventArgs e)
+    {
+        var button = (Button)sender;
+        ClipboardText.Copy(((ChatItem)button.DataContext).Answer, icon => button.Content = icon);
     }
 
     void DeleteChat_Click(object sender, RoutedEventArgs e) => conversation.Delete((ChatItem)((FrameworkElement)sender).DataContext);

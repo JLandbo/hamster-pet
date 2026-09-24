@@ -13,6 +13,7 @@ public interface IClaudeListener
     Task<bool> AskPermissionAsync(PermissionRequest request, CancellationToken cancellationToken);
     void UsageReported(Usage usage);
     void ModeChanged(string mode);
+    void BackgroundTasksChanged(int count);
     void ResultReceived(ClaudeResult result);
     void Exited(string error);
 }

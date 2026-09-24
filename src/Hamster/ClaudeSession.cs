@@ -73,6 +73,9 @@ public sealed class ClaudeSession(TextReader output, TextWriter input, IClaudeLi
             case ModeChanged mode:
                 listener.ModeChanged(mode.Mode);
                 break;
+            case BackgroundTasksChanged tasks:
+                listener.BackgroundTasksChanged(tasks.Count);
+                break;
             case ClaudeResult result:
                 listener.ResultReceived(result);
                 break;

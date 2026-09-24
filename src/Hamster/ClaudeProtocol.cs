@@ -25,6 +25,8 @@ public sealed record TurnStarted(string? MessageId) : ClaudeEvent;
 
 public sealed record ModeChanged(string Mode) : ClaudeEvent;
 
+public sealed record BackgroundTasksChanged(int Count) : ClaudeEvent;
+
 public sealed record ClaudeResult(string? SessionId, string Text, bool IsError, decimal? Cost = null, IReadOnlyList<string>? Answers = null) : ClaudeEvent
 {
     public bool NeedsLogin => IsError && Text.Contains("/login");
@@ -72,6 +74,7 @@ public static class ClaudeProtocol
             "command_lifecycle" when (string?)message["state"] == "started" => [new TurnStarted((string?)message["command_uuid"])],
             "system" when (string?)message["subtype"] == "init" => [new TurnStarted(null)],
             "system" when (string?)message["subtype"] == "status" && (string?)message["permissionMode"] is { } mode => [new ModeChanged(mode)],
+            "system" when (string?)message["subtype"] == "background_tasks_changed" && message["tasks"] is JsonArray tasks => [new BackgroundTasksChanged(tasks.Count)],
             "control_request" when (string?)message["request"]?["subtype"] == "can_use_tool" => [ToPermissionRequest(message)],
             "control_cancel_request" => [new CancelRequest((string)message["request_id"]!)],
             "rate_limit_event" => UsageOf(message["rate_limit_info"]?["unifiedWindows"]),

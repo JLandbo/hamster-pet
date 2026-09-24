@@ -23,9 +23,20 @@ public class MarkdownConverterTests
         var document = MarkdownConverter.Render("```cs\nvar x = 1;\nx++;\n```");
 
         // Assert
-        var code = Assert.IsType<Paragraph>(Assert.Single(document.Blocks));
+        var code = Assert.IsType<Paragraph>(Assert.IsType<Section>(Assert.Single(document.Blocks)).Blocks.LastBlock);
         Assert.Equal("Cascadia Mono, Consolas", code.FontFamily.Source);
         Assert.Equal("var x = 1;\nx++;", Text(code).ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    public void Render_WhenFencedCode_ThenOffersToCopyIt()
+    {
+        // Act
+        var document = MarkdownConverter.Render("```cs" + (char)10 + "var x = 1;" + (char)10 + "```");
+
+        // Assert
+        var header = Assert.IsType<Paragraph>(Assert.IsType<Section>(Assert.Single(document.Blocks)).Blocks.FirstBlock);
+        Assert.IsType<Hyperlink>(Assert.Single(header.Inlines));
     }
 
     [Fact]

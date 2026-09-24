@@ -19,7 +19,6 @@ public sealed class Conversation : IClaudeListener
     string? sessionId, turnMessage;
     ChatItem? turn, lastAnswered;
     bool turnRunning, stopping;
-    DateTime answeredAt;
 
     public Conversation(IClaudeClient claude, JsonFile<SavedChats> store)
     {
@@ -37,14 +36,18 @@ public sealed class Conversation : IClaudeListener
     public ObservableCollection<ChatItem> Chats { get; } = [];
     public decimal Cost { get; private set; }
     public Usage? Usage { get; private set; }
+    public int BackgroundTasks { get; private set; }
+    public DateTime AnsweredAt { get; private set; }
     public bool IsBusy => turnRunning || waiting.Count > 0;
     public bool IsBrowsingWeb => webTools.Count > 0;
     public bool IsWaitingForUser => Chats.Any(chat => chat.NeedsAction);
 
     public bool IsCurrent(ChatItem chat, DateTime now) =>
-        chat.Status == ChatStatus.Busy || chat.NeedsAction || (chat == lastAnswered && now - answeredAt < AnswerShownTime);
+        chat.Status == ChatStatus.Busy || chat.NeedsAction || (chat == lastAnswered && now - AnsweredAt < AnswerShownTime);
 
-    public bool AnsweredWithin(TimeSpan time, DateTime now) => lastAnswered is { Status: ChatStatus.Done } && now - answeredAt < time;
+    public bool AnsweredWithin(TimeSpan time, DateTime now) => lastAnswered is { Status: ChatStatus.Done } && now - AnsweredAt < time;
+
+    public bool FailedWithin(TimeSpan time, DateTime now) => lastAnswered is { Status: ChatStatus.Error } && now - AnsweredAt < time;
 
     public static string WithAttachments(string text, IReadOnlyList<string> files, IReadOnlyList<ImageAttachment> images)
     {
@@ -102,7 +105,7 @@ public sealed class Conversation : IClaudeListener
         toolChats.Clear();
         webTools.Clear();
         (turn, turnMessage, lastAnswered, turnRunning, stopping) = (null, null, null, false, false);
-        (sessionId, Cost) = (null, 0);
+        (sessionId, Cost, BackgroundTasks) = (null, 0, 0);
         Save();
         Changed?.Invoke();
         _ = StartAsync();
@@ -186,6 +189,12 @@ public sealed class Conversation : IClaudeListener
 
     public void ModeChanged(string mode) => PermissionModeChanged?.Invoke(mode);
 
+    public void BackgroundTasksChanged(int count)
+    {
+        BackgroundTasks = count;
+        Changed?.Invoke();
+    }
+
     public void ResultReceived(ClaudeResult result)
     {
         var stopped = result.IsError && stopping;
@@ -214,7 +223,8 @@ public sealed class Conversation : IClaudeListener
             Cost = result.SessionId is not null && result.SessionId == sessionId ? Math.Max(Cost, cost) : cost;
         sessionId = failedToStart ? null : result.SessionId ?? sessionId;
         (turn, turnMessage, turnRunning, stopping) = (null, null, false, false);
-        (lastAnswered, answeredAt) = (target, DateTime.UtcNow);
+        if (target is not null)
+            (lastAnswered, AnsweredAt) = (target, DateTime.UtcNow);
         webTools.Clear();
         Save();
         Changed?.Invoke();
@@ -228,7 +238,7 @@ public sealed class Conversation : IClaudeListener
         if (turn is { Status: ChatStatus.Busy })
             Finish(turn, result, stopping);
         waiting.Clear();
-        (turn, turnMessage, turnRunning, stopping) = (null, null, false, false);
+        (turn, turnMessage, turnRunning, stopping, BackgroundTasks) = (null, null, false, false, 0);
         webTools.Clear();
         Save();
         Changed?.Invoke();
