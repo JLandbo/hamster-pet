@@ -2,19 +2,30 @@ namespace Hamster.Tests;
 
 public class ChatItemTests
 {
-    [Theory]
-    [InlineData(ChatStatus.Busy, "Tygger…")]
-    [InlineData(ChatStatus.Done, "Svar")]
-    public void DisplayAnswer_WhenAnswered_ThenShowsAnswerUnlessBusy(ChatStatus status, string expected)
+    [Fact]
+    public void DisplayAnswer_WhenDone_ThenShowsTheAnswer()
     {
         // Arrange
-        var chat = new ChatItem("hej") { Answer = "Svar", Status = status };
+        var chat = new ChatItem("hej") { Answer = "Svar", Status = ChatStatus.Done };
 
         // Act
         var shown = chat.DisplayAnswer;
 
         // Assert
-        Assert.StartsWith(expected, shown);
+        Assert.Equal("Svar", shown);
+    }
+
+    [Fact]
+    public void DisplayAnswer_WhenBusy_ThenChewsWithTheTimeSoFar()
+    {
+        // Arrange
+        var chat = new ChatItem("hej") { Answer = "Svar" };
+
+        // Act
+        var shown = chat.DisplayAnswer;
+
+        // Assert
+        Assert.Matches(@"^Tygger… \d+ s$", shown);
     }
 
     [Theory]

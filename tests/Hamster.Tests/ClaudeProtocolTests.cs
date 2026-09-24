@@ -265,6 +265,7 @@ public class ClaudeProtocolTests
         Assert.Equal(
             ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
              "--permission-prompt-tool", "stdio", "--permission-mode", "default", "--setting-sources", "user",
+             "--settings", """{"permissions":{"ask":["Skill"]}}""",
              "--model", "claude-opus-5-5", "--effort", "xhigh",
              "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,Monitor,ToolSearch,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Workflow,TaskStop,ListAgents,CronList,ReportFindings,Skill"],
             arguments);

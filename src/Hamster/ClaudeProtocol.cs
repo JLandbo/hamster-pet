@@ -38,6 +38,8 @@ public static class ClaudeProtocol
         "--permission-prompt-tool", "stdio", "--permission-mode", settings.PermissionMode,
         // Settings written into the workspace must not be able to silence the permission bubbles.
         "--setting-sources", "user",
+        // A skill may use its allowed-tools without asking, so calling the skill has to ask first.
+        "--settings", """{"permissions":{"ask":["Skill"]}}""",
         "--model", settings.Model, "--effort", settings.Effort,
         .. (sessionId is null ? Array.Empty<string>() : ["--resume", sessionId]),
         .. (instructionsFile is null ? Array.Empty<string>() : ["--append-system-prompt-file", instructionsFile]),

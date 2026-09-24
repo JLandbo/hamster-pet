@@ -26,8 +26,8 @@ public partial class MainWindow : Window
     static readonly TimeSpan MovingTime = TimeSpan.FromMilliseconds(200);
     static readonly TimeSpan ClickTime = TimeSpan.FromMilliseconds(300);
     static readonly TimeSpan IdleTime = TimeSpan.FromSeconds(60);
-    const string CollapseIcon = "";
-    const string ExpandIcon = "";
+    const string CollapseIcon = "\uE70D";
+    const string ExpandIcon = "\uE70E";
 
     readonly ClaudeClient claude;
     readonly Conversation conversation;
@@ -280,7 +280,7 @@ public partial class MainWindow : Window
     void ResizeGrip_DragStarted(object sender, DragStartedEventArgs e)
     {
         beforeFullScreen = null;
-        resizeStart = (Mouse.GetPosition(this), Root.ActualWidth, ChatScroll.ActualHeight);
+        resizeStart = (Mouse.GetPosition(this), Root.ActualWidth, ChatScroll.MaxHeight);
     }
 
     void ResizeGrip_DragDelta(object sender, DragDeltaEventArgs e)
