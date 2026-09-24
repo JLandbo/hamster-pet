@@ -63,11 +63,14 @@ public partial class MainWindow : Window
         conversation = new Conversation(claude, new JsonFile<SavedChats>(Path.Combine(data, "chats.json"), SavedChats.Empty));
         placementFile = new JsonFile<Placement>(Path.Combine(data, "placement.json"), DefaultPlacement);
         placement = placementFile.Load();
+        if (!ModeButton.ContextMenu.Items.OfType<MenuItem>().Any(item => (string)item.Tag == claude.Settings.PermissionMode))
+            claude.Settings = claude.Settings with { PermissionMode = ClaudeSettings.Default.PermissionMode };
         Choose(ModelButton, claude.Settings.Model);
         Choose(EffortButton, claude.Settings.Effort);
         Choose(ModeButton, claude.Settings.PermissionMode);
         ToggleChats.Content = CollapseIcon;
         conversation.Changed += Conversation_Changed;
+        conversation.PermissionModeChanged += mode => claude.Remember(claude.Settings with { PermissionMode = Choose(ModeButton, mode) });
         timer.Tick += (_, _) =>
         {
             UpdateChatList();
@@ -142,6 +145,7 @@ public partial class MainWindow : Window
         UpdateToolbar();
         UpdateChatList();
         ScrollToNewest();
+        _ = conversation.StartAsync();
     }
 
     Placement OnScreen(Placement saved)
@@ -183,7 +187,7 @@ public partial class MainWindow : Window
         ChatScroll.MaxHeight = Math.Clamp(Math.Min(placement.Bottom - SystemParameters.WorkArea.Top, ActualHeight) - (Root.ActualHeight - ChatScroll.ActualHeight),
             0, placement.ChatHeight);
 
-    void Window_Closed(object sender, EventArgs e) => conversation.Cancel();
+    void Window_Closed(object sender, EventArgs e) => claude.End();
 
     void Window_MouseMove(object sender, MouseEventArgs e)
     {
@@ -340,7 +344,7 @@ public partial class MainWindow : Window
         if (e.Key == Key.Enter && Keyboard.Modifiers != ModifierKeys.Shift)
         {
             e.Handled = true;
-            if ((Input.Text.Trim().Length == 0 && attachedFiles.Count + attachedImages.Count == 0) || conversation.IsBusy)
+            if (Input.Text.Trim().Length == 0 && attachedFiles.Count + attachedImages.Count == 0)
                 return;
             var prompt = Conversation.WithAttachments(Input.Text.Trim(), attachedFiles, attachedImages);
             ImageAttachment[] images = [.. attachedImages];

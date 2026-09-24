@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -8,131 +7,141 @@ namespace Hamster;
 
 public interface IClaudeListener
 {
+    void TurnStarted(string? messageId);
     void ToolStarted(ToolUse tool);
     void ToolFinished(ToolResult result);
     Task<bool> AskPermissionAsync(PermissionRequest request, CancellationToken cancellationToken);
     void UsageReported(Usage usage);
+    void ModeChanged(string mode);
+    void ResultReceived(ClaudeResult result);
+    void Exited(string error);
 }
 
 public interface IClaudeClient
 {
-    Task<ClaudeResult> SendAsync(string prompt, IReadOnlyList<ImageAttachment> images, string? sessionId, IClaudeListener listener, CancellationToken cancellationToken);
+    bool IsRunning { get; }
+    Task StartAsync(string? sessionId, IClaudeListener listener);
+    Task SendAsync(string id, string prompt, IReadOnlyList<ImageAttachment> images);
+    void Interrupt();
+    void Withdraw(string id);
+    void End();
 }
 
 public sealed class ClaudeClient(string workspace, string instructionsFile, JsonFile<ClaudeSettings> store) : IClaudeClient
 {
     static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
 
+    (Process Process, ClaudeSession Session)? current;
+    int starts;
+    ClaudeSettings settings = store.Load();
+
     public ClaudeSettings Settings
     {
-        get;
+        get => settings;
         set
         {
-            field = value;
-            store.Save(value);
+            var old = settings;
+            Remember(value);
+            if (current is var (_, session))
+                foreach (var change in ClaudeProtocol.Changes(old, value))
+                    TrySend(session, change);
         }
-    } = store.Load();
+    }
 
-    public async Task<ClaudeResult> SendAsync(string prompt, IReadOnlyList<ImageAttachment> images, string? sessionId, IClaudeListener listener, CancellationToken cancellationToken)
+    public void Remember(ClaudeSettings value)
     {
-        var instructions = File.Exists(instructionsFile) ? await File.ReadAllTextAsync(instructionsFile, CancellationToken.None) : "";
-        using var process = Start(sessionId, instructions);
-        using var killer = new CancellationTokenSource();
-        using var kill = killer.Token.Register(() => TryKill(process));
-        using var stop = cancellationToken.Register(() => killer.CancelAfter(StopTimeout));
-        var errors = process.StandardError.ReadToEndAsync(CancellationToken.None);
+        settings = value;
+        store.Save(value);
+    }
 
-        ClaudeResult? result;
+    public bool IsRunning => current is not null;
+
+    public async Task StartAsync(string? sessionId, IClaudeListener listener)
+    {
+        End();
+        var start = ++starts;
+        var instructions = File.Exists(instructionsFile) ? await File.ReadAllTextAsync(instructionsFile) : "";
+        if (start != starts)
+            return;
+        var process = Start(sessionId, instructions);
+        var session = new ClaudeSession(process.StandardOutput, process.StandardInput, listener);
+        current = (process, session);
+        _ = RunAsync(process, session, listener);
+    }
+
+    public Task SendAsync(string id, string prompt, IReadOnlyList<ImageAttachment> images) =>
+        current is var (_, session) ? session.SendAsync(id, prompt, images) : throw new InvalidOperationException("claude kører ikke.");
+
+    public void Interrupt()
+    {
+        if (current is not var (process, session))
+            return;
+        var results = session.Results;
+        TrySend(session, ClaudeProtocol.Interrupt());
+        _ = KillAfterAsync(process, () => session.Results == results);
+    }
+
+    public void Withdraw(string id)
+    {
+        if (current is var (_, session))
+            TrySend(session, ClaudeProtocol.Withdraw(id));
+    }
+
+    public void End()
+    {
+        if (current is not var (process, session))
+            return;
+        current = null;
+        session.Detach();
+        TrySend(session, ClaudeProtocol.EndSession());
         try
-        {
-            result = await ConverseAsync(process.StandardOutput, process.StandardInput, prompt, images, listener, cancellationToken);
-        }
-        finally
         {
             process.StandardInput.Close();
-        }
-        await process.WaitForExitAsync();
-        if (result is not null)
-            return result;
-
-        var error = (await errors).Trim();
-        return new ClaudeResult(SessionId: null, error.Length > 0 ? error : $"claude stoppede uventet (exit code {process.ExitCode}).", IsError: true);
-    }
-
-    public static async Task<ClaudeResult?> ConverseAsync(TextReader output, TextWriter input, string prompt, IReadOnlyList<ImageAttachment> images,
-        IClaudeListener listener, CancellationToken cancellationToken)
-    {
-        input = TextWriter.Synchronized(input);
-        var pending = new ConcurrentDictionary<string, CancellationTokenSource>();
-        await Task.Run(() => Send(input, ClaudeProtocol.UserMessage(prompt, images)));
-        using var interrupt = cancellationToken.Register(() => Interrupt(input));
-        try
-        {
-            while (await output.ReadLineAsync() is { } line)
-            {
-                foreach (var message in ClaudeProtocol.Parse(line))
-                {
-                    switch (message)
-                    {
-                        case ToolUse tool:
-                            listener.ToolStarted(tool);
-                            break;
-                        case ToolResult toolResult:
-                            listener.ToolFinished(toolResult);
-                            break;
-                        case PermissionRequest request:
-                            var withdrawal = pending[request.RequestId] = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                            _ = AnswerAsync(request, listener, input, pending, withdrawal.Token);
-                            break;
-                        case CancelRequest cancel when pending.TryRemove(cancel.RequestId, out var withdrawn):
-                            withdrawn.Cancel();
-                            break;
-                        case Usage usage:
-                            listener.UsageReported(usage);
-                            break;
-                        case ClaudeResult result:
-                            return result;
-                    }
-                }
-            }
-            return null;
-        }
-        finally
-        {
-            foreach (var unanswered in pending.Values)
-                unanswered.Cancel();
-        }
-    }
-
-    static async Task AnswerAsync(PermissionRequest request, IClaudeListener listener, TextWriter input,
-        ConcurrentDictionary<string, CancellationTokenSource> pending, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var allowed = await listener.AskPermissionAsync(request, cancellationToken);
-            if (pending.TryRemove(request.RequestId, out _))
-                Send(input, allowed ? ClaudeProtocol.Allow(request) : ClaudeProtocol.Deny(request));
-        }
-        catch (Exception exception) when (exception is OperationCanceledException or IOException)
-        {
-        }
-    }
-
-    static void Interrupt(TextWriter input)
-    {
-        try
-        {
-            Send(input, ClaudeProtocol.Interrupt);
         }
         catch (IOException)
         {
         }
+        _ = KillAfterAsync(process, () => true);
     }
 
-    static void Send(TextWriter input, string json)
+    async Task RunAsync(Process process, ClaudeSession session, IClaudeListener listener)
     {
-        input.Write(json + '\n');
-        input.Flush();
+        using (process)
+        {
+            var errors = process.StandardError.ReadToEndAsync();
+            try
+            {
+                await session.ReadAsync();
+            }
+            catch (Exception)
+            {
+                TryKill(process);
+            }
+            await process.WaitForExitAsync();
+            var error = (await errors).Trim();
+            if (current?.Process != process)
+                return;
+            current = null;
+            listener.Exited(error.Length > 0 ? error : $"claude stoppede uventet (exit code {process.ExitCode}).");
+        }
+    }
+
+    static async Task KillAfterAsync(Process process, Func<bool> stuck)
+    {
+        await Task.Delay(StopTimeout);
+        if (stuck())
+            TryKill(process);
+    }
+
+    static void TrySend(ClaudeSession session, string json)
+    {
+        try
+        {
+            session.Send(json);
+        }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException)
+        {
+        }
     }
 
     Process Start(string? sessionId, string instructions)
@@ -150,7 +159,6 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
             StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
-            Environment = { ["CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"] = "1" },
         })!;
     }
 

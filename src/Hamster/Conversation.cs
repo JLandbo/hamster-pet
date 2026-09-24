@@ -7,16 +7,19 @@ namespace Hamster;
 public sealed class Conversation : IClaudeListener
 {
     public const int MaxChats = 100;
+    public const string BackgroundPrompt = "Baggrundsopgave";
+    public const string AnsweredAbove = "Besvaret sammen med beskeden ovenfor.";
     public static readonly TimeSpan AnswerShownTime = TimeSpan.FromSeconds(30);
 
     readonly IClaudeClient claude;
     readonly JsonFile<SavedChats> store;
     readonly HashSet<string> webTools = [];
-    string? sessionId;
-    CancellationTokenSource? run;
-    ChatItem? active, lastAnswered;
+    readonly Dictionary<string, ChatItem> waiting = [];
+    readonly Dictionary<string, ChatItem> toolChats = [];
+    string? sessionId, turnMessage;
+    ChatItem? turn, lastAnswered;
+    bool turnRunning, stopping;
     DateTime answeredAt;
-    int resets;
 
     public Conversation(IClaudeClient claude, JsonFile<SavedChats> store)
     {
@@ -29,15 +32,17 @@ public sealed class Conversation : IClaudeListener
 
     public event Action? Changed;
 
+    public event Action<string>? PermissionModeChanged;
+
     public ObservableCollection<ChatItem> Chats { get; } = [];
     public decimal Cost { get; private set; }
     public Usage? Usage { get; private set; }
-    public bool IsBusy => run is not null;
+    public bool IsBusy => turnRunning || waiting.Count > 0;
     public bool IsBrowsingWeb => webTools.Count > 0;
     public bool IsWaitingForUser => Chats.Any(chat => chat.NeedsAction);
 
     public bool IsCurrent(ChatItem chat, DateTime now) =>
-        chat == active || (chat == lastAnswered && now - answeredAt < AnswerShownTime);
+        chat.Status == ChatStatus.Busy || chat.NeedsAction || (chat == lastAnswered && now - answeredAt < AnswerShownTime);
 
     public bool AnsweredWithin(TimeSpan time, DateTime now) => lastAnswered is { Status: ChatStatus.Done } && now - answeredAt < time;
 
@@ -53,43 +58,38 @@ public sealed class Conversation : IClaudeListener
         return prompt;
     }
 
+    public async Task StartAsync()
+    {
+        try
+        {
+            await claude.StartAsync(sessionId, this);
+        }
+        catch (Exception exception) when (exception is Win32Exception or IOException or InvalidOperationException)
+        {
+        }
+    }
+
     public async Task SendAsync(string prompt, IReadOnlyList<ImageAttachment>? images = null)
     {
-        if (IsBusy)
-            return;
         if (prompt == "/clear")
         {
             Reset();
             return;
         }
-        var chat = active = new ChatItem(prompt);
-        Chats.Add(chat);
-        while (Chats.Count > MaxChats)
-            Chats.RemoveAt(0);
-        using var cancellation = run = new CancellationTokenSource();
+        var id = Guid.NewGuid().ToString();
+        var chat = waiting[id] = Add(new ChatItem(prompt));
         Changed?.Invoke();
         try
         {
-            var resetsAtStart = resets;
-            var result = await claude.SendAsync(prompt, images ?? [], sessionId, this, cancellation.Token);
-            var stopped = result.IsError && cancellation.IsCancellationRequested;
-            chat.NeedsLogin = !stopped && result.NeedsLogin;
-            chat.Answer = stopped ? "Afbrudt." : chat.NeedsLogin ? "Du er ikke logget ind i claude." : result.Text;
-            chat.Status = result.IsError ? ChatStatus.Error : ChatStatus.Done;
-            if (resetsAtStart == resets)
-            {
-                sessionId = result.SessionId ?? (stopped ? sessionId : null);
-                Cost = result.Cost ?? Cost;
-            }
+            if (!claude.IsRunning)
+                await claude.StartAsync(sessionId, this);
+            await claude.SendAsync(id, prompt, images ?? []);
         }
         catch (Exception exception) when (exception is Win32Exception or IOException or InvalidOperationException)
         {
+            if (!waiting.Remove(id))
+                return;
             (chat.Answer, chat.Status) = ($"Kunne ikke tale med claude: {exception.Message}", ChatStatus.Error);
-        }
-        finally
-        {
-            (run, active, lastAnswered, answeredAt) = (null, null, chat, DateTime.UtcNow);
-            webTools.Clear();
             Save();
             Changed?.Invoke();
         }
@@ -97,31 +97,57 @@ public sealed class Conversation : IClaudeListener
 
     public void Reset()
     {
-        resets++;
-        Cancel();
         Chats.Clear();
+        waiting.Clear();
+        toolChats.Clear();
+        webTools.Clear();
+        (turn, turnMessage, lastAnswered, turnRunning, stopping) = (null, null, null, false, false);
         (sessionId, Cost) = (null, 0);
         Save();
         Changed?.Invoke();
+        _ = StartAsync();
     }
 
     public void Delete(ChatItem chat)
     {
-        if (chat == active)
+        var id = waiting.FirstOrDefault(entry => entry.Value == chat).Key;
+        if (chat == turn)
             Cancel();
-        Chats.Remove(chat);
+        else if (id is not null)
+            claude.Withdraw(id);
+        if (id is not null)
+            waiting.Remove(id);
+        Remove(chat);
         Save();
         Changed?.Invoke();
     }
 
-    public void Cancel() => run?.Cancel();
+    public void Cancel()
+    {
+        if (!turnRunning)
+            return;
+        stopping = true;
+        claude.Interrupt();
+    }
+
+    public void TurnStarted(string? messageId)
+    {
+        if (turnRunning)
+            return;
+        (turnRunning, turnMessage) = (true, messageId);
+        turn = messageId is null ? null : waiting.GetValueOrDefault(messageId);
+        Changed?.Invoke();
+    }
 
     public void ToolStarted(ToolUse tool)
     {
         if (tool.IsWeb)
             webTools.Add(tool.Id);
-        if (active is { } chat)
+        if (ChatFor(tool.ParentId) is { } chat)
+        {
+            toolChats[tool.Id] = chat;
             (tool.IsWeb ? chat.Sources : chat.Commands).Lines.Add(tool.Description);
+        }
         Changed?.Invoke();
     }
 
@@ -133,7 +159,7 @@ public sealed class Conversation : IClaudeListener
 
     public async Task<bool> AskPermissionAsync(PermissionRequest request, CancellationToken cancellationToken)
     {
-        var chat = active!;
+        var chat = ChatFor(request.ToolUseId) ?? Add(new ChatItem(BackgroundPrompt) { Status = ChatStatus.Done });
         var question = new UserRequest(request.ToolName, request.Details);
         chat.Requests.Add(question);
         Changed?.Invoke();
@@ -158,5 +184,83 @@ public sealed class Conversation : IClaudeListener
         Changed?.Invoke();
     }
 
-    void Save() => store.Save(new SavedChats(sessionId, [.. Chats.Where(chat => chat != active).Select(chat => chat.ToRecord())], Cost, Usage));
+    public void ModeChanged(string mode) => PermissionModeChanged?.Invoke(mode);
+
+    public void ResultReceived(ClaudeResult result)
+    {
+        var stopped = result.IsError && stopping;
+        var failedToStart = result.IsError && result.Answers is null && !turnRunning;
+        List<ChatItem> answered = failedToStart ? [.. waiting.Values] : [];
+        if (failedToStart)
+            waiting.Clear();
+        foreach (var id in result.Answers ?? [])
+            if (waiting.Remove(id, out var chat))
+                answered.Add(chat);
+
+        var target = answered.FirstOrDefault() ?? turn ?? (Autonomous && result.Text.Length > 0 ? Add(new ChatItem(BackgroundPrompt)) : null);
+        if (target is not null)
+            Finish(target, result, stopped);
+        foreach (var chat in answered.Skip(1))
+        {
+            if (failedToStart)
+                Finish(chat, result, stopped);
+            else
+                (chat.Answer, chat.Status) = (AnsweredAbove, ChatStatus.Done);
+        }
+        if (turn is { Status: ChatStatus.Busy } && turn != target)
+            turn.Status = ChatStatus.Done;
+
+        if (result.Cost is { } cost)
+            Cost = result.SessionId is not null && result.SessionId == sessionId ? Math.Max(Cost, cost) : cost;
+        sessionId = failedToStart ? null : result.SessionId ?? sessionId;
+        (turn, turnMessage, turnRunning, stopping) = (null, null, false, false);
+        (lastAnswered, answeredAt) = (target, DateTime.UtcNow);
+        webTools.Clear();
+        Save();
+        Changed?.Invoke();
+    }
+
+    public void Exited(string error)
+    {
+        var result = new ClaudeResult(null, error, IsError: true);
+        foreach (var chat in waiting.Values)
+            Finish(chat, result, stopping);
+        if (turn is { Status: ChatStatus.Busy })
+            Finish(turn, result, stopping);
+        waiting.Clear();
+        (turn, turnMessage, turnRunning, stopping) = (null, null, false, false);
+        webTools.Clear();
+        Save();
+        Changed?.Invoke();
+    }
+
+    bool Autonomous => turnRunning && turnMessage is null;
+
+    ChatItem? ChatFor(string? toolUseId) =>
+        toolUseId is not null && toolChats.TryGetValue(toolUseId, out var chat) && Chats.Contains(chat) ? chat
+        : turn ?? (Autonomous ? turn = Add(new ChatItem(BackgroundPrompt)) : Chats.LastOrDefault());
+
+    ChatItem Add(ChatItem chat)
+    {
+        Chats.Add(chat);
+        while (Chats.Count > MaxChats)
+            Remove(Chats[0]);
+        return chat;
+    }
+
+    void Remove(ChatItem chat)
+    {
+        foreach (var request in chat.Requests.ToArray())
+            request.Respond(false);
+        Chats.Remove(chat);
+    }
+
+    static void Finish(ChatItem chat, ClaudeResult result, bool stopped)
+    {
+        chat.NeedsLogin = !stopped && result.NeedsLogin;
+        chat.Answer = stopped ? "Afbrudt." : chat.NeedsLogin ? "Du er ikke logget ind i claude." : result.Text;
+        chat.Status = result.IsError ? ChatStatus.Error : ChatStatus.Done;
+    }
+
+    void Save() => store.Save(new SavedChats(sessionId, [.. Chats.Where(chat => chat.Status != ChatStatus.Busy).Select(chat => chat.ToRecord())], Cost, Usage));
 }

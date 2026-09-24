@@ -366,7 +366,6 @@
                                     <MenuItem Header="manual" Tag="default" />
                                     <MenuItem Header="auto edit" Tag="acceptEdits" />
                                     <MenuItem Header="auto" Tag="auto" />
-                                    <MenuItem Header="bypass" Tag="bypassPermissions" />
                                 </ContextMenu>
                             </Button.ContextMenu>
                         </Button>

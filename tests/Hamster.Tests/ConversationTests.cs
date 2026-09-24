@@ -12,6 +12,8 @@ public sealed class ConversationTests : IDisposable
 
     JsonFile<SavedChats> Store() => new(Path.Combine(directory, "chats.json"), SavedChats.Empty);
 
+    static CancellationToken Token => TestContext.Current.CancellationToken;
+
     public void Dispose()
     {
         if (Directory.Exists(directory))
@@ -30,38 +32,93 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
-    public async Task SendAsync_WhenCalledAgain_ThenResumesTheSession()
+    public async Task SendAsync_WhenCalledTwice_ThenBothGoToTheSameClaude()
     {
-        // Arrange
-        await conversation.SendAsync("hej");
-
         // Act
+        await conversation.SendAsync("hej");
         await conversation.SendAsync("igen");
 
         // Assert
-        Assert.Equal([null, "session-1"], claude.Sessions);
+        Assert.Equal([null], claude.Starts);
     }
 
     [Fact]
-    public async Task SendAsync_WhenResumeFails_ThenNextMessageStartsNewSession()
+    public async Task SendAsync_WhenBusy_ThenSendsRightAway()
+    {
+        // Arrange
+        claude.Reply = Started;
+        await conversation.SendAsync("første");
+
+        // Act
+        await conversation.SendAsync("anden");
+
+        // Assert
+        Assert.Equal(2, claude.Ids.Count);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenSessionWasSaved_ThenResumesIt()
     {
         // Arrange
         await conversation.SendAsync("hej");
-        claude.Reply = (_, _) => Task.FromResult(new ClaudeResult(null, "No conversation found", IsError: true));
-        await conversation.SendAsync("igen");
+        var restarted = new Conversation(claude, Store());
 
         // Act
-        await conversation.SendAsync("forfra");
+        await restarted.StartAsync();
 
         // Assert
-        Assert.Equal([null, "session-1", null], claude.Sessions);
+        Assert.Equal([null, "session-1"], claude.Starts);
+    }
+
+    [Fact]
+    public async Task ResultReceived_WhenClaudeCannotResume_ThenWaitingChatShowsWhy()
+    {
+        // Arrange
+        var restarted = await RestartedWithWaitingChat();
+
+        // Act
+        claude.Listener.ResultReceived(CannotResume);
+
+        // Assert
+        Assert.Equal(("No conversation found", ChatStatus.Error), (restarted.Chats[1].Answer, restarted.Chats[1].Status));
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenClaudeCouldNotResume_ThenStartsANewSession()
+    {
+        // Arrange
+        var restarted = await RestartedWithWaitingChat();
+        claude.Listener.ResultReceived(CannotResume);
+        claude.IsRunning = false;
+        claude.Reply = Answer;
+
+        // Act
+        await restarted.SendAsync("forfra");
+
+        // Assert
+        Assert.Equal([null, "session-1", null], claude.Starts);
+    }
+
+    [Fact]
+    public async Task ResultReceived_WhenClaudeCannotResumeBeforeAnyMessage_ThenAddsNoChat()
+    {
+        // Arrange
+        await conversation.SendAsync("hej");
+        var restarted = new Conversation(claude, Store());
+        await restarted.StartAsync();
+
+        // Act
+        claude.Listener.ResultReceived(CannotResume);
+
+        // Assert
+        Assert.Single(restarted.Chats);
     }
 
     [Fact]
     public async Task SendAsync_WhenClaudeFails_ThenChatShowsError()
     {
         // Arrange
-        claude.Reply = (_, _) => Task.FromException<ClaudeResult>(new IOException("pipe brudt"));
+        claude.Reply = (_, _) => throw new IOException("pipe brudt");
 
         // Act
         await conversation.SendAsync("hej");
@@ -84,47 +141,63 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
-    public async Task Constructor_WhenChatsWereSaved_ThenRestoresChatsAndSession()
+    public async Task Constructor_WhenChatsWereSaved_ThenRestoresChats()
     {
         // Arrange
         await conversation.SendAsync("hej");
 
         // Act
         var restarted = new Conversation(claude, Store());
-        await restarted.SendAsync("igen");
 
         // Assert
-        Assert.Equal([null, "session-1"], claude.Sessions);
-        Assert.Equal(["hej", "igen"], restarted.Chats.Select(chat => chat.Prompt));
-        Assert.Equal(("Svar", ChatStatus.Done), (restarted.Chats[0].Answer, restarted.Chats[0].Status));
+        var chat = Assert.Single(restarted.Chats);
+        Assert.Equal(("hej", "Svar", ChatStatus.Done), (chat.Prompt, chat.Answer, chat.Status));
     }
 
     [Fact]
-    public void AskPermissionAsync_WhenAsked_ThenWaitsForUser()
+    public async Task AskPermissionAsync_WhenAsked_ThenWaitsForUser()
     {
         // Arrange
-        claude.Reply = AskingPermission;
+        claude.Reply = (listener, id) =>
+        {
+            listener.TurnStarted(id);
+            _ = listener.AskPermissionAsync(Request(), CancellationToken.None);
+        };
 
         // Act
-        _ = conversation.SendAsync("hej");
+        await conversation.SendAsync("hej");
 
         // Assert
         Assert.True(conversation.IsWaitingForUser);
     }
 
-    [Fact(Timeout = 5_000)]
-    public async Task AskPermissionAsync_WhenUserAllows_ThenClaudeGetsYes()
+    [Theory(Timeout = 5_000)]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AskPermissionAsync_WhenUserAnswers_ThenClaudeGetsTheAnswer(bool allowed)
     {
         // Arrange
-        claude.Reply = AskingPermission;
-        var sending = conversation.SendAsync("hej");
+        var asking = await Asking();
 
         // Act
-        conversation.Chats[0].Requests[0].Respond(true);
-        await sending.WaitAsync(TestContext.Current.CancellationToken);
+        conversation.Chats[0].Requests[0].Respond(allowed);
 
         // Assert
-        Assert.Equal("True", conversation.Chats[0].Answer);
+        Assert.Equal(allowed, await asking.WaitAsync(Token));
+    }
+
+    [Fact(Timeout = 5_000)]
+    public async Task AskPermissionAsync_WhenUserDenies_ThenCommandsShowIt()
+    {
+        // Arrange
+        var asking = await Asking();
+
+        // Act
+        conversation.Chats[0].Requests[0].Respond(false);
+        await asking.WaitAsync(Token);
+
+        // Assert
+        Assert.Equal(["Afvist: Bash"], conversation.Chats[0].Commands.Lines);
     }
 
     [Fact(Timeout = 5_000)]
@@ -133,110 +206,214 @@ public sealed class ConversationTests : IDisposable
         // Arrange
         using var withdrawal = new CancellationTokenSource();
         Task<bool>? asking = null;
-        claude.Reply = (listener, _) =>
+        claude.Reply = (listener, id) =>
         {
+            listener.TurnStarted(id);
             asking = listener.AskPermissionAsync(Request(), withdrawal.Token);
-            return new TaskCompletionSource<ClaudeResult>().Task;
         };
-        _ = conversation.SendAsync("hej");
+        await conversation.SendAsync("hej");
 
         // Act
         withdrawal.Cancel();
 
         // Assert
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => asking!).WaitAsync(TestContext.Current.CancellationToken);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => asking!).WaitAsync(Token);
         Assert.Empty(conversation.Chats[0].Requests);
     }
 
     [Fact(Timeout = 5_000)]
-    public async Task Reset_WhenRunningTurnEndsAfterwards_ThenNextMessageStartsNewConversation()
+    public async Task Delete_WhenChatAsksPermission_ThenClaudeGetsNo()
     {
         // Arrange
-        var reply = new TaskCompletionSource<ClaudeResult>();
-        claude.Reply = (_, _) => reply.Task;
-        var sending = conversation.SendAsync("hej");
-        conversation.Reset();
-        reply.SetResult(Stopped);
-        await sending.WaitAsync(TestContext.Current.CancellationToken);
-        claude.Reply = (_, _) => Task.FromResult(Answered);
+        var asking = await Asking();
 
         // Act
-        await conversation.SendAsync("forfra");
+        conversation.Delete(conversation.Chats[0]);
 
         // Assert
-        Assert.Equal([null, null], claude.Sessions);
-        Assert.Equal(0m, conversation.Cost);
-    }
-
-    [Fact(Timeout = 5_000)]
-    public async Task AskPermissionAsync_WhenUserDenies_ThenCommandsShowIt()
-    {
-        // Arrange
-        claude.Reply = AskingPermission;
-        var sending = conversation.SendAsync("hej");
-
-        // Act
-        conversation.Chats[0].Requests[0].Respond(false);
-        await sending.WaitAsync(TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.Equal(["Afvist: Bash"], conversation.Chats[0].Commands.Lines);
+        Assert.False(await asking.WaitAsync(Token));
     }
 
     [Fact]
-    public async Task Reset_WhenCalled_ThenForgetsChatsAndSession()
+    public async Task AskPermissionAsync_WhenNoTurnIsRunning_ThenAsksInTheLatestChat()
+    {
+        // Arrange
+        await conversation.SendAsync("hej");
+
+        // Act
+        _ = conversation.AskPermissionAsync(Request(), CancellationToken.None);
+
+        // Assert
+        Assert.Single(conversation.Chats[0].Requests);
+    }
+
+    [Fact]
+    public async Task ToolStarted_WhenSubagentWorksAfterTheAnswer_ThenShowsInTheChatThatStartedIt()
+    {
+        // Arrange
+        await StartedSubagent();
+
+        // Act
+        claude.Listener.ToolStarted(new ToolUse("toolu_2", "Bash", "dir", ParentId: "toolu_agent"));
+
+        // Assert
+        Assert.Equal(["Agent: Undersøg", "Bash: dir"], conversation.Chats[0].Commands.Lines);
+    }
+
+    [Fact]
+    public async Task AskPermissionAsync_WhenSubagentAsksAfterTheAnswer_ThenAsksInTheChatThatStartedIt()
+    {
+        // Arrange
+        await StartedSubagent();
+        claude.Listener.ToolStarted(new ToolUse("toolu_2", "Bash", "dir", ParentId: "toolu_agent"));
+
+        // Act
+        _ = conversation.AskPermissionAsync(Request() with { ToolUseId = "toolu_2" }, CancellationToken.None);
+
+        // Assert
+        Assert.Equal((1, 0), (conversation.Chats[0].Requests.Count, conversation.Chats[1].Requests.Count));
+    }
+
+    [Fact]
+    public async Task AskPermissionAsync_WhenTheChatThatStartedTheSubagentIsDeleted_ThenAsksInTheLatestChat()
+    {
+        // Arrange
+        await StartedSubagent();
+        conversation.Delete(conversation.Chats[0]);
+
+        // Act
+        _ = conversation.AskPermissionAsync(Request() with { ToolUseId = "toolu_agent" }, CancellationToken.None);
+
+        // Assert
+        Assert.Single(conversation.Chats[0].Requests);
+    }
+
+    [Fact]
+    public async Task ResultReceived_WhenBackgroundTaskFinishes_ThenShowsTheAnswerInANewChat()
+    {
+        // Arrange
+        await conversation.SendAsync("hej");
+
+        // Act
+        claude.Listener.TurnStarted(null);
+        claude.Listener.ResultReceived(new ClaudeResult("session-1", "Opgaven er færdig.", IsError: false));
+
+        // Assert
+        var chat = conversation.Chats[^1];
+        Assert.Equal((Conversation.BackgroundPrompt, "Opgaven er færdig.", ChatStatus.Done), (chat.Prompt, chat.Answer, chat.Status));
+    }
+
+    [Fact]
+    public async Task ToolStarted_WhenBackgroundTurnWorks_ThenItsChatShowsTheCommands()
+    {
+        // Arrange
+        await conversation.SendAsync("hej");
+        claude.Listener.TurnStarted(null);
+
+        // Act
+        claude.Listener.ToolStarted(new ToolUse("toolu_2", "Bash", "dir"));
+
+        // Assert
+        Assert.Equal(Conversation.BackgroundPrompt, conversation.Chats[^1].Prompt);
+        Assert.Equal(["Bash: dir"], conversation.Chats[^1].Commands.Lines);
+    }
+
+    [Fact]
+    public async Task ResultReceived_WhenMessagesWereAnsweredTogether_ThenTheFirstGetsTheAnswer()
+    {
+        // Arrange
+        claude.Reply = Started;
+        await conversation.SendAsync("første");
+        await conversation.SendAsync("anden");
+
+        // Act
+        claude.Listener.ResultReceived(Answered with { Answers = [.. claude.Ids] });
+
+        // Assert
+        Assert.Equal(["Svar", Conversation.AnsweredAbove], conversation.Chats.Select(chat => chat.Answer));
+        Assert.False(conversation.IsBusy);
+    }
+
+    [Fact]
+    public async Task Reset_WhenCalled_ThenForgetsChatsAndStartsANewSession()
     {
         // Arrange
         await conversation.SendAsync("hej");
 
         // Act
         conversation.Reset();
-        await conversation.SendAsync("forfra");
 
         // Assert
-        Assert.Equal([null, null], claude.Sessions);
-        Assert.Single(conversation.Chats);
+        Assert.Equal([null, null], claude.Starts);
+        Assert.Empty(conversation.Chats);
     }
 
     [Fact]
-    public async Task SendAsync_WhenClear_ThenForgetsChatsAndSessionWithoutAskingClaude()
+    public async Task SendAsync_WhenClear_ThenStartsANewSessionWithoutSendingIt()
     {
         // Arrange
         await conversation.SendAsync("hej");
 
         // Act
         await conversation.SendAsync("/clear");
-        await conversation.SendAsync("forfra");
 
         // Assert
-        Assert.Equal([null, null], claude.Sessions);
-        Assert.Single(conversation.Chats);
-    }
-
-    [Fact(Timeout = 5_000)]
-    public async Task Reset_WhenRunning_ThenCancelsClaudeAndEndsEmpty()
-    {
-        // Arrange
-        claude.Reply = (_, cancellationToken) => UntilStopped(cancellationToken, Stopped);
-        var sending = conversation.SendAsync("hej");
-
-        // Act
-        conversation.Reset();
-        await sending.WaitAsync(TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.Equal((false, 0), (conversation.IsBusy, conversation.Chats.Count));
+        Assert.Equal([null, null], claude.Starts);
+        Assert.Single(claude.Ids);
+        Assert.Empty(conversation.Chats);
     }
 
     [Fact]
-    public void IsCurrent_WhenChatIsRunning_ThenTrue()
+    public async Task Reset_WhenRunning_ThenIsNoLongerBusy()
     {
         // Arrange
-        claude.Reply = (_, _) => new TaskCompletionSource<ClaudeResult>().Task;
-        _ = conversation.SendAsync("hej");
+        claude.Reply = Started;
+        await conversation.SendAsync("hej");
+
+        // Act
+        conversation.Reset();
+
+        // Assert
+        Assert.False(conversation.IsBusy);
+    }
+
+    [Fact]
+    public async Task Reset_WhenCalled_ThenCostIsZero()
+    {
+        // Arrange
+        claude.Reply = Answering(Answered with { Cost = 0.36m });
+        await conversation.SendAsync("hej");
+
+        // Act
+        conversation.Reset();
+
+        // Assert
+        Assert.Equal(0m, conversation.Cost);
+    }
+
+    [Fact]
+    public async Task IsCurrent_WhenChatIsRunning_ThenTrue()
+    {
+        // Arrange
+        claude.Reply = Started;
+        await conversation.SendAsync("hej");
 
         // Act
         var current = conversation.IsCurrent(conversation.Chats[0], DateTime.UtcNow);
+
+        // Assert
+        Assert.True(current);
+    }
+
+    [Fact]
+    public async Task IsCurrent_WhenChatAsksPermission_ThenTrueLongAfterItsAnswer()
+    {
+        // Arrange
+        await conversation.SendAsync("hej");
+        _ = conversation.AskPermissionAsync(Request(), CancellationToken.None);
+
+        // Act
+        var current = conversation.IsCurrent(conversation.Chats[0], DateTime.UtcNow.AddMinutes(1));
 
         // Assert
         Assert.True(current);
@@ -290,7 +467,7 @@ public sealed class ConversationTests : IDisposable
     public async Task AnsweredWithin_WhenClaudeFailed_ThenFalse()
     {
         // Arrange
-        claude.Reply = (_, _) => Task.FromResult(new ClaudeResult("session-1", "Fejl", IsError: true));
+        claude.Reply = Answering(new ClaudeResult("session-1", "Fejl", IsError: true));
         await conversation.SendAsync("hej");
 
         // Act
@@ -304,9 +481,24 @@ public sealed class ConversationTests : IDisposable
     public async Task SendAsync_WhenClaudeReportsCost_ThenCostIsTheSessionTotal()
     {
         // Arrange
-        claude.Reply = (_, _) => Task.FromResult(Answered with { Cost = 0.36m });
+        claude.Reply = Answering(Answered with { Cost = 0.36m });
         await conversation.SendAsync("hej");
-        claude.Reply = (_, _) => Task.FromResult(Answered with { Cost = 0.5m });
+        claude.Reply = Answering(Answered with { Cost = 0.5m });
+
+        // Act
+        await conversation.SendAsync("igen");
+
+        // Assert
+        Assert.Equal(0.5m, conversation.Cost);
+    }
+
+    [Fact]
+    public async Task ResultReceived_WhenTheSameSessionReportsLess_ThenKeepsTheHigherCost()
+    {
+        // Arrange
+        claude.Reply = Answering(Answered with { Cost = 0.5m });
+        await conversation.SendAsync("hej");
+        claude.Reply = Answering(Answered with { Cost = 0.3m });
 
         // Act
         await conversation.SendAsync("igen");
@@ -319,7 +511,7 @@ public sealed class ConversationTests : IDisposable
     public async Task Constructor_WhenCostWasSaved_ThenRestoresCost()
     {
         // Arrange
-        claude.Reply = (_, _) => Task.FromResult(Answered with { Cost = 0.36m });
+        claude.Reply = Answering(Answered with { Cost = 0.36m });
         await conversation.SendAsync("hej");
 
         // Act
@@ -327,20 +519,6 @@ public sealed class ConversationTests : IDisposable
 
         // Assert
         Assert.Equal(0.36m, restarted.Cost);
-    }
-
-    [Fact]
-    public async Task Reset_WhenCalled_ThenCostIsZero()
-    {
-        // Arrange
-        claude.Reply = (_, _) => Task.FromResult(Answered with { Cost = 0.36m });
-        await conversation.SendAsync("hej");
-
-        // Act
-        conversation.Reset();
-
-        // Assert
-        Assert.Equal(0m, conversation.Cost);
     }
 
     [Fact]
@@ -357,31 +535,78 @@ public sealed class ConversationTests : IDisposable
         Assert.Equal(["behold mig"], new Conversation(claude, Store()).Chats.Select(chat => chat.Prompt));
     }
 
-    [Fact(Timeout = 5_000)]
-    public async Task Delete_WhenChatIsRunning_ThenCancelsClaude()
+    [Fact]
+    public async Task Delete_WhenChatIsRunning_ThenInterruptsClaude()
     {
         // Arrange
-        claude.Reply = (_, cancellationToken) => UntilStopped(cancellationToken, Stopped);
-        var sending = conversation.SendAsync("hej");
+        claude.Reply = Started;
+        await conversation.SendAsync("hej");
 
         // Act
         conversation.Delete(conversation.Chats[0]);
-        await sending.WaitAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal((false, 0), (conversation.IsBusy, conversation.Chats.Count));
+        Assert.Equal((1, 0), (claude.Interrupts, conversation.Chats.Count));
     }
 
     [Fact]
-    public async Task SendAsync_WhenRunEndsDuringWebSearch_ThenStopsBrowsingWeb()
+    public async Task Delete_WhenChatWaitsForItsTurn_ThenWithdrawsItFromClaude()
+    {
+        // Arrange
+        claude.Reply = Started;
+        await conversation.SendAsync("første");
+        await conversation.SendAsync("anden");
+
+        // Act
+        conversation.Delete(conversation.Chats[1]);
+
+        // Assert
+        Assert.Equal([claude.Ids[1]], claude.Withdrawn);
+        Assert.Equal(0, claude.Interrupts);
+    }
+
+    [Fact]
+    public async Task ResultReceived_WhenADeletedMessageRunsAnyway_ThenAddsNoChat()
+    {
+        // Arrange
+        claude.Reply = Silent;
+        await conversation.SendAsync("slet mig");
+        conversation.Delete(conversation.Chats[0]);
+        claude.Listener.TurnStarted(claude.Ids[0]);
+
+        // Act
+        claude.Listener.ResultReceived(Answered with { Answers = [claude.Ids[0]] });
+
+        // Assert
+        Assert.Empty(conversation.Chats);
+    }
+
+    [Fact]
+    public async Task Delete_WhenAnotherChatIsRunning_ThenRunningChatIsNotSaved()
+    {
+        // Arrange
+        await conversation.SendAsync("færdig");
+        claude.Reply = Started;
+        await conversation.SendAsync("kører");
+
+        // Act
+        conversation.Delete(conversation.Chats[0]);
+
+        // Assert
+        Assert.Empty(new Conversation(claude, Store()).Chats);
+    }
+
+    [Fact]
+    public async Task ResultReceived_WhenRunEndsDuringWebSearch_ThenStopsBrowsingWeb()
     {
         // Arrange
         var browsing = false;
-        claude.Reply = (listener, _) =>
+        claude.Reply = (listener, id) =>
         {
+            listener.TurnStarted(id);
             listener.ToolStarted(new ToolUse("toolu_1", "WebSearch"));
             browsing = conversation.IsBrowsingWeb;
-            return Task.FromResult(Answered);
+            listener.ResultReceived(Answered with { Answers = [id] });
         };
 
         // Act
@@ -395,12 +620,12 @@ public sealed class ConversationTests : IDisposable
     public async Task ToolStarted_WhenRunning_ThenChatShowsCommandsAndSources()
     {
         // Arrange
-        claude.Reply = (listener, _) =>
+        claude.Reply = (listener, id) =>
         {
+            listener.TurnStarted(id);
             listener.ToolStarted(new ToolUse("toolu_1", "Read", "Mood.cs"));
             listener.ToolStarted(new ToolUse("toolu_2", "WebSearch", "hamstere"));
             listener.ToolStarted(new ToolUse("toolu_3", "Bash", "git log"));
-            return Task.FromResult(Answered);
         };
 
         // Act
@@ -415,7 +640,7 @@ public sealed class ConversationTests : IDisposable
     public async Task SendAsync_WhenNotLoggedIn_ThenChatOffersLogin()
     {
         // Arrange
-        claude.Reply = (_, _) => Task.FromResult(new ClaudeResult("session-1", "Not logged in · Please run /login", IsError: true));
+        claude.Reply = Answering(new ClaudeResult("session-1", "Not logged in · Please run /login", IsError: true));
 
         // Act
         await conversation.SendAsync("hej");
@@ -428,10 +653,10 @@ public sealed class ConversationTests : IDisposable
     public async Task Constructor_WhenUsageWasSaved_ThenRestoresUsage()
     {
         // Arrange
-        claude.Reply = (listener, _) =>
+        claude.Reply = (listener, id) =>
         {
             listener.UsageReported(new Usage(0.03, 0.59));
-            return Task.FromResult(Answered);
+            Answer(listener, id);
         };
         await conversation.SendAsync("hej");
 
@@ -443,67 +668,105 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
-    public async Task Delete_WhenAnotherChatIsRunning_ThenRunningChatIsNotSaved()
-    {
-        // Arrange
-        await conversation.SendAsync("færdig");
-        claude.Reply = (_, _) => new TaskCompletionSource<ClaudeResult>().Task;
-        _ = conversation.SendAsync("kører");
-
-        // Act
-        conversation.Delete(conversation.Chats[0]);
-
-        // Assert
-        Assert.Empty(new Conversation(claude, Store()).Chats);
-    }
-
-    [Fact(Timeout = 5_000)]
     public async Task Cancel_WhenRunning_ThenChatIsInterruptedAndKeepsTheCost()
     {
         // Arrange
-        claude.Reply = (_, cancellationToken) => UntilStopped(cancellationToken, Stopped);
-        var sending = conversation.SendAsync("hej");
+        claude.Reply = Started;
+        await conversation.SendAsync("hej");
 
         // Act
         conversation.Cancel();
-        await sending.WaitAsync(TestContext.Current.CancellationToken);
+        claude.Listener.ResultReceived(Stopped with { Answers = [claude.Ids[0]] });
 
         // Assert
         var chat = Assert.Single(conversation.Chats);
-        Assert.Equal(("Afbrudt.", ChatStatus.Error, 0.2m), (chat.Answer, chat.Status, conversation.Cost));
+        Assert.Equal((1, "Afbrudt.", ChatStatus.Error, 0.2m), (claude.Interrupts, chat.Answer, chat.Status, conversation.Cost));
     }
 
-    [Fact(Timeout = 5_000)]
-    public async Task Cancel_WhenClaudeHadToBeKilled_ThenNextMessageResumesTheSession()
+    [Fact]
+    public async Task Cancel_WhenNothingRuns_ThenDoesNotInterrupt()
     {
         // Arrange
         await conversation.SendAsync("hej");
-        claude.Reply = (_, cancellationToken) => UntilStopped(cancellationToken, new ClaudeResult(null, "claude stoppede uventet", IsError: true));
-        var sending = conversation.SendAsync("stop");
+
+        // Act
         conversation.Cancel();
-        await sending.WaitAsync(TestContext.Current.CancellationToken);
-        claude.Reply = (_, _) => Task.FromResult(Answered);
+
+        // Assert
+        Assert.Equal(0, claude.Interrupts);
+    }
+
+    [Fact]
+    public async Task Cancel_WhenAnswerAlreadyArrived_ThenKeepsTheAnswer()
+    {
+        // Arrange
+        claude.Reply = Started;
+        await conversation.SendAsync("hej");
+
+        // Act
+        conversation.Cancel();
+        claude.Listener.ResultReceived(Answered with { Answers = [claude.Ids[0]] });
+
+        // Assert
+        Assert.Equal(("Svar", ChatStatus.Done), (conversation.Chats[0].Answer, conversation.Chats[0].Status));
+    }
+
+    [Fact]
+    public async Task Exited_WhenClaudeDies_ThenWaitingChatShowsWhy()
+    {
+        // Arrange
+        claude.Reply = Started;
+        await conversation.SendAsync("hej");
+
+        // Act
+        claude.Listener.Exited("claude stoppede uventet");
+
+        // Assert
+        Assert.Equal(("claude stoppede uventet", ChatStatus.Error), (conversation.Chats[0].Answer, conversation.Chats[0].Status));
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenClaudeHasExited_ThenResumesTheSession()
+    {
+        // Arrange
+        await conversation.SendAsync("hej");
+        claude.IsRunning = false;
+        claude.Listener.Exited("claude stoppede uventet");
 
         // Act
         await conversation.SendAsync("igen");
 
         // Assert
-        Assert.Equal([null, "session-1", "session-1"], claude.Sessions);
+        Assert.Equal([null, "session-1"], claude.Starts);
     }
 
-    [Fact(Timeout = 5_000)]
-    public async Task Cancel_WhenAnswerAlreadyArrived_ThenKeepsTheAnswer()
+    [Fact]
+    public async Task Exited_WhenClaudeWasKilledAfterStop_ThenChatSaysInterrupted()
     {
         // Arrange
-        claude.Reply = (_, cancellationToken) => UntilStopped(cancellationToken, Answered);
-        var sending = conversation.SendAsync("hej");
+        claude.Reply = Started;
+        await conversation.SendAsync("hej");
+        conversation.Cancel();
 
         // Act
-        conversation.Cancel();
-        await sending.WaitAsync(TestContext.Current.CancellationToken);
+        claude.Listener.Exited("killed");
 
         // Assert
-        Assert.Equal(("Svar", ChatStatus.Done), (conversation.Chats[0].Answer, conversation.Chats[0].Status));
+        Assert.Equal("Afbrudt.", conversation.Chats[0].Answer);
+    }
+
+    [Fact]
+    public void ModeChanged_WhenClaudeSwitchesMode_ThenTellsTheWindow()
+    {
+        // Arrange
+        string? mode = null;
+        conversation.PermissionModeChanged += changed => mode = changed;
+
+        // Act
+        conversation.ModeChanged("plan");
+
+        // Assert
+        Assert.Equal("plan", mode);
     }
 
     [Theory]
@@ -551,34 +814,93 @@ public sealed class ConversationTests : IDisposable
         Assert.Equal([image], claude.Images);
     }
 
+    async Task<Task<bool>> Asking()
+    {
+        Task<bool>? asking = null;
+        claude.Reply = (listener, id) =>
+        {
+            listener.TurnStarted(id);
+            asking = listener.AskPermissionAsync(Request(), CancellationToken.None);
+        };
+        await conversation.SendAsync("hej");
+        return asking!;
+    }
+
+    async Task<Conversation> RestartedWithWaitingChat()
+    {
+        await conversation.SendAsync("hej");
+        var restarted = new Conversation(claude, Store());
+        claude.IsRunning = false;
+        claude.Reply = Silent;
+        await restarted.SendAsync("igen");
+        return restarted;
+    }
+
+    async Task StartedSubagent()
+    {
+        claude.Reply = (listener, id) =>
+        {
+            listener.TurnStarted(id);
+            listener.ToolStarted(new ToolUse("toolu_agent", "Agent", "Undersøg"));
+            listener.ResultReceived(Answered with { Answers = [id] });
+        };
+        await conversation.SendAsync("første");
+        claude.Reply = Answer;
+        await conversation.SendAsync("anden");
+    }
+
     static PermissionRequest Request() => new("req-1", "Bash", new JsonObject { ["command"] = "dir" });
 
     static readonly ClaudeResult Answered = new("session-1", "Svar", IsError: false);
 
-    static async Task<ClaudeResult> AskingPermission(IClaudeListener listener, CancellationToken _) =>
-        Answered with { Text = $"{await listener.AskPermissionAsync(Request(), CancellationToken.None)}" };
     static readonly ClaudeResult Stopped = new("session-1", "error_during_execution", IsError: true, Cost: 0.2m);
 
-    static Task<ClaudeResult> UntilStopped(CancellationToken cancellationToken, ClaudeResult result)
+    static readonly ClaudeResult CannotResume = new("session-1", "No conversation found", IsError: true);
+
+    static Action<IClaudeListener, string> Answering(ClaudeResult result) => (listener, id) =>
     {
-        var reply = new TaskCompletionSource<ClaudeResult>();
-        cancellationToken.Register(() => reply.TrySetResult(result));
-        return reply.Task;
+        listener.TurnStarted(id);
+        listener.ResultReceived(result with { Answers = [id] });
+    };
+
+    static void Answer(IClaudeListener listener, string id) => Answering(Answered)(listener, id);
+
+    static void Started(IClaudeListener listener, string id) => listener.TurnStarted(id);
+
+    static void Silent(IClaudeListener listener, string id)
+    {
     }
 
     sealed class FakeClaude : IClaudeClient
     {
-        public Func<IClaudeListener, CancellationToken, Task<ClaudeResult>> Reply { get; set; } =
-            (_, _) => Task.FromResult(Answered);
-        public List<string?> Sessions { get; } = [];
+        public Action<IClaudeListener, string> Reply { get; set; } = Answer;
+        public List<string?> Starts { get; } = [];
+        public List<string> Ids { get; } = [];
         public List<ImageAttachment> Images { get; } = [];
+        public List<string> Withdrawn { get; } = [];
+        public int Interrupts { get; private set; }
+        public bool IsRunning { get; set; }
+        public IClaudeListener Listener { get; private set; } = null!;
 
-        public Task<ClaudeResult> SendAsync(string prompt, IReadOnlyList<ImageAttachment> images, string? sessionId, IClaudeListener listener,
-            CancellationToken cancellationToken)
+        public Task StartAsync(string? sessionId, IClaudeListener listener)
         {
-            Sessions.Add(sessionId);
-            Images.AddRange(images);
-            return Reply(listener, cancellationToken);
+            Starts.Add(sessionId);
+            (Listener, IsRunning) = (listener, true);
+            return Task.CompletedTask;
         }
+
+        public Task SendAsync(string id, string prompt, IReadOnlyList<ImageAttachment> images)
+        {
+            Ids.Add(id);
+            Images.AddRange(images);
+            Reply(Listener, id);
+            return Task.CompletedTask;
+        }
+
+        public void Interrupt() => Interrupts++;
+
+        public void Withdraw(string id) => Withdrawn.Add(id);
+
+        public void End() => IsRunning = false;
     }
 }

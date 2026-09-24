@@ -5,7 +5,7 @@ namespace Hamster;
 
 public abstract record ClaudeEvent;
 
-public sealed record ToolUse(string Id, string Name, string Detail = "") : ClaudeEvent
+public sealed record ToolUse(string Id, string Name, string Detail = "", string? ParentId = null) : ClaudeEvent
 {
     public bool IsWeb => Name is "WebSearch" or "WebFetch";
 
@@ -14,14 +14,18 @@ public sealed record ToolUse(string Id, string Name, string Detail = "") : Claud
 
 public sealed record ToolResult(string ToolUseId) : ClaudeEvent;
 
-public sealed record PermissionRequest(string RequestId, string ToolName, JsonObject Input) : ClaudeEvent
+public sealed record PermissionRequest(string RequestId, string ToolName, JsonObject Input, string? ToolUseId = null) : ClaudeEvent
 {
     public string Details => string.Join(Environment.NewLine, Input.Select(property => $"{property.Key}: {property.Value}"));
 }
 
 public sealed record CancelRequest(string RequestId) : ClaudeEvent;
 
-public sealed record ClaudeResult(string? SessionId, string Text, bool IsError, decimal? Cost = null) : ClaudeEvent
+public sealed record TurnStarted(string? MessageId) : ClaudeEvent;
+
+public sealed record ModeChanged(string Mode) : ClaudeEvent;
+
+public sealed record ClaudeResult(string? SessionId, string Text, bool IsError, decimal? Cost = null, IReadOnlyList<string>? Answers = null) : ClaudeEvent
 {
     public bool NeedsLogin => IsError && Text.Contains("/login");
 }
@@ -57,13 +61,17 @@ public static class ClaudeProtocol
         {
             return [];
         }
-        if (message is null)
+        if (message is not JsonObject)
             return [];
 
         return (string?)message["type"] switch
         {
-            "assistant" => ContentBlocks(message, "tool_use").Select(block => new ToolUse((string)block["id"]!, (string)block["name"]!, Detail(block["input"]))),
+            "assistant" => ContentBlocks(message, "tool_use").Select(block =>
+                new ToolUse((string)block["id"]!, (string)block["name"]!, Detail(block["input"]), (string?)message["parent_tool_use_id"])),
             "user" => ContentBlocks(message, "tool_result").Select(block => new ToolResult((string)block["tool_use_id"]!)),
+            "command_lifecycle" when (string?)message["state"] == "started" => [new TurnStarted((string?)message["command_uuid"])],
+            "system" when (string?)message["subtype"] == "init" => [new TurnStarted(null)],
+            "system" when (string?)message["subtype"] == "status" && (string?)message["permissionMode"] is { } mode => [new ModeChanged(mode)],
             "control_request" when (string?)message["request"]?["subtype"] == "can_use_tool" => [ToPermissionRequest(message)],
             "control_cancel_request" => [new CancelRequest((string)message["request_id"]!)],
             "rate_limit_event" => UsageOf(message["rate_limit_info"]?["unifiedWindows"]),
@@ -71,14 +79,16 @@ public static class ClaudeProtocol
                 (string?)message["session_id"],
                 ResultText(message),
                 (bool?)message["is_error"] ?? false,
-                (decimal?)message["total_cost_usd"])],
+                (decimal?)message["total_cost_usd"],
+                Answers(message))],
             _ => [],
         };
     }
 
-    public static string UserMessage(string prompt, IReadOnlyList<ImageAttachment> images) => new JsonObject
+    public static string UserMessage(string prompt, IReadOnlyList<ImageAttachment> images, string id) => new JsonObject
     {
         ["type"] = "user",
+        ["uuid"] = id,
         ["message"] = new JsonObject { ["role"] = "user", ["content"] = Content(prompt, images) },
         ["parent_tool_use_id"] = null,
         ["session_id"] = "",
@@ -97,13 +107,34 @@ public static class ClaudeProtocol
                 }),
             ]);
 
-    public const string Interrupt = """{"type":"control_request","request_id":"interrupt","request":{"subtype":"interrupt"}}""";
+    public static string Interrupt() => Control(new JsonObject { ["subtype"] = "interrupt" });
+
+    public static string EndSession() => Control(new JsonObject { ["subtype"] = "end_session" });
+
+    public static string Withdraw(string id) => Control(new JsonObject { ["subtype"] = "cancel_async_message", ["message_uuid"] = id });
+
+    public static IEnumerable<string> Changes(ClaudeSettings old, ClaudeSettings value)
+    {
+        if (value.Model != old.Model)
+            yield return Control(new JsonObject { ["subtype"] = "set_model", ["model"] = value.Model });
+        if (value.Effort != old.Effort)
+            yield return Control(new JsonObject { ["subtype"] = "apply_flag_settings", ["settings"] = new JsonObject { ["effortLevel"] = value.Effort } });
+        if (value.PermissionMode != old.PermissionMode)
+            yield return Control(new JsonObject { ["subtype"] = "set_permission_mode", ["mode"] = value.PermissionMode });
+    }
 
     public static string Allow(PermissionRequest request) =>
         Response(request.RequestId, new JsonObject { ["behavior"] = "allow", ["updatedInput"] = request.Input.DeepClone() });
 
     public static string Deny(PermissionRequest request) =>
         Response(request.RequestId, new JsonObject { ["behavior"] = "deny", ["message"] = "Brugeren afviste." });
+
+    static string Control(JsonObject request) => new JsonObject
+    {
+        ["type"] = "control_request",
+        ["request_id"] = Guid.NewGuid().ToString(),
+        ["request"] = request,
+    }.ToJsonString();
 
     static string Response(string requestId, JsonObject body) => new JsonObject
     {
@@ -126,6 +157,11 @@ public static class ClaudeProtocol
         ?? (string?)message["subtype"]
         ?? "";
 
+    static IReadOnlyList<string>? Answers(JsonNode message) =>
+        message["user_message_uuids"] is JsonArray ids ? [.. ids.Select(id => (string)id!)]
+        : (string?)message["user_message_uuid"] is { } id ? [id]
+        : null;
+
     static IEnumerable<ClaudeEvent> UsageOf(JsonNode? windows) =>
         (double?)windows?["five_hour"]?["utilization"] is { } fiveHour && (double?)windows?["seven_day"]?["utilization"] is { } sevenDay
             ? [new Usage(fiveHour, sevenDay)]
@@ -137,6 +173,7 @@ public static class ClaudeProtocol
         return new PermissionRequest(
             (string)message["request_id"]!,
             (string?)request["display_name"] ?? (string)request["tool_name"]!,
-            request["input"]?.DeepClone() as JsonObject ?? new JsonObject());
+            request["input"]?.DeepClone() as JsonObject ?? new JsonObject(),
+            (string?)request["tool_use_id"]);
     }
 }
