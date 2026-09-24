@@ -398,8 +398,6 @@
                     </ContextMenu>
                 </Image.ContextMenu>
             </Image>
-            <Ellipse x:Name="NewsDot" Grid.Column="1" Width="10" Height="10" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="22,0,0,116"
-                     Fill="{StaticResource Attention}" Stroke="#1E1E1E" StrokeThickness="1.5" IsHitTestVisible="False" Visibility="Collapsed" />
         </Grid>
     </StackPanel>
 </Window>

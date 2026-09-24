@@ -98,6 +98,7 @@ public partial class MainWindow : Window
         Celebrating: conversation.AnsweredWithin(HappyTime, DateTime.UtcNow),
         Failed: conversation.FailedWithin(SadTime, DateTime.UtcNow),
         Typing: Input.IsKeyboardFocused && Input.Text.Length > 0,
+        HasNews: conversation.AnsweredAt > newsSeenAt,
         BackgroundWork: conversation.BackgroundTasks > 0,
         Hovered: Pet.IsMouseOver,
         Awake: Input.IsKeyboardFocused || DateTime.UtcNow - lastActivity < AwakeTime);
@@ -195,6 +196,7 @@ public partial class MainWindow : Window
 
     void Window_MouseMove(object sender, MouseEventArgs e)
     {
+        UpdateNews();
         Touch();
         if (Status.Mood != mood)
             Animate();
@@ -224,9 +226,8 @@ public partial class MainWindow : Window
 
     void UpdateNews()
     {
-        if (Pet.IsMouseOver)
+        if (IsMouseOver)
             newsSeenAt = DateTime.UtcNow;
-        NewsDot.Visibility = conversation.AnsweredAt > newsSeenAt ? Visibility.Visible : Visibility.Collapsed;
     }
 
     void UpdateChatList()
@@ -246,7 +247,6 @@ public partial class MainWindow : Window
 
     void Pet_MouseEnterOrLeave(object sender, MouseEventArgs e)
     {
-        UpdateNews();
         Touch();
         Animate();
     }

@@ -7,7 +7,8 @@ public class PetStatusTests
         var awake = new PetStatus(Awake: true);
         var curious = awake with { Hovered = true };
         var dance = curious with { BackgroundWork = true };
-        var listen = dance with { Typing = true };
+        var news = dance with { HasNews = true };
+        var listen = news with { Typing = true };
         var sad = listen with { Failed = true };
         var happy = sad with { Celebrating = true };
         var spin = happy with { Busy = true };
@@ -22,6 +23,7 @@ public class PetStatusTests
             { awake, Mood.Awake },
             { curious, Mood.Curious },
             { dance, Mood.Dance },
+            { news, Mood.News },
             { listen, Mood.Listen },
             { sad, Mood.Sad },
             { happy, Mood.Happy },
