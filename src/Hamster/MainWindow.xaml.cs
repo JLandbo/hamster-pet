@@ -54,8 +54,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        // Resizing a transparent window makes everything flicker, so the window covers the work area and only its content changes size.
-        (Width, Height) = (SystemParameters.WorkArea.Width, SystemParameters.WorkArea.Height);
+        // Resizing a transparent window makes everything flicker, so the window covers the screen and only its content changes size.
+        (Width, Height) = (SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
         var data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Hamster");
         instructionsFile = Path.Combine(data, "instructions.txt");
         claude = new ClaudeClient(Path.Combine(data, "workspace"), instructionsFile,
@@ -174,8 +174,10 @@ public partial class MainWindow : Window
 
     void Root_SizeChanged(object sender, SizeChangedEventArgs e) => FitChatHeight();
 
+    // Up to the top of the screen, and never above the window's own top, which would cut off the chats and the resize grip.
     void FitChatHeight() =>
-        ChatScroll.MaxHeight = Math.Clamp(placement.Bottom - SystemParameters.WorkArea.Top - (Root.ActualHeight - ChatScroll.ActualHeight), 0, placement.ChatHeight);
+        ChatScroll.MaxHeight = Math.Clamp(Math.Min(placement.Bottom - SystemParameters.WorkArea.Top, ActualHeight) - (Root.ActualHeight - ChatScroll.ActualHeight),
+            0, placement.ChatHeight);
 
     void Window_Closed(object sender, EventArgs e) => conversation.Cancel();
 
@@ -301,7 +303,7 @@ public partial class MainWindow : Window
         else
         {
             beforeFullScreen = placement;
-            Apply(DefaultPlacement with { Width = ActualWidth, ChatHeight = ActualHeight });
+            Apply(DefaultPlacement with { Width = SystemParameters.WorkArea.Width, ChatHeight = SystemParameters.WorkArea.Height });
         }
         Touch();
         ScrollToNewest();
