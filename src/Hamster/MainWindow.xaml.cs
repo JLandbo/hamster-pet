@@ -550,6 +550,7 @@ public partial class MainWindow : Window
         FolderItem.IsChecked = folder is not null;
         NoFolderItem.IsChecked = folder is null;
         FullScreenItem.IsChecked = beforeFullScreen is not null;
+        SaveChatItem.IsEnabled = conversation.Chats.Count > 0;
         UsageItem.Header = conversation.Usage is { } usage
             ? $"Forbrug: 5 t {usage.FiveHour:P0} · uge {usage.SevenDay:P0}"
             : "Forbrug vises efter første svar";
@@ -577,6 +578,26 @@ public partial class MainWindow : Window
         Directory.CreateDirectory(Path.GetDirectoryName(instructionsFile)!);
         File.AppendAllText(instructionsFile, "");
         Open(new ProcessStartInfo(instructionsFile) { UseShellExecute = true }, "Kunne ikke åbne instruktionerne.");
+    }
+
+    async void SaveChat_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SaveFileDialog
+        {
+            FileName = $"Hamster-chat {DateTime.Now:yyyy-MM-dd HH.mm}",
+            DefaultExt = ".md",
+            Filter = "Markdown (*.md)|*.md|Tekst (*.txt)|*.txt",
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+        try
+        {
+            await File.WriteAllTextAsync(dialog.FileName, ChatExport.ToMarkdown(conversation.Chats.Select(chat => chat.ToRecord())));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"Kunne ikke gemme chatten: {exception.Message}", "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     void OpenClaude_Click(object sender, RoutedEventArgs e) =>

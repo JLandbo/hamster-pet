@@ -315,6 +315,7 @@
                                     <MenuItem x:Name="FolderItem" Click="Folder_Click" />
                                     <MenuItem x:Name="NoFolderItem" Header="Ingen mappe (chat)" Click="NoFolder_Click" />
                                     <MenuItem Header="Instruktioner…" Click="Instructions_Click" />
+                                    <MenuItem x:Name="SaveChatItem" Header="Gem chat…" Click="SaveChat_Click" />
                                     <MenuItem Header="Åbn Claude-appen" Click="OpenClaude_Click" />
                                     <MenuItem Header="Indstillinger…" Click="Settings_Click" />
                                     <MenuItem x:Name="UsageItem" IsEnabled="False" />
