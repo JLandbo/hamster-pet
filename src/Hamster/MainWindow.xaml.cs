@@ -150,6 +150,7 @@ public partial class MainWindow : Window
     void Window_Loaded(object sender, RoutedEventArgs e)
     {
         Apply(OnScreen(placement));
+        FitToScreen();
         UpdateToolbar();
         UpdateChatList();
         ScrollToNewest();
@@ -169,7 +170,7 @@ public partial class MainWindow : Window
     {
         placement = next with
         {
-            Width = Math.Min(Math.Max(next.Width, NarrowestWidth()), ActualWidth),
+            Width = Math.Min(Math.Max(next.Width, NarrowestWidth()), Width),
             ChatHeight = Math.Max(next.ChatHeight, MinChatHeight),
         };
         Root.Width = placement.Width;
@@ -185,14 +186,21 @@ public partial class MainWindow : Window
 
     void Place()
     {
-        Left = placement.Right - ActualWidth;
-        Top = placement.Bottom - ActualHeight;
+        Left = placement.Right - Width;
+        Top = placement.Bottom - Height;
+    }
+
+    void FitToScreen()
+    {
+        var screen = ScreenArea.Of(Pet);
+        (Width, Height) = (screen.Width, screen.Height);
+        Apply(placement);
     }
 
     void Root_SizeChanged(object sender, SizeChangedEventArgs e) => FitChatHeight();
 
     void FitChatHeight() =>
-        ChatScroll.Height = Math.Clamp(Math.Min(placement.Bottom - SystemParameters.WorkArea.Top, ActualHeight) - (Root.ActualHeight - ChatScroll.ActualHeight),
+        ChatScroll.Height = Math.Clamp(Math.Min(placement.Bottom - ScreenArea.Of(Pet).Top, Height) - (Root.ActualHeight - ChatScroll.ActualHeight),
             0, placement.ChatHeight);
 
     void Window_Closed(object sender, EventArgs e) => claude.End();
@@ -300,7 +308,7 @@ public partial class MainWindow : Window
             placementFile.Save(beforeFullScreen ?? placement);
         (pressed, dragging) = (false, false);
         Facing.ScaleX = 1;
-        FitChatHeight();
+        FitToScreen();
         Animate();
     }
 
@@ -328,7 +336,8 @@ public partial class MainWindow : Window
         else
         {
             beforeFullScreen = placement;
-            Apply(DefaultPlacement with { Width = SystemParameters.WorkArea.Width, ChatHeight = SystemParameters.WorkArea.Height });
+            var screen = ScreenArea.Of(Pet);
+            Apply(new Placement(screen.Right, screen.Bottom, screen.Width, screen.Height));
         }
         Touch();
         ScrollToNewest();
