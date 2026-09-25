@@ -29,7 +29,7 @@ public sealed record BackgroundTasksChanged(int Count) : ClaudeEvent;
 
 public sealed record ControlReply(string RequestId, JsonObject? Response, string? Error) : ClaudeEvent;
 
-public sealed record McpServer(string Name, string Status, string? Url, string? Error, bool HasToken = false)
+public sealed record McpServer(string Name, string Status, string? Url, string? Error, bool HasToken = false, bool FromClaudeAi = false)
 {
     public bool IsUsable => Status is "connected" or "pending" or "disabled";
 }
@@ -50,12 +50,19 @@ public static class ClaudeProtocol
         "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
         "--permission-prompt-tool", "stdio", "--permission-mode", settings.PermissionMode,
         "--setting-sources", "user",
-        "--settings", """{"permissions":{"ask":["Skill","CronCreate"]},"disableClaudeAiConnectors":true}""",
+        "--settings", SettingsJson(settings),
         "--model", settings.Model, "--effort", settings.Effort,
         .. (sessionId is null ? Array.Empty<string>() : ["--resume", sessionId]),
         "--append-system-prompt", string.IsNullOrWhiteSpace(instructions) ? PetInstructions : $"{PetInstructions}\n\n{instructions}",
         "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,ToolSearch,EnterPlanMode,ExitPlanMode,Workflow,TaskStop,ListAgents,CronList,CronCreate,CronDelete,ReportFindings,Skill",
     ];
+
+    static string SettingsJson(ClaudeSettings settings) => new JsonObject
+    {
+        ["permissions"] = new JsonObject { ["ask"] = new JsonArray("Skill", "CronCreate") },
+        ["allowedMcpServers"] = Connectors.AllowedServers(),
+        ["deniedMcpServers"] = Connectors.DeniedServers(settings.ClaudeAiConnectors ?? []),
+    }.ToJsonString();
 
     static readonly string[] DetailFields = ["file_path", "notebook_path", "command", "url", "query", "pattern", "skill", "description"];
 
@@ -136,7 +143,8 @@ public static class ClaudeProtocol
                 (string?)server["status"] ?? "",
                 (string?)server["config"]?["url"],
                 (string?)server["error"],
-                server["config"]?["headers"]?["Authorization"] is not null))]
+                server["config"]?["headers"]?["Authorization"] is not null,
+                (string?)server["source"] == "claudeai"))]
             : [];
 
     public static IEnumerable<string> Changes(ClaudeSettings old, ClaudeSettings value)

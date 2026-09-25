@@ -21,6 +21,7 @@ public interface IClaudeListener
 
 public interface IClaudeClient
 {
+    ClaudeSettings Settings { get; set; }
     bool IsRunning { get; }
     Task StartAsync(string? sessionId, IClaudeListener listener);
     Task SendAsync(string id, string prompt, IReadOnlyList<ImageAttachment> images);

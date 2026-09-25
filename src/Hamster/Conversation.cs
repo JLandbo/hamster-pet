@@ -39,6 +39,7 @@ public sealed class Conversation : IClaudeListener
     public int BackgroundTasks { get; private set; }
     public DateTime AnsweredAt { get; private set; }
     public bool IsBusy => turnRunning || waiting.Count > 0;
+    public bool RestartPending => restartWhenIdle;
     public bool IsBrowsingWeb => webTools.Count > 0;
     public bool IsWaitingForUser => Chats.Any(chat => chat.NeedsAction);
 

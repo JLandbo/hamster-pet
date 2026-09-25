@@ -1207,6 +1207,7 @@ public sealed class ConversationTests : IDisposable
         public int Interrupts { get; private set; }
         public bool IsRunning { get; set; }
         public IClaudeListener Listener { get; private set; } = null!;
+        public ClaudeSettings Settings { get; set; } = ClaudeSettings.Default;
 
         public Task StartAsync(string? sessionId, IClaudeListener listener)
         {

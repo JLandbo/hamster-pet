@@ -72,7 +72,7 @@ public partial class MainWindow : Window
         placement = placementFile.Load();
         characters = new CharacterLibrary(Path.Combine(data, "Characters"));
         petFile = new JsonFile<PetSettings>(Path.Combine(data, "pet.json"), PetSettings.Default);
-        connectors = new Connectors(claude, conversation.Restart);
+        connectors = new Connectors(claude, conversation.Restart, () => conversation.RestartPending);
         if (!ModeButton.ContextMenu.Items.OfType<MenuItem>().Any(item => (string)item.Tag == claude.Settings.PermissionMode))
             claude.Settings = claude.Settings with { PermissionMode = ClaudeSettings.Default.PermissionMode };
         Choose(ModelButton, claude.Settings.Model);

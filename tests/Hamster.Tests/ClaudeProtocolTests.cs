@@ -280,10 +280,20 @@ public class ClaudeProtocolTests
         Assert.Equal(
             ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
              "--permission-prompt-tool", "stdio", "--permission-mode", "default", "--setting-sources", "user",
-             "--settings", """{"permissions":{"ask":["Skill","CronCreate"]},"disableClaudeAiConnectors":true}""",
+             "--settings", """{"permissions":{"ask":["Skill","CronCreate"]},"allowedMcpServers":[{"serverUrl":"https://mcp.atlassian.com/*"},{"serverUrl":"https://api.githubcopilot.com/*"},{"serverUrl":"https://microsoft365.mcp.claude.com/*"}],"deniedMcpServers":[{"serverName":"claude.ai Atlassian Rovo"},{"serverName":"claude.ai Microsoft 365"}]}""",
              "--model", "claude-opus-5-5", "--effort", "xhigh", "--append-system-prompt", ClaudeProtocol.PetInstructions,
              "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,ToolSearch,EnterPlanMode,ExitPlanMode,Workflow,TaskStop,ListAgents,CronList,CronCreate,CronDelete,ReportFindings,Skill"],
             arguments);
+    }
+
+    [Fact]
+    public void Arguments_WhenClaudeAiIsChosen_ThenDeniesTheHamstersOwnServer()
+    {
+        // Act
+        var arguments = ClaudeProtocol.Arguments(null, ClaudeSettings.Default with { ClaudeAiConnectors = ["hamster-atlassian-rovo"] });
+
+        // Assert
+        Assert.Contains("""{"serverName":"hamster-atlassian-rovo"}""", arguments[Array.IndexOf(arguments, "--settings") + 1]);
     }
 
     [Fact]
@@ -514,14 +524,14 @@ public class ClaudeProtocolTests
     public void McpServers_WhenClaudeReportsStatus_ThenReadsNameStatusUrlErrorAndToken()
     {
         // Arrange
-        var status = JsonNode.Parse("""{"mcpServers":[{"name":"plugin:atlassian:atlassian","status":"needs-auth","config":{"type":"http","url":"https://mcp.atlassian.com/v2/mcp"}},{"name":"hamster-github","status":"failed","config":{"type":"http","url":"https://api.githubcopilot.com/mcp/","headers":{"Authorization":"Bearer x"}},"error":"401"}]}""")!.AsObject();
+        var status = JsonNode.Parse("""{"mcpServers":[{"name":"plugin:atlassian:atlassian","status":"needs-auth","config":{"type":"http","url":"https://mcp.atlassian.com/v2/mcp"}},{"name":"hamster-github","status":"failed","config":{"type":"http","url":"https://api.githubcopilot.com/mcp/","headers":{"Authorization":"Bearer x"}},"error":"401"},{"name":"claude.ai Linear","status":"needs-auth","config":{"type":"claudeai-proxy","url":"https://mcp.linear.app/mcp","id":"x"},"source":"claudeai"}]}""")!.AsObject();
 
         // Act
         var servers = ClaudeProtocol.McpServers(status);
 
         // Assert
         Assert.Equal(
-            [new McpServer("plugin:atlassian:atlassian", "needs-auth", "https://mcp.atlassian.com/v2/mcp", null), new McpServer("hamster-github", "failed", "https://api.githubcopilot.com/mcp/", "401", HasToken: true)],
+            [new McpServer("plugin:atlassian:atlassian", "needs-auth", "https://mcp.atlassian.com/v2/mcp", null), new McpServer("hamster-github", "failed", "https://api.githubcopilot.com/mcp/", "401", HasToken: true), new McpServer("claude.ai Linear", "needs-auth", "https://mcp.linear.app/mcp", null, FromClaudeAi: true)],
             servers);
     }
 

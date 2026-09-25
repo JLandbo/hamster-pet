@@ -36,13 +36,14 @@ public partial class SettingsWindow : Window
     readonly Action<Character> choose;
     readonly Connectors connectors;
     readonly ObservableCollection<CharacterChoice> tiles = [];
-    readonly ConnectorRow[] rows = [.. Connectors.All.Select(connector => new ConnectorRow(connector))];
+    readonly ConnectorRow[] rows;
     string chosen;
 
     public SettingsWindow(CharacterLibrary characters, string chosen, Action<Character> choose, Connectors connectors)
     {
         InitializeComponent();
         (this.characters, this.chosen, this.choose, this.connectors) = (characters, chosen, choose, connectors);
+        rows = [.. Connectors.All.Select(connector => new ConnectorRow(connector, connectors.UsesClaudeAi(connector)))];
         CharacterList.ItemsSource = tiles;
         ConnectorList.ItemsSource = rows;
     }
@@ -115,7 +116,13 @@ public partial class SettingsWindow : Window
         {
             var servers = await connectors.ServersAsync();
             foreach (var row in rows)
-                row.Show(row.Connector.FindIn(servers));
+            {
+                row.Show(servers, connectors.RestartPending);
+                if (!row.ClaudeAiMissing)
+                    continue;
+                UseClaudeAi(row, false);
+                row.Finish("Ikke fundet på claude.ai.");
+            }
             ConnectorProblem.Visibility = Visibility.Collapsed;
         }
         catch (OperationCanceledException)
@@ -133,6 +140,18 @@ public partial class SettingsWindow : Window
         var (row, enabled) = ((ConnectorRow)toggle.DataContext, toggle.IsChecked == true);
         await RunAsync(row, () => connectors.ToggleAsync(row.Server!, enabled));
         await ShowConnectorsAsync();
+    }
+
+    void ClaudeAi_Click(object sender, RoutedEventArgs e)
+    {
+        var toggle = (ToggleButton)sender;
+        UseClaudeAi((ConnectorRow)toggle.DataContext, toggle.IsChecked == true);
+    }
+
+    void UseClaudeAi(ConnectorRow row, bool use)
+    {
+        connectors.UseClaudeAi(row.Connector, use);
+        row.UseClaudeAi(use);
     }
 
     void Edit_Click(object sender, RoutedEventArgs e) => ((ConnectorRow)((FrameworkElement)sender).DataContext).Edit();
