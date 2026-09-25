@@ -1,14 +1,7 @@
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Text;
-using System.Text.Json.Nodes;
 
 namespace Hamster;
-
-public sealed record McpServer(string Name, string Status, string? Url, string? Error, bool ReadOnly = false, bool HasToken = false)
-{
-    public bool IsUsable => Status is "connected" or "pending" or "disabled";
-}
 
 public sealed record ConnectorField(string Label, bool Secret);
 
@@ -17,6 +10,7 @@ public sealed record Connector(string Title, string Name, string Url, Uri TokenP
     public McpServer? FindIn(IEnumerable<McpServer> servers) =>
         servers.Where(server => Uri.TryCreate(server.Url, UriKind.Absolute, out var url) && url.Host == new Uri(Url).Host)
             .OrderByDescending(server => server.IsUsable)
+            .ThenByDescending(server => server.Name == Name)
             .FirstOrDefault();
 
     public IReadOnlyList<string> AddArguments(IReadOnlyList<string> values, bool allowWrite) =>
@@ -41,49 +35,21 @@ public sealed class Connectors(IClaudeClient claude, Action restart)
             CanBeReadOnly: true),
     ];
 
-    public async Task<IReadOnlyList<McpServer>> ServersAsync() => Servers(await claude.RequestAsync(new JsonObject { ["subtype"] = "mcp_status" }));
+    public async Task<IReadOnlyList<McpServer>> ServersAsync() => ClaudeProtocol.McpServers(await claude.RequestAsync(ClaudeProtocol.McpStatus()));
 
-    public Task ToggleAsync(McpServer server, bool enabled) =>
-        claude.RequestAsync(new JsonObject { ["subtype"] = "mcp_toggle", ["serverName"] = server.Name, ["enabled"] = enabled });
+    public Task ToggleAsync(McpServer server, bool enabled) => claude.RequestAsync(ClaudeProtocol.McpToggle(server.Name, enabled));
 
     public async Task InstallAsync(Connector connector, IReadOnlyList<string> values, bool allowWrite)
     {
         try
         {
-            await RunClaudeAsync(["mcp", "remove", "--scope", "user", connector.Name]);
+            await ClaudeClient.RunCommandAsync(["mcp", "remove", "--scope", "user", connector.Name]);
         }
         catch (InvalidOperationException)
         {
         }
-        await RunClaudeAsync(connector.AddArguments(values, allowWrite));
+        await ClaudeClient.RunCommandAsync(connector.AddArguments(values, allowWrite));
         restart();
-    }
-
-    public static IReadOnlyList<McpServer> Servers(JsonObject? status) =>
-        status?["mcpServers"] is JsonArray servers
-            ? [.. servers.OfType<JsonObject>().Where(server => (string?)server["name"] is not null).Select(server => new McpServer(
-                (string)server["name"]!,
-                (string?)server["status"] ?? "",
-                (string?)server["config"]?["url"],
-                (string?)server["error"],
-                (string?)server["config"]?["headers"]?[ReadOnlyHeader] == "true",
-                server["config"]?["headers"]?["Authorization"] is not null))]
-            : [];
-
-    static async Task RunClaudeAsync(IReadOnlyList<string> arguments)
-    {
-        using var process = Process.Start(new ProcessStartInfo("claude", arguments)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        })!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var errors = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException((await errors).Trim() is { Length: > 0 } error ? error : (await output).Trim());
     }
 }
 
@@ -115,24 +81,21 @@ public sealed class ConnectorRow(Connector connector) : INotifyPropertyChanged
 
     public string State => !Known ? "Henter…"
         : Restarting && !Installed ? "Installeret – bliver aktiv, når Claude er genstartet"
-        : Server?.ReadOnly == true ? $"{Status} · kun læse"
-        : Status;
-
-    string Status => Server?.Status switch
-    {
-        null => "Ikke installeret",
-        "connected" => "Forbundet",
-        "pending" => "Forbinder…",
-        "disabled" => "Slået fra",
-        "needs-auth" => "Mangler login",
-        "failed" => $"Fejl: {Server.Error}",
-        var status => status,
-    };
+        : Server?.Status switch
+        {
+            null => "Ikke installeret",
+            "connected" => "Forbundet",
+            "pending" => "Forbinder…",
+            "disabled" => "Slået fra",
+            "needs-auth" => "Mangler login",
+            "failed" => $"Fejl: {Server.Error}",
+            var status => status,
+        };
 
     public void Show(McpServer? server)
     {
         (Server, Known) = (server, true);
-        Restarting &= !Installed;
+        Restarting &= !Installed && Server?.Name != Connector.Name;
         Changed();
     }
 

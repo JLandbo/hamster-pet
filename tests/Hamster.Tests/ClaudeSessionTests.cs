@@ -206,6 +206,24 @@ public sealed class ClaudeSessionTests
     }
 
     [Fact(Timeout = 5_000)]
+    public async Task RequestAsync_WhenAnotherRequestIsAnsweredFirst_ThenWaitsForItsOwnReply()
+    {
+        // Arrange
+        var (output, input) = (new LineReader(), new LineWriter());
+        var session = new ClaudeSession(output, input, new FakeListener());
+        _ = session.ReadAsync();
+        var asking = session.RequestAsync(new JsonObject { ["subtype"] = "mcp_status" }, Patience);
+        var request = await input.NextAsync();
+
+        // Act
+        output.Add("""{"type":"control_response","response":{"subtype":"success","request_id":"other","response":{}}}""");
+        output.Add(Reply(request, """{"subtype":"success","response":{"mcpServers":[]}}"""));
+
+        // Assert
+        Assert.True((await asking.WaitAsync(Token))?["mcpServers"] is JsonArray);
+    }
+
+    [Fact(Timeout = 5_000)]
     public async Task RequestAsync_WhenClaudeRefuses_ThenThrowsItsError()
     {
         // Arrange

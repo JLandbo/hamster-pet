@@ -29,6 +29,11 @@ public sealed record BackgroundTasksChanged(int Count) : ClaudeEvent;
 
 public sealed record ControlReply(string RequestId, JsonObject? Response, string? Error) : ClaudeEvent;
 
+public sealed record McpServer(string Name, string Status, string? Url, string? Error, bool HasToken = false)
+{
+    public bool IsUsable => Status is "connected" or "pending" or "disabled";
+}
+
 public sealed record ClaudeResult(string? SessionId, string Text, bool IsError, decimal? Cost = null, IReadOnlyList<string>? Answers = null) : ClaudeEvent
 {
     public bool NeedsLogin => IsError && Text.Contains("/login");
@@ -45,7 +50,7 @@ public static class ClaudeProtocol
         "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
         "--permission-prompt-tool", "stdio", "--permission-mode", settings.PermissionMode,
         "--setting-sources", "user",
-        "--settings", """{"permissions":{"ask":["Skill","CronCreate"]}}""",
+        "--settings", """{"permissions":{"ask":["Skill","CronCreate"]},"disableClaudeAiConnectors":true}""",
         "--model", settings.Model, "--effort", settings.Effort,
         .. (sessionId is null ? Array.Empty<string>() : ["--resume", sessionId]),
         "--append-system-prompt", string.IsNullOrWhiteSpace(instructions) ? PetInstructions : $"{PetInstructions}\n\n{instructions}",
@@ -119,6 +124,20 @@ public static class ClaudeProtocol
     public static string EndSession() => Control(new JsonObject { ["subtype"] = "end_session" });
 
     public static string Withdraw(string id) => Control(new JsonObject { ["subtype"] = "cancel_async_message", ["message_uuid"] = id });
+
+    public static JsonObject McpStatus() => new() { ["subtype"] = "mcp_status" };
+
+    public static JsonObject McpToggle(string serverName, bool enabled) => new() { ["subtype"] = "mcp_toggle", ["serverName"] = serverName, ["enabled"] = enabled };
+
+    public static IReadOnlyList<McpServer> McpServers(JsonObject? status) =>
+        status?["mcpServers"] is JsonArray servers
+            ? [.. servers.OfType<JsonObject>().Where(server => (string?)server["name"] is not null).Select(server => new McpServer(
+                (string)server["name"]!,
+                (string?)server["status"] ?? "",
+                (string?)server["config"]?["url"],
+                (string?)server["error"],
+                server["config"]?["headers"]?["Authorization"] is not null))]
+            : [];
 
     public static IEnumerable<string> Changes(ClaudeSettings old, ClaudeSettings value)
     {

@@ -1127,7 +1127,40 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
-    public async Task SendAsync_WhenARestartWaits_ThenStartsClaudeAgainFirst()
+    public async Task SendAsync_WhenARestartWaitsWhileBusy_ThenDoesNotRestart()
+    {
+        // Arrange
+        claude.Reply = Started;
+        await conversation.SendAsync("hej");
+        conversation.Restart();
+
+        // Act
+        await conversation.SendAsync("igen");
+
+        // Assert
+        Assert.Equal([null], claude.Starts);
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenTheWaitingRestartIsDone_ThenDoesNotRestartAgain()
+    {
+        // Arrange
+        claude.Reply = Started;
+        await conversation.SendAsync("hej");
+        conversation.Restart();
+        claude.Listener.ResultReceived(Answered with { Answers = [claude.Ids[0]] });
+        claude.Reply = Answer;
+        await conversation.SendAsync("igen");
+
+        // Act
+        await conversation.SendAsync("tredje");
+
+        // Assert
+        Assert.Equal([null, "session-1"], claude.Starts);
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenARestartWaits_ThenStartsClaudeAgain()
     {
         // Arrange
         claude.Reply = Started;

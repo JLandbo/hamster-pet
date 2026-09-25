@@ -280,7 +280,7 @@ public class ClaudeProtocolTests
         Assert.Equal(
             ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
              "--permission-prompt-tool", "stdio", "--permission-mode", "default", "--setting-sources", "user",
-             "--settings", """{"permissions":{"ask":["Skill","CronCreate"]}}""",
+             "--settings", """{"permissions":{"ask":["Skill","CronCreate"]},"disableClaudeAiConnectors":true}""",
              "--model", "claude-opus-5-5", "--effort", "xhigh", "--append-system-prompt", ClaudeProtocol.PetInstructions,
              "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,ToolSearch,EnterPlanMode,ExitPlanMode,Workflow,TaskStop,ListAgents,CronList,CronCreate,CronDelete,ReportFindings,Skill"],
             arguments);
@@ -508,6 +508,31 @@ public class ClaudeProtocolTests
 
         // Assert
         Assert.Equal(("req-1", "Server not found: x"), (reply.RequestId, reply.Error));
+    }
+
+    [Fact]
+    public void McpServers_WhenClaudeReportsStatus_ThenReadsNameStatusUrlErrorAndToken()
+    {
+        // Arrange
+        var status = JsonNode.Parse("""{"mcpServers":[{"name":"plugin:atlassian:atlassian","status":"needs-auth","config":{"type":"http","url":"https://mcp.atlassian.com/v2/mcp"}},{"name":"hamster-github","status":"failed","config":{"type":"http","url":"https://api.githubcopilot.com/mcp/","headers":{"Authorization":"Bearer x"}},"error":"401"}]}""")!.AsObject();
+
+        // Act
+        var servers = ClaudeProtocol.McpServers(status);
+
+        // Assert
+        Assert.Equal(
+            [new McpServer("plugin:atlassian:atlassian", "needs-auth", "https://mcp.atlassian.com/v2/mcp", null), new McpServer("hamster-github", "failed", "https://api.githubcopilot.com/mcp/", "401", HasToken: true)],
+            servers);
+    }
+
+    [Fact]
+    public void McpToggle_WhenCalled_ThenNamesTheServerAndTheState()
+    {
+        // Act
+        var request = ClaudeProtocol.McpToggle("hamster-github", enabled: false);
+
+        // Assert
+        Assert.Equal("""{"subtype":"mcp_toggle","serverName":"hamster-github","enabled":false}""", request.ToJsonString());
     }
 
     static string Summary(string line)

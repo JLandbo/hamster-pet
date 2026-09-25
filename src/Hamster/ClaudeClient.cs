@@ -169,6 +169,22 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
         })!;
     }
 
+    public static async Task RunCommandAsync(IReadOnlyList<string> arguments)
+    {
+        using var process = Process.Start(new ProcessStartInfo("claude", arguments)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        })!;
+        var output = process.StandardOutput.ReadToEndAsync();
+        var errors = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException((await errors).Trim() is { Length: > 0 } error ? error : (await output).Trim());
+    }
+
     static void TryKill(Process process)
     {
         try

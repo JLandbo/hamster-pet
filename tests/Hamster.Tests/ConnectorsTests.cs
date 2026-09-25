@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json.Nodes;
 
 namespace Hamster.Tests;
 
@@ -7,21 +6,6 @@ public sealed class ConnectorsTests
 {
     static Connector Atlassian => Connectors.All.Single(connector => connector.Title == "Atlassian Rovo");
     static Connector GitHub => Connectors.All.Single(connector => connector.Title == "GitHub");
-
-    [Fact]
-    public void Servers_WhenClaudeReportsStatus_ThenReadsNameStatusUrlAndError()
-    {
-        // Arrange
-        var status = JsonNode.Parse("""{"mcpServers":[{"name":"claude.ai Atlassian Rovo","status":"connected","config":{"type":"claudeai-proxy","url":"https://mcp.atlassian.com/v1/mcp","id":"x"}},{"name":"hamster-github","status":"failed","config":{"type":"http","url":"https://api.githubcopilot.com/mcp/","headers":{"Authorization":"Bearer x","X-MCP-Readonly":"true"}},"error":"401"}]}""")!.AsObject();
-
-        // Act
-        var servers = Connectors.Servers(status);
-
-        // Assert
-        Assert.Equal(
-            [new McpServer("claude.ai Atlassian Rovo", "connected", "https://mcp.atlassian.com/v1/mcp", null), new McpServer("hamster-github", "failed", "https://api.githubcopilot.com/mcp/", "401", ReadOnly: true, HasToken: true)],
-            servers);
-    }
 
     [Fact]
     public void FindIn_WhenSeveralServersUseTheHost_ThenPrefersOneThatWorks()
@@ -34,6 +18,19 @@ public sealed class ConnectorsTests
 
         // Assert
         Assert.Equal("claude.ai Atlassian Rovo", server?.Name);
+    }
+
+    [Fact]
+    public void FindIn_WhenEveryServerFails_ThenPrefersItsOwn()
+    {
+        // Arrange
+        McpServer[] servers = [new("plugin:atlassian:atlassian", "needs-auth", "https://mcp.atlassian.com/v2/mcp", null), new("hamster-atlassian-rovo", "failed", "https://mcp.atlassian.com/v2/mcp", "401")];
+
+        // Act
+        var server = Atlassian.FindIn(servers);
+
+        // Assert
+        Assert.Equal("hamster-atlassian-rovo", server?.Name);
     }
 
     [Fact]
@@ -128,15 +125,17 @@ public sealed class ConnectorsTests
     }
 
     [Fact]
-    public void State_WhenGitHubIsReadOnly_ThenSaysSo()
+    public void Show_WhenItsOwnServerFailsAfterTheRestart_ThenOffersInstallAgain()
     {
         // Arrange
         var row = new ConnectorRow(GitHub);
+        row.Show(null);
+        row.AwaitRestart();
 
         // Act
-        row.Show(new McpServer("hamster-github", "connected", "https://api.githubcopilot.com/mcp/", null, ReadOnly: true));
+        row.Show(new McpServer("hamster-github", "needs-auth", "https://api.githubcopilot.com/mcp/", null));
 
         // Assert
-        Assert.Equal("Forbundet · kun læse", row.State);
+        Assert.Equal((true, "Mangler login"), (row.CanInstall, row.State));
     }
 }
