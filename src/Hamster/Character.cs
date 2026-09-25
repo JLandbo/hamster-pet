@@ -3,12 +3,14 @@ using System.IO;
 
 namespace Hamster;
 
-public sealed record Frame(string[] Rows, int Milliseconds);
+public sealed record Frame(string[] Rows, int Milliseconds)
+{
+    public int Width => Rows[0].Length;
+    public int Height => Rows.Length;
+}
 
 public sealed record Character(string Name, IReadOnlyDictionary<char, uint> Palette, IReadOnlyDictionary<Mood, Frame[]> Animations)
 {
-    public const int Width = 40;
-    public const int Height = 36;
     const string PaletteFile = "palette.txt";
 
     public static IEnumerable<string> Files => [PaletteFile, .. Enum.GetValues<Mood>().Select(FileOf)];
@@ -51,14 +53,19 @@ public sealed record Character(string Name, IReadOnlyDictionary<char, uint> Pale
         }
     }
 
-    static Frame[] ParseFrames(string text, string file) =>
-        [.. text.ReplaceLineEndings("\n").Trim('\n').Split("\n\n").Select(frame => ParseFrame(frame.Split('\n'), file))];
+    static Frame[] ParseFrames(string text, string file)
+    {
+        Frame[] frames = [.. text.ReplaceLineEndings("\n").Trim('\n').Split("\n\n").Select(frame => ParseFrame(frame.Split('\n'), file))];
+        return frames.All(frame => (frame.Width, frame.Height) == (frames[0].Width, frames[0].Height))
+            ? frames
+            : throw new InvalidDataException($"{file}: alle frames skal have samme størrelse som den første ({frames[0].Width}×{frames[0].Height}).");
+    }
 
     static Frame ParseFrame(string[] lines, string file) =>
         int.TryParse(lines[0], CultureInfo.InvariantCulture, out var milliseconds) && milliseconds > 0
-            && lines.Length == Height + 1 && lines.Skip(1).All(row => row.Length == Width)
+            && lines.Length > 1 && lines[1].Length > 0 && lines.Skip(1).All(row => row.Length == lines[1].Length)
             ? new Frame(lines[1..], milliseconds)
-            : throw new InvalidDataException($"{file}: hver frame skal have en varighed i millisekunder og derefter {Height} linjer à {Width} tegn.");
+            : throw new InvalidDataException($"{file}: hver frame skal have en varighed i millisekunder og derefter linjer, der alle er lige lange.");
 
     static InvalidDataException Missing(string name, string file) => new($"{name} mangler {file}.");
 }

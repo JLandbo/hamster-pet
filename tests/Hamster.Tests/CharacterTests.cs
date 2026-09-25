@@ -53,10 +53,36 @@ public sealed class CharacterTests : IDisposable
     }
 
     [Fact]
-    public void FromFolder_WhenAFrameHasTheWrongSize_ThenSaysWhichFile()
+    public void FromFolder_WhenFramesAreBig_ThenLoadsThemInTheirOwnSize()
     {
         // Arrange
-        File.WriteAllText(Path.Combine(folder, "sleep.txt"), "700\n....\n");
+        File.WriteAllText(Path.Combine(folder, "sleep.txt"), "700\n" + string.Join('\n', Enumerable.Repeat(new string('.', 64), 64)));
+
+        // Act
+        var frame = Character.FromFolder(folder).Animations[Mood.Sleep][0];
+
+        // Assert
+        Assert.Equal((64, 64), (frame.Width, frame.Height));
+    }
+
+    [Fact]
+    public void FromFolder_WhenAFrameDiffersFromTheFirst_ThenSaysWhichFile()
+    {
+        // Arrange
+        File.WriteAllText(Path.Combine(folder, "sleep.txt"), "700\n....\n....\n\n700\n..\n..\n");
+
+        // Act
+        var loading = () => Character.FromFolder(folder);
+
+        // Assert
+        Assert.StartsWith("sleep.txt:", Assert.Throws<InvalidDataException>(loading).Message);
+    }
+
+    [Fact]
+    public void FromFolder_WhenRowsDifferInLength_ThenSaysWhichFile()
+    {
+        // Arrange
+        File.WriteAllText(Path.Combine(folder, "sleep.txt"), "700\n....\n..\n");
 
         // Act
         var loading = () => Character.FromFolder(folder);

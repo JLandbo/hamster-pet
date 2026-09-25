@@ -329,20 +329,22 @@
                     </Grid>
                 </StackPanel>
             </Border>
-            <Image x:Name="Pet" Grid.Column="1" VerticalAlignment="Bottom" Width="160" Height="144" Margin="0,0,8,0" Cursor="Hand"
-                   RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5"
-                   MouseLeftButtonDown="Pet_MouseLeftButtonDown" MouseMove="Pet_MouseMove" MouseLeftButtonUp="Pet_MouseLeftButtonUp"
-                   LostMouseCapture="Pet_LostMouseCapture" MouseEnter="Pet_MouseEnterOrLeave" MouseLeave="Pet_MouseEnterOrLeave">
-                <Image.RenderTransform>
-                    <ScaleTransform x:Name="Facing" />
-                </Image.RenderTransform>
-                <Image.ContextMenu>
-                    <ContextMenu Style="{StaticResource ChoiceMenu}">
-                        <MenuItem Header="Ny samtale" Click="NewChat_Click" />
-                        <MenuItem Header="Afslut" Click="Exit_Click" />
-                    </ContextMenu>
-                </Image.ContextMenu>
-            </Image>
+            <Grid Grid.Column="1" VerticalAlignment="Bottom" Width="160" Height="144" Margin="0,0,8,0">
+                <Image x:Name="Pet" VerticalAlignment="Bottom" HorizontalAlignment="Center" Cursor="Hand"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5"
+                       MouseLeftButtonDown="Pet_MouseLeftButtonDown" MouseMove="Pet_MouseMove" MouseLeftButtonUp="Pet_MouseLeftButtonUp"
+                       LostMouseCapture="Pet_LostMouseCapture" MouseEnter="Pet_MouseEnterOrLeave" MouseLeave="Pet_MouseEnterOrLeave">
+                    <Image.RenderTransform>
+                        <ScaleTransform x:Name="Facing" />
+                    </Image.RenderTransform>
+                    <Image.ContextMenu>
+                        <ContextMenu Style="{StaticResource ChoiceMenu}">
+                            <MenuItem Header="Ny samtale" Click="NewChat_Click" />
+                            <MenuItem Header="Afslut" Click="Exit_Click" />
+                        </ContextMenu>
+                    </Image.ContextMenu>
+                </Image>
+            </Grid>
         </Grid>
     </StackPanel>
 </Window>
