@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO;
+using System.Text.Json.Nodes;
 
 namespace Hamster;
 
@@ -7,6 +8,7 @@ public sealed class ClaudeSession(TextReader output, TextWriter input, IClaudeLi
 {
     readonly TextWriter input = TextWriter.Synchronized(input);
     readonly ConcurrentDictionary<string, CancellationTokenSource> questions = new();
+    readonly ConcurrentDictionary<string, TaskCompletionSource<JsonObject?>> replies = new();
     volatile bool detached;
 
     public int Results { get; private set; }
@@ -28,12 +30,33 @@ public sealed class ClaudeSession(TextReader output, TextWriter input, IClaudeLi
         }
         finally
         {
-            CancelQuestions();
+            Detach();
         }
     }
 
     public Task SendAsync(string id, string prompt, IReadOnlyList<ImageAttachment> images) =>
         Task.Run(() => Send(ClaudeProtocol.UserMessage(prompt, images, id)));
+
+    public async Task<JsonObject?> RequestAsync(JsonObject request, TimeSpan timeout)
+    {
+        var id = Guid.NewGuid().ToString();
+        var reply = replies[id] = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            if (detached)
+                throw new InvalidOperationException("claude kører ikke.");
+            await Task.Run(() => Send(ClaudeProtocol.Control(request, id)));
+            return await reply.Task.WaitAsync(timeout);
+        }
+        catch (TimeoutException)
+        {
+            throw new InvalidOperationException("claude svarede ikke.");
+        }
+        finally
+        {
+            replies.TryRemove(id, out _);
+        }
+    }
 
     public void Send(string json)
     {
@@ -44,7 +67,7 @@ public sealed class ClaudeSession(TextReader output, TextWriter input, IClaudeLi
     public void Detach()
     {
         detached = true;
-        CancelQuestions();
+        CancelOpen();
     }
 
     void Dispatch(ClaudeEvent message)
@@ -79,6 +102,12 @@ public sealed class ClaudeSession(TextReader output, TextWriter input, IClaudeLi
             case ClaudeResult result:
                 listener.ResultReceived(result);
                 break;
+            case ControlReply { Error: { } error } reply when replies.TryRemove(reply.RequestId, out var waiter):
+                waiter.TrySetException(new InvalidOperationException(error));
+                break;
+            case ControlReply reply when replies.TryRemove(reply.RequestId, out var waiter):
+                waiter.TrySetResult(reply.Response);
+                break;
         }
     }
 
@@ -95,10 +124,13 @@ public sealed class ClaudeSession(TextReader output, TextWriter input, IClaudeLi
         }
     }
 
-    void CancelQuestions()
+    void CancelOpen()
     {
         foreach (var id in questions.Keys)
             if (questions.TryRemove(id, out var question))
                 question.Cancel();
+        foreach (var id in replies.Keys)
+            if (replies.TryRemove(id, out var reply))
+                reply.TrySetCanceled();
     }
 }

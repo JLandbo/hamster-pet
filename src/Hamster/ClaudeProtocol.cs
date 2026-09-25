@@ -27,6 +27,8 @@ public sealed record ModeChanged(string Mode) : ClaudeEvent;
 
 public sealed record BackgroundTasksChanged(int Count) : ClaudeEvent;
 
+public sealed record ControlReply(string RequestId, JsonObject? Response, string? Error) : ClaudeEvent;
+
 public sealed record ClaudeResult(string? SessionId, string Text, bool IsError, decimal? Cost = null, IReadOnlyList<string>? Answers = null) : ClaudeEvent
 {
     public bool NeedsLogin => IsError && Text.Contains("/login");
@@ -77,6 +79,8 @@ public static class ClaudeProtocol
             "system" when (string?)message["subtype"] == "background_tasks_changed" && message["tasks"] is JsonArray tasks => [new BackgroundTasksChanged(tasks.Count)],
             "control_request" when (string?)message["request"]?["subtype"] == "can_use_tool" => [ToPermissionRequest(message)],
             "control_cancel_request" => [new CancelRequest((string)message["request_id"]!)],
+            "control_response" when message["response"] is JsonObject response && (string?)response["request_id"] is { } id =>
+                [new ControlReply(id, response["response"] as JsonObject, (string?)response["subtype"] == "error" ? (string?)response["error"] ?? "" : null)],
             "rate_limit_event" => UsageOf(message["rate_limit_info"]?["unifiedWindows"]),
             "result" => [new ClaudeResult(
                 (string?)message["session_id"],
@@ -132,12 +136,14 @@ public static class ClaudeProtocol
     public static string Deny(PermissionRequest request) =>
         Response(request.RequestId, new JsonObject { ["behavior"] = "deny", ["message"] = "Brugeren afviste." });
 
-    static string Control(JsonObject request) => new JsonObject
+    public static string Control(JsonObject request, string id) => new JsonObject
     {
         ["type"] = "control_request",
-        ["request_id"] = Guid.NewGuid().ToString(),
+        ["request_id"] = id,
         ["request"] = request,
     }.ToJsonString();
+
+    static string Control(JsonObject request) => Control(request, Guid.NewGuid().ToString());
 
     static string Response(string requestId, JsonObject body) => new JsonObject
     {

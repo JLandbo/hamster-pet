@@ -18,7 +18,7 @@ public sealed class Conversation : IClaudeListener
     readonly Dictionary<string, ChatItem> toolChats = [];
     string? sessionId;
     ChatItem? turn, lastAnswered;
-    bool turnRunning, autonomous, stopping;
+    bool turnRunning, autonomous, stopping, restartWhenIdle;
 
     public Conversation(IClaudeClient claude, JsonFile<SavedChats> store)
     {
@@ -79,12 +79,14 @@ public sealed class Conversation : IClaudeListener
             Reset();
             return;
         }
+        var restart = restartWhenIdle && !IsBusy && BackgroundTasks == 0;
+        restartWhenIdle &= !restart;
         var id = Guid.NewGuid().ToString();
         var chat = waiting[id] = Add(new ChatItem(prompt));
         Changed?.Invoke();
         try
         {
-            if (!claude.IsRunning)
+            if (restart || !claude.IsRunning)
                 await claude.StartAsync(sessionId, this);
             await claude.SendAsync(id, prompt, images ?? []);
         }
@@ -104,9 +106,16 @@ public sealed class Conversation : IClaudeListener
         Chats.Clear();
         waiting.Clear();
         toolChats.Clear();
-        (lastAnswered, sessionId, Cost, BackgroundTasks, AnsweredAt) = (null, null, 0, 0, default);
+        (lastAnswered, sessionId, Cost, BackgroundTasks, AnsweredAt, restartWhenIdle) = (null, null, 0, 0, default, false);
         EndTurn();
         _ = StartAsync();
+    }
+
+    public void Restart()
+    {
+        restartWhenIdle = IsBusy || BackgroundTasks > 0;
+        if (!restartWhenIdle)
+            _ = StartAsync();
     }
 
     public void Delete(ChatItem chat)

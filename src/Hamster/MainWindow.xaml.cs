@@ -39,11 +39,15 @@ public partial class MainWindow : Window
     readonly string instructionsFile;
     readonly List<string> attachedFiles = [];
     readonly List<ImageAttachment> attachedImages = [];
-    readonly Dictionary<Mood, BitmapSource[]> images = Sprites.Animations.ToDictionary(
-        animation => animation.Key, animation => animation.Value.Select(frame => SpriteRenderer.Render(frame.Rows)).ToArray());
+    readonly CharacterLibrary characters;
+    readonly JsonFile<PetSettings> petFile;
+    readonly Connectors connectors;
     readonly DispatcherTimer timer = new();
     readonly DispatcherTimer clock = new() { Interval = TimeSpan.FromSeconds(1) };
 
+    Character character = Character.Hamster;
+    Dictionary<Mood, BitmapSource[]> images = [];
+    SettingsWindow? settings;
     Mood mood;
     int frame;
     bool pressed, dragging, chatsExpanded = true, chatsShown = true, toolbarShown = true;
@@ -66,6 +70,9 @@ public partial class MainWindow : Window
         conversation = new Conversation(claude, new JsonFile<SavedChats>(Path.Combine(data, "chats.json"), SavedChats.Empty));
         placementFile = new JsonFile<Placement>(Path.Combine(data, "placement.json"), DefaultPlacement);
         placement = placementFile.Load();
+        characters = new CharacterLibrary(Path.Combine(data, "Characters"));
+        petFile = new JsonFile<PetSettings>(Path.Combine(data, "pet.json"), PetSettings.Default);
+        connectors = new Connectors(claude, conversation.Restart);
         if (!ModeButton.ContextMenu.Items.OfType<MenuItem>().Any(item => (string)item.Tag == claude.Settings.PermissionMode))
             claude.Settings = claude.Settings with { PermissionMode = ClaudeSettings.Default.PermissionMode };
         Choose(ModelButton, claude.Settings.Model);
@@ -85,7 +92,7 @@ public partial class MainWindow : Window
             foreach (var chat in conversation.Chats)
                 chat.RefreshElapsed();
         };
-        Animate();
+        UseCharacter(LoadCharacter(petFile.Load().CharacterName));
     }
 
     static Placement DefaultPlacement => new(SystemParameters.WorkArea.Right, SystemParameters.WorkArea.Bottom, DefaultWidth, DefaultChatHeight);
@@ -108,15 +115,52 @@ public partial class MainWindow : Window
 
     void Animate()
     {
-        var next = MoodTransition.Next(mood, frame, Status.Mood);
+        var next = MoodTransition.Next(mood, frame, Status.Mood, character.Animations[Mood.Spin].Length);
         if (next != mood)
             (mood, frame) = (next, 0);
-        var frames = Sprites.Animations[mood];
+        var frames = character.Animations[mood];
         var index = frame++ % frames.Length;
         Pet.Source = images[mood][index];
         timer.Stop();
         timer.Interval = TimeSpan.FromMilliseconds(frames[index].Milliseconds);
         timer.Start();
+    }
+
+    Character LoadCharacter(string name)
+    {
+        try
+        {
+            return characters.Load(name);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            return Character.Hamster;
+        }
+    }
+
+    void UseCharacter(Character next)
+    {
+        character = next;
+        images = next.Animations.ToDictionary(animation => animation.Key, animation => animation.Value.Select(frame => SpriteRenderer.Render(frame.Rows, next.Palette)).ToArray());
+        frame = 0;
+        Animate();
+    }
+
+    void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        if (settings is { IsVisible: true })
+        {
+            settings.Activate();
+            return;
+        }
+        settings = new SettingsWindow(characters, character.Name, ChooseCharacter, connectors) { Owner = this };
+        settings.Show();
+    }
+
+    void ChooseCharacter(Character chosen)
+    {
+        petFile.Save(new PetSettings(chosen.Name));
+        UseCharacter(chosen);
     }
 
     void Touch()

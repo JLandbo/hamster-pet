@@ -4,9 +4,9 @@ public enum Mood { Sleep, Awake, Curious, Spin, Research, Happy, Alert, Giggle, 
 
 public static class MoodTransition
 {
-    public static Mood Next(Mood current, int framesShown, Mood wanted) =>
+    public static Mood Next(Mood current, int framesShown, Mood wanted, int spinFrames) =>
         current == Mood.Spin && wanted != current && wanted is not (Mood.Dangle or Mood.Run)
-            && framesShown % Sprites.Animations[Mood.Spin].Length != 0
+            && framesShown % spinFrames != 0
             ? current
             : wanted;
 }

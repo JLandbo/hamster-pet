@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Text.Json.Nodes;
 
 namespace Hamster;
 
@@ -23,6 +24,7 @@ public interface IClaudeClient
     bool IsRunning { get; }
     Task StartAsync(string? sessionId, IClaudeListener listener);
     Task SendAsync(string id, string prompt, IReadOnlyList<ImageAttachment> images);
+    Task<JsonObject?> RequestAsync(JsonObject request);
     void Interrupt();
     void Withdraw(string id);
     void End();
@@ -31,6 +33,7 @@ public interface IClaudeClient
 public sealed class ClaudeClient(string workspace, string instructionsFile, JsonFile<ClaudeSettings> store) : IClaudeClient
 {
     static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
+    static readonly TimeSpan RequestTimeout = TimeSpan.FromMinutes(1);
 
     (Process Process, ClaudeSession Session)? current;
     int starts;
@@ -72,6 +75,9 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
 
     public Task SendAsync(string id, string prompt, IReadOnlyList<ImageAttachment> images) =>
         current is var (_, session) ? session.SendAsync(id, prompt, images) : throw new InvalidOperationException("claude kører ikke.");
+
+    public Task<JsonObject?> RequestAsync(JsonObject request) =>
+        current is var (_, session) ? session.RequestAsync(request, RequestTimeout) : throw new InvalidOperationException("claude kører ikke.");
 
     public void Interrupt()
     {
