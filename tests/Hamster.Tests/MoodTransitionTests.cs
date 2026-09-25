@@ -2,13 +2,13 @@ namespace Hamster.Tests;
 
 public class MoodTransitionTests
 {
-    static int SpinLength => Sprites.Animations[Mood.Spin].Length;
+    static int SpinLength => Character.Hamster.Animations[Mood.Spin].Length;
 
     [Fact]
     public void Next_WhenSpinIsMidCycle_ThenKeepsSpinning()
     {
         // Act
-        var mood = MoodTransition.Next(Mood.Spin, framesShown: 5, wanted: Mood.Happy);
+        var mood = MoodTransition.Next(Mood.Spin, framesShown: 5, wanted: Mood.Happy, SpinLength);
 
         // Assert
         Assert.Equal(Mood.Spin, mood);
@@ -18,7 +18,7 @@ public class MoodTransitionTests
     public void Next_WhenSpinFinishedItsCycle_ThenSwitches()
     {
         // Act
-        var mood = MoodTransition.Next(Mood.Spin, framesShown: SpinLength, wanted: Mood.Happy);
+        var mood = MoodTransition.Next(Mood.Spin, framesShown: SpinLength, wanted: Mood.Happy, SpinLength);
 
         // Assert
         Assert.Equal(Mood.Happy, mood);
@@ -30,7 +30,7 @@ public class MoodTransitionTests
     public void Next_WhenGrabbedMidSpin_ThenReactsRightAway(Mood wanted)
     {
         // Act
-        var mood = MoodTransition.Next(Mood.Spin, framesShown: 5, wanted);
+        var mood = MoodTransition.Next(Mood.Spin, framesShown: 5, wanted, SpinLength);
 
         // Assert
         Assert.Equal(wanted, mood);
@@ -40,7 +40,7 @@ public class MoodTransitionTests
     public void Next_WhenNotSpinning_ThenSwitchesRightAway()
     {
         // Act
-        var mood = MoodTransition.Next(Mood.Research, framesShown: 1, wanted: Mood.Happy);
+        var mood = MoodTransition.Next(Mood.Research, framesShown: 1, wanted: Mood.Happy, SpinLength);
 
         // Assert
         Assert.Equal(Mood.Happy, mood);

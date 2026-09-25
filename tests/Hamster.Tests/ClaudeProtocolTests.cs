@@ -484,6 +484,32 @@ public class ClaudeProtocolTests
         Assert.Equal(("cancel_async_message", "id-2"), ((string?)request["subtype"], (string?)request["message_uuid"]));
     }
 
+    [Fact]
+    public void Parse_WhenControlRequestSucceeds_ThenReturnsTheReply()
+    {
+        // Arrange
+        const string line = """{"type":"control_response","response":{"subtype":"success","request_id":"req-1","response":{"mcpServers":[]}}}""";
+
+        // Act
+        var reply = Assert.IsType<ControlReply>(Assert.Single(ClaudeProtocol.Parse(line)));
+
+        // Assert
+        Assert.Equal(("req-1", true, (string?)null), (reply.RequestId, reply.Response?["mcpServers"] is JsonArray, reply.Error));
+    }
+
+    [Fact]
+    public void Parse_WhenControlRequestFails_ThenReturnsTheError()
+    {
+        // Arrange
+        const string line = """{"type":"control_response","response":{"subtype":"error","request_id":"req-1","error":"Server not found: x"}}""";
+
+        // Act
+        var reply = Assert.IsType<ControlReply>(Assert.Single(ClaudeProtocol.Parse(line)));
+
+        // Assert
+        Assert.Equal(("req-1", "Server not found: x"), (reply.RequestId, reply.Error));
+    }
+
     static string Summary(string line)
     {
         var request = JsonNode.Parse(line)!["request"]!;

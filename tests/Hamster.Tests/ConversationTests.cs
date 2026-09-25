@@ -1084,6 +1084,64 @@ public sealed class ConversationTests : IDisposable
         await conversation.SendAsync("anden");
     }
 
+    [Fact]
+    public async Task Restart_WhenIdle_ThenStartsClaudeAgainWithTheSession()
+    {
+        // Arrange
+        await conversation.SendAsync("hej");
+
+        // Act
+        conversation.Restart();
+
+        // Assert
+        Assert.Equal([null, "session-1"], claude.Starts);
+    }
+
+    [Fact]
+    public async Task Restart_WhenBusy_ThenKeepsClaudeRunningWhenTheTurnEnds()
+    {
+        // Arrange
+        claude.Reply = Started;
+        await conversation.SendAsync("hej");
+        conversation.Restart();
+
+        // Act
+        claude.Listener.ResultReceived(Answered with { Answers = [claude.Ids[0]] });
+
+        // Assert
+        Assert.Equal([null], claude.Starts);
+    }
+
+    [Fact]
+    public async Task Restart_WhenBackgroundTasksRun_ThenKeepsClaudeRunning()
+    {
+        // Arrange
+        await conversation.SendAsync("hej");
+        conversation.BackgroundTasksChanged(1);
+
+        // Act
+        conversation.Restart();
+
+        // Assert
+        Assert.Equal([null], claude.Starts);
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenARestartWaits_ThenStartsClaudeAgainFirst()
+    {
+        // Arrange
+        claude.Reply = Started;
+        await conversation.SendAsync("hej");
+        conversation.Restart();
+        claude.Listener.ResultReceived(Answered with { Answers = [claude.Ids[0]] });
+
+        // Act
+        await conversation.SendAsync("igen");
+
+        // Assert
+        Assert.Equal([null, "session-1"], claude.Starts);
+    }
+
     static PermissionRequest Request() => new("req-1", "Bash", new JsonObject { ["command"] = "dir" });
 
     static readonly ClaudeResult Answered = new("session-1", "Svar", IsError: false);
@@ -1131,6 +1189,8 @@ public sealed class ConversationTests : IDisposable
             Reply(Listener, id);
             return Task.CompletedTask;
         }
+
+        public Task<JsonObject?> RequestAsync(JsonObject request) => Task.FromResult<JsonObject?>(null);
 
         public void Interrupt() => Interrupts++;
 

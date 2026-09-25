@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 namespace Hamster.Tests;
 
 public sealed class ClaudeClientTests : IDisposable
@@ -55,5 +57,18 @@ public sealed class ClaudeClientTests : IDisposable
 
         // Assert
         await Assert.ThrowsAsync<InvalidOperationException>(sending);
+    }
+
+    [Fact]
+    public async Task RequestAsync_WhenNotStarted_ThenFailsWithInvalidOperation()
+    {
+        // Arrange
+        var client = new ClaudeClient("workspace", "instructions.txt", Store());
+
+        // Act
+        var asking = () => client.RequestAsync(new JsonObject { ["subtype"] = "mcp_status" });
+
+        // Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(asking);
     }
 }

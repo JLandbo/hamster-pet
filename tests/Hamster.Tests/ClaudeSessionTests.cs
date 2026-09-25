@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
 
@@ -14,6 +15,8 @@ public sealed class ClaudeSessionTests
     const string Tasks = """{"type":"system","subtype":"background_tasks_changed","tasks":[]}""";
     const string Status = """{"type":"system","subtype":"status","status":null,"permissionMode":"plan"}""";
     const string Result = """{"type":"result","subtype":"success","is_error":false,"result":"Svar","session_id":"session-1","user_message_uuids":["id-1"]}""";
+
+    static readonly TimeSpan Patience = TimeSpan.FromMinutes(1);
 
     static CancellationToken Token => TestContext.Current.CancellationToken;
 
@@ -186,6 +189,76 @@ public sealed class ClaudeSessionTests
         Assert.Equal((0, 0, 1), (listener.Turns.Count, listener.Results.Count, session.Results));
     }
 
+    [Fact(Timeout = 5_000)]
+    public async Task RequestAsync_WhenClaudeAnswers_ThenReturnsTheResponse()
+    {
+        // Arrange
+        var (output, input) = (new LineReader(), new LineWriter());
+        var session = new ClaudeSession(output, input, new FakeListener());
+        _ = session.ReadAsync();
+        var asking = session.RequestAsync(new JsonObject { ["subtype"] = "mcp_status" }, Patience);
+
+        // Act
+        output.Add(Reply(await input.NextAsync(), """{"subtype":"success","response":{"mcpServers":[]}}"""));
+
+        // Assert
+        Assert.True((await asking.WaitAsync(Token))?["mcpServers"] is JsonArray);
+    }
+
+    [Fact(Timeout = 5_000)]
+    public async Task RequestAsync_WhenClaudeRefuses_ThenThrowsItsError()
+    {
+        // Arrange
+        var (output, input) = (new LineReader(), new LineWriter());
+        var session = new ClaudeSession(output, input, new FakeListener());
+        _ = session.ReadAsync();
+        var asking = session.RequestAsync(new JsonObject { ["subtype"] = "mcp_toggle" }, Patience);
+
+        // Act
+        output.Add(Reply(await input.NextAsync(), """{"subtype":"error","error":"Server not found: x"}"""));
+
+        // Assert
+        Assert.Equal("Server not found: x", (await Assert.ThrowsAsync<InvalidOperationException>(() => asking.WaitAsync(Token))).Message);
+    }
+
+    [Fact(Timeout = 5_000)]
+    public async Task RequestAsync_WhenOutputEndsBeforeTheAnswer_ThenIsCancelled()
+    {
+        // Arrange
+        var (output, input) = (new LineReader(), new LineWriter());
+        var session = new ClaudeSession(output, input, new FakeListener());
+        var reading = session.ReadAsync();
+        var asking = session.RequestAsync(new JsonObject { ["subtype"] = "mcp_status" }, Patience);
+        await input.NextAsync();
+
+        // Act
+        output.End();
+        await reading.WaitAsync(Token);
+
+        // Assert
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => asking.WaitAsync(Token));
+    }
+
+    [Fact(Timeout = 5_000)]
+    public async Task RequestAsync_WhenClaudeDoesNotAnswerInTime_ThenFails()
+    {
+        // Arrange
+        var session = new ClaudeSession(new LineReader(), new LineWriter(), new FakeListener());
+
+        // Act
+        var asking = () => session.RequestAsync(new JsonObject { ["subtype"] = "mcp_status" }, TimeSpan.Zero).WaitAsync(Token);
+
+        // Assert
+        Assert.Equal("claude svarede ikke.", (await Assert.ThrowsAsync<InvalidOperationException>(asking)).Message);
+    }
+
+    static string Reply(string request, string response)
+    {
+        var reply = JsonNode.Parse(response)!.AsObject();
+        reply["request_id"] = (string?)JsonNode.Parse(request)!["request_id"];
+        return new JsonObject { ["type"] = "control_response", ["response"] = reply }.ToJsonString();
+    }
+
     static StringReader Output(params string[] lines) => new(string.Join('\n', lines));
 
     static string[] Lines(StringWriter input) => input.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
@@ -200,6 +273,17 @@ public sealed class ClaudeSessionTests
 
         public override async Task<string?> ReadLineAsync() =>
             await lines.Reader.WaitToReadAsync() && lines.Reader.TryRead(out var line) ? line : null;
+    }
+
+    sealed class LineWriter : TextWriter
+    {
+        readonly Channel<string> lines = Channel.CreateUnbounded<string>();
+
+        public override Encoding Encoding => Encoding.UTF8;
+
+        public override void Write(string? value) => lines.Writer.TryWrite(value!.TrimEnd('\n'));
+
+        public ValueTask<string> NextAsync() => lines.Reader.ReadAsync(Token);
     }
 
     sealed class FakeListener(bool? allow = true) : IClaudeListener
