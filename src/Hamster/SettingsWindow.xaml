@@ -50,7 +50,7 @@
 
         <DataTemplate DataType="{x:Type local:FieldInput}">
             <StackPanel Margin="0,0,0,8">
-                <TextBlock Text="{Binding Field.Label}" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,0,0,2" />
+                <TextBlock Text="{Binding Field.Label}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,0,0,2" />
                 <TextBox x:Name="Plain" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" CaretBrush="{DynamicResource Text}" Style="{StaticResource Field}" />
                 <PasswordBox x:Name="Secret" Visibility="Collapsed" PasswordChanged="Secret_PasswordChanged" CaretBrush="{DynamicResource Text}" Style="{StaticResource Field}" />
             </StackPanel>
@@ -65,7 +65,7 @@
         <DataTemplate x:Key="ChoiceTemplate" DataType="{x:Type local:Choice}">
             <CheckBox Content="{Binding Title}" IsChecked="{Binding Chosen, Mode=OneWay}" Click="Choice_Click"
                       IsEnabled="{Binding DataContext.Idle, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                      FontSize="11" Margin="0,6,0,0" />
+                      FontSize="12" Margin="0,6,0,0" />
         </DataTemplate>
     </Window.Resources>
 
@@ -110,7 +110,7 @@
                                                     <Border Width="22" Height="9" CornerRadius="4.5" Background="{Binding Attention}" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
                                                 </Grid>
                                             </Border>
-                                            <TextBlock Text="{Binding Name}" HorizontalAlignment="Center" FontSize="11" Margin="0,4,0,0" />
+                                            <TextBlock Text="{Binding Name}" HorizontalAlignment="Center" FontSize="12" Margin="0,4,0,0" />
                                         </StackPanel>
                                     </Button>
                                 </Border>
@@ -140,7 +140,7 @@
                                     <Button Click="Character_Click" ToolTip="{Binding Problem}" Style="{StaticResource PillButton}" Padding="10,8">
                                         <StackPanel>
                                             <Image Source="{Binding Preview}" Width="80" Height="72" RenderOptions.BitmapScalingMode="NearestNeighbor" />
-                                            <TextBlock Text="{Binding Name}" HorizontalAlignment="Center" FontSize="11" Margin="0,4,0,0" />
+                                            <TextBlock Text="{Binding Name}" HorizontalAlignment="Center" FontSize="12" Margin="0,4,0,0" />
                                         </StackPanel>
                                     </Button>
                                 </Border>
@@ -154,7 +154,7 @@
                     </ItemsControl>
 
                     <TextBlock Text="{DynamicResource Settings.Connectors}" Foreground="{DynamicResource Muted}" Margin="0,16,0,8" />
-                    <TextBlock x:Name="ConnectorProblem" Foreground="{DynamicResource Attention}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed" />
+                    <TextBlock x:Name="ConnectorProblem" Foreground="{DynamicResource Attention}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed" />
                     <ItemsControl x:Name="ConnectorList">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type local:ConnectorRow}">
@@ -180,19 +180,19 @@
                                                     Style="{StaticResource TextButton}" Padding="6,2" Visibility="Collapsed" />
                                             <Button x:Name="EditButton" DockPanel.Dock="Right" Content="{DynamicResource Settings.EditToken}" Click="Edit_Click"
                                                     Style="{StaticResource TextButton}" Padding="6,2" Visibility="Collapsed" />
-                                            <TextBlock DockPanel.Dock="Left" Text="{Binding State}" ToolTip="{Binding State}" Foreground="{DynamicResource Muted}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                            <TextBox x:Name="SiteBox" Text="{Binding SiteInput, UpdateSourceTrigger=PropertyChanged}" Margin="8,0,8,0" FontSize="11" VerticalAlignment="Center"
+                                            <TextBlock DockPanel.Dock="Left" Text="{Binding State}" ToolTip="{Binding State}" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                            <TextBox x:Name="SiteBox" Text="{Binding SiteInput, UpdateSourceTrigger=PropertyChanged}" Margin="8,0,8,0" FontSize="12" VerticalAlignment="Center"
                                                      CaretBrush="{DynamicResource Text}" Style="{StaticResource Field}" Visibility="Hidden" />
                                         </DockPanel>
                                         <StackPanel x:Name="Form" Margin="0,10,0,0" Visibility="Collapsed">
                                             <ItemsControl ItemsSource="{Binding Inputs}" />
                                             <DockPanel x:Name="Write" Margin="0,2,0,10" Visibility="Collapsed">
                                                 <ToggleButton DockPanel.Dock="Right" IsChecked="{Binding AllowWrite}" Style="{StaticResource Switch}" />
-                                                <TextBlock Text="{DynamicResource Settings.AllowWrite}" Foreground="{DynamicResource Text}" FontSize="11" VerticalAlignment="Center" />
+                                                <TextBlock Text="{DynamicResource Settings.AllowWrite}" Foreground="{DynamicResource Text}" FontSize="12" VerticalAlignment="Center" />
                                             </DockPanel>
                                             <DockPanel>
                                                 <Button DockPanel.Dock="Right" Content="{DynamicResource Settings.Save}" Click="Install_Click" IsEnabled="{Binding Idle}" Style="{StaticResource PrimaryButton}" />
-                                                <TextBlock VerticalAlignment="Center" FontSize="11">
+                                                <TextBlock VerticalAlignment="Center" FontSize="12">
                                                     <Hyperlink NavigateUri="{Binding Connector.TokenPage}" RequestNavigate="TokenPage_RequestNavigate"><Run Text="{DynamicResource Settings.CreateToken}" /></Hyperlink>
                                                 </TextBlock>
                                             </DockPanel>
@@ -201,25 +201,25 @@
                                             <DockPanel>
                                                 <Button x:Name="FetchChoices" DockPanel.Dock="Right" Content="{DynamicResource Settings.FetchBoards}" Click="FetchStatuses_Click" IsEnabled="{Binding Idle}"
                                                         Style="{StaticResource TextButton}" Padding="6,2" Visibility="Collapsed" />
-                                                <TextBlock Text="{DynamicResource Settings.SubscribeTo}" Foreground="{DynamicResource Muted}" FontSize="11" VerticalAlignment="Center" />
+                                                <TextBlock Text="{DynamicResource Settings.SubscribeTo}" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" />
                                             </DockPanel>
-                                            <TextBlock x:Name="ChoicesText" Text="{Binding ChoicesText}" Foreground="{DynamicResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                            <TextBlock x:Name="ChoicesText" Text="{Binding ChoicesText}" Foreground="{DynamicResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition />
                                                     <ColumnDefinition />
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel x:Name="Boards" Margin="0,0,12,0">
-                                                    <TextBlock Text="{DynamicResource Settings.Boards}" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,6,0,0" />
+                                                    <TextBlock Text="{DynamicResource Settings.Boards}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,6,0,0" />
                                                     <ItemsControl ItemsSource="{Binding BoardChoices}" ItemTemplate="{StaticResource ChoiceTemplate}" />
                                                 </StackPanel>
                                                 <StackPanel x:Name="ChoicesPanel" Grid.Column="1">
-                                                    <TextBlock x:Name="ColumnsLabel" Text="{DynamicResource Settings.Columns}" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,6,0,0" />
+                                                    <TextBlock x:Name="ColumnsLabel" Text="{DynamicResource Settings.Columns}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,6,0,0" />
                                                     <ItemsControl ItemsSource="{Binding Choices}" ItemTemplate="{StaticResource ChoiceTemplate}" />
                                                 </StackPanel>
                                             </Grid>
                                         </StackPanel>
-                                        <TextBlock x:Name="ProblemText" Text="{Binding Problem}" Foreground="{DynamicResource Attention}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0" />
+                                        <TextBlock x:Name="ProblemText" Text="{Binding Problem}" Foreground="{DynamicResource Attention}" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0" />
                                     </StackPanel>
                                 </Border>
                                 <DataTemplate.Triggers>

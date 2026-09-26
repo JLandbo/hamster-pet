@@ -18,7 +18,7 @@
         <BooleanToVisibilityConverter x:Key="VisibleWhenTrue" />
         <local:MarkdownConverter x:Key="Markdown" />
         <Style TargetType="FlowDocument" BasedOn="{StaticResource {x:Type FlowDocument}}">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="13" />
         </Style>
 
         <Style x:Key="ExpandButton" TargetType="ToggleButton">
@@ -79,16 +79,16 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <Border x:Name="Chip" CornerRadius="5" Margin="0,0,10,0" HorizontalAlignment="Left" VerticalAlignment="Center">
-                        <TextBlock x:Name="Key" Text="{Binding Id}" Foreground="{DynamicResource Link}" FontFamily="Cascadia Mono, Consolas" FontSize="11" />
+                        <TextBlock x:Name="Key" Text="{Binding Id}" Foreground="{DynamicResource Link}" FontFamily="Cascadia Mono, Consolas" FontSize="12" />
                     </Border>
                     <TextBlock x:Name="Title" Grid.Column="1" Text="{Binding Title}" Foreground="{DynamicResource Text}"
                                TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="2" Text="{Binding Detail}" Foreground="{DynamicResource Muted}" FontSize="11"
+                    <TextBlock Grid.Column="2" Text="{Binding Detail}" Foreground="{DynamicResource Muted}" FontSize="12"
                                Margin="10,0,0,0" VerticalAlignment="Center" />
                     <ToggleButton x:Name="Expand" Grid.Column="3" Style="{StaticResource ExpandButton}" Margin="6,0,0,0" Loaded="Expand_Loaded" Click="Expand_Click" />
                 </Grid>
             </Button>
-            <Border Margin="10,0,6,6" Padding="12,8,12,10" CornerRadius="8" Background="{DynamicResource Hover}"
+            <Border Margin="10,4,6,6" Padding="12,8,12,10" CornerRadius="8" Background="{DynamicResource Hover}"
                     Visibility="{Binding IsChecked, ElementName=Expand, Converter={StaticResource VisibleWhenTrue}}">
                 <StackPanel>
                     <StackPanel x:Name="SprintLine" Orientation="Horizontal" Margin="0,0,0,8">
@@ -105,7 +105,7 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type local:IssueTag}">
                                 <Border Margin="0,0,5,5" Padding="7,1" CornerRadius="6" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
-                                    <TextBlock FontSize="11">
+                                    <TextBlock FontSize="12">
                                         <Run Text="{Binding Key, Mode=OneWay}" Foreground="{DynamicResource Muted}" />
                                         <Run Text="{Binding Value, Mode=OneWay}" Foreground="{DynamicResource Text}" />
                                     </TextBlock>
@@ -113,7 +113,7 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <FlowDocumentScrollViewer x:Name="Description" VerticalScrollBarVisibility="Disabled" FocusVisualStyle="{x:Null}" Foreground="{DynamicResource Muted}"
+                    <FlowDocumentScrollViewer x:Name="Description" VerticalScrollBarVisibility="Disabled" FocusVisualStyle="{x:Null}" Foreground="{DynamicResource Text}"
                                               Hyperlink.RequestNavigate="Link_RequestNavigate" RequestBringIntoView="Description_RequestBringIntoView" />
                 </StackPanel>
             </Border>
@@ -167,7 +167,7 @@
                 <Button x:Name="RefreshButton" DockPanel.Dock="Right" Content="&#xE72C;" ToolTip="{DynamicResource Tasks.Refresh}" Click="Refresh_Click"
                         Style="{StaticResource SmallIconButton}" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
                 <TextBlock Text="{DynamicResource Common.Tasks}" Foreground="{DynamicResource Text}" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center" />
-                <TextBlock x:Name="UpdatedText" Foreground="{DynamicResource Muted}" FontSize="11" Margin="10,3,0,0" VerticalAlignment="Center" />
+                <TextBlock x:Name="UpdatedText" Foreground="{DynamicResource Muted}" FontSize="12" Margin="10,3,0,0" VerticalAlignment="Center" />
             </DockPanel>
 
             <TextBlock x:Name="EmptyText" DockPanel.Dock="Top" Text="{DynamicResource Tasks.Empty}" Foreground="{DynamicResource Muted}" Visibility="Collapsed" />
@@ -187,12 +187,12 @@
                                         </Viewbox>
                                         <TextBlock Text="{Binding Title}" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" />
                                     </StackPanel>
-                                    <TextBlock x:Name="Error" Text="{Binding Error}" Foreground="{DynamicResource Error}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock x:Name="Error" Text="{Binding Error}" Foreground="{DynamicResource Error}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <ItemsControl ItemsSource="{Binding Groups}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="{x:Type local:FeedGroup}">
                                                 <StackPanel>
-                                                    <TextBlock Text="{Binding Title}" Foreground="{DynamicResource Attention}" FontSize="11" Margin="0,8,0,4" />
+                                                    <TextBlock Text="{Binding Title}" Foreground="{DynamicResource Attention}" FontSize="12" Margin="0,8,0,4" />
                                                     <ItemsControl ItemsSource="{Binding Boxes}">
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate DataType="{x:Type local:FeedBox}">

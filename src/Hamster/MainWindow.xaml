@@ -19,7 +19,7 @@
 
         <Style x:Key="FoldButton" TargetType="ToggleButton">
             <Setter Property="Foreground" Value="{DynamicResource Muted}" />
-            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontSize" Value="12" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Focusable" Value="False" />
             <Setter Property="Template">
@@ -99,7 +99,7 @@
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
                                                                 <TextBlock Text="{Binding}" ToolTip="{Binding}" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"
-                                                                           Foreground="{DynamicResource Muted}" FontFamily="{x:Static local:MarkdownConverter.CodeFont}" FontSize="11" />
+                                                                           Foreground="{DynamicResource Muted}" FontFamily="{x:Static local:MarkdownConverter.CodeFont}" FontSize="12" />
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
@@ -130,7 +130,7 @@
                                                     <TextBlock Text="{Binding Details}" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"
                                                                FontFamily="{x:Static local:MarkdownConverter.CodeFont}" FontSize="12" />
                                                     <TextBlock Foreground="{DynamicResource Muted}" TextWrapping="Wrap"
-                                                               FontSize="11" Margin="0,6,0,0" Visibility="{Binding CanAllowAlways, Converter={StaticResource VisibleWhenTrue}}"><Run Text="{DynamicResource Main.AllowAlwaysScope}" /> <Run Text="{Binding AlwaysScope, Mode=OneWay}" /></TextBlock>
+                                                               FontSize="12" Margin="0,6,0,0" Visibility="{Binding CanAllowAlways, Converter={StaticResource VisibleWhenTrue}}"><Run Text="{DynamicResource Main.AllowAlwaysScope}" /> <Run Text="{Binding AlwaysScope, Mode=OneWay}" /></TextBlock>
                                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
                                                         <Button Content="{DynamicResource Main.Deny}" Click="Deny_Click" Style="{StaticResource PillButton}" />
                                                         <Button Content="{DynamicResource Main.AllowAlways}" Click="AllowAlways_Click" Style="{StaticResource PillButton}" Margin="8,0,0,0"
@@ -221,7 +221,7 @@
                                 <DockPanel>
                                     <Button x:Name="AttachmentChip" DockPanel.Dock="Left" Visibility="Collapsed" Click="ClearAttachments_Click"
                                             Style="{StaticResource PillButton}" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Top">
-                                        <TextBlock FontSize="11">
+                                        <TextBlock FontSize="12">
                                             <Run FontFamily="{StaticResource IconFont}" Text="&#xE723;" />
                                             <Run x:Name="AttachmentCount" />
                                         </TextBlock>
@@ -280,7 +280,7 @@
                                     </Button.ContextMenu>
                                 </Button>
                                 <TextBlock x:Name="CostText" Grid.Row="0" Grid.Column="3" ToolTip="{DynamicResource Main.CostHint}" Foreground="{DynamicResource Muted}"
-                                    FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6,0" />
+                                    FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6,0" />
                                 <Button x:Name="MoreButton" Grid.Row="1" Grid.Column="0" Content="&#xE712;" ToolTip="{DynamicResource Main.More}" Click="ShowChoices_Click" Style="{StaticResource IconButton}"
                                         ToolTipService.ShowOnDisabled="True">
                                     <Button.ContextMenu>
@@ -303,7 +303,7 @@
                                 </Button>
                                 <Button x:Name="StopButton" Grid.Row="1" Grid.Column="3" Content="&#xE71A;" ToolTip="{DynamicResource Main.Stop}" Click="Stop_Click" Style="{StaticResource IconButton}" Visibility="Collapsed" />
                                 <TextBlock x:Name="TasksText" Grid.Row="1" Grid.Column="3" ToolTip="{DynamicResource Main.TasksHint}" Foreground="{DynamicResource Muted}"
-                                    FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
+                                    FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
                                 <Border Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="3" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0"
                                         Padding="2" CornerRadius="8" Background="{DynamicResource Input}">
                                     <StackPanel Orientation="Horizontal">
