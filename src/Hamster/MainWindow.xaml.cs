@@ -31,8 +31,6 @@ public partial class MainWindow : Window
     static readonly TimeSpan ChatsIdleTime = TimeSpan.FromSeconds(60);
     static readonly TimeSpan ToolbarIdleTime = TimeSpan.FromSeconds(2);
     const string CollapseIcon = "\uE70D";
-    const string SwitchWhenIdle = "Stop Claude, eller vent til den er færdig, for at skifte";
-    const string OnlyInFirstHamster = "Kun i den første hamster";
     const string ExpandIcon = "\uE70E";
     const string PlayIcon = "\uE768";
     const string PauseIcon = "\uE769";
@@ -59,9 +57,9 @@ public partial class MainWindow : Window
     readonly DispatcherTimer timer = new();
     readonly DispatcherTimer clock = new() { Interval = TimeSpan.FromSeconds(1) };
     readonly DispatcherTimer feedTimer = new() { Interval = Subscriptions.Interval };
-    readonly HashSet<string> dismissedProblems = [];
+    readonly HashSet<ConnectorProblem> dismissedProblems = [];
 
-    IReadOnlyList<string> problems = [];
+    IReadOnlyList<ConnectorProblem> problems = [];
     DateTime feedNewsAt;
     MusicPlayer? music;
     Character character = Character.Hamster;
@@ -86,6 +84,9 @@ public partial class MainWindow : Window
         data = DataFolder.Current;
         var settingsFile = Path.Combine(data, "settings.json");
         chatOnly = !settingsOwner.TryOwn(settingsFile);
+        petFile = new JsonFile<PetSettings>(Path.Combine(data, "pet.json"), PetSettings.Default, chatOnly);
+        var pet = petFile.Load();
+        ((App)Application.Current).Use(Translation.All.FirstOrDefault(translation => translation.Name == pet.LanguageName) ?? Translation.Danish);
         instructionsFile = Path.Combine(data, "instructions.txt");
         claude = new ClaudeClient(Path.Combine(data, "workspace"), instructionsFile,
             new JsonFile<ClaudeSettings>(settingsFile, ClaudeSettings.Default, chatOnly));
@@ -101,7 +102,6 @@ public partial class MainWindow : Window
         characters = new CharacterLibrary(Path.Combine(data, "Characters"));
         prompts = new PromptLibrary(Path.Combine(data, "Prompts"));
         themes = new ThemeLibrary(Path.Combine(data, "Themes"));
-        petFile = new JsonFile<PetSettings>(Path.Combine(data, "pet.json"), PetSettings.Default, chatOnly);
         connectors = new Connectors(claude, conversation.Restart, () => conversation.RestartPending);
         subscriptions = new Subscriptions(connectors, new ClaudeFetcher(Path.Combine(data, "workspace")), new WebSession(Path.Combine(data, "WebLogin")),
             new JsonFile<SubscriptionSettings>(Path.Combine(data, "subscriptions.json"), SubscriptionSettings.Empty, chatOnly));
@@ -120,9 +120,7 @@ public partial class MainWindow : Window
         Choose(EffortButton, claude.Settings.Effort);
         Choose(ModeButton, claude.Settings.PermissionMode);
         ToggleChats.Content = CollapseIcon;
-        if (chatOnly)
-            foreach (var button in new[] { MoreButton, FeedButton })
-                (button.IsEnabled, button.ToolTip, button.Opacity) = (false, OnlyInFirstHamster, 0.4);
+        ShowChatOnly();
         ShowFolder();
         ChatList.ItemsSource = conversation.Chats;
         conversation.Changed += Conversation_Changed;
@@ -145,10 +143,20 @@ public partial class MainWindow : Window
             foreach (var chat in conversation.Chats)
                 chat.RefreshElapsed();
         };
-        var pet = petFile.Load();
+        Strings.Changed += () =>
+        {
+            ShowChatOnly();
+            UpdateToolbar();
+            ShowMusic();
+            UpdateAttachments();
+            ShowProblems();
+            _ = feed.RefreshAsync();
+        };
         ((App)Application.Current).Use(themes.Find(pet.ThemeName));
         UseCharacter(LoadCharacter(pet.CharacterName));
     }
+
+    static string SwitchWhenIdle => Strings.Of("Main.SwitchWhenIdle");
 
     static Placement DefaultPlacement => new(SystemParameters.WorkArea.Right, SystemParameters.WorkArea.Bottom, DefaultWidth, DefaultChatHeight);
 
@@ -202,6 +210,13 @@ public partial class MainWindow : Window
         Animate();
     }
 
+    void ShowChatOnly()
+    {
+        if (chatOnly)
+            foreach (var button in new[] { MoreButton, FeedButton })
+                (button.IsEnabled, button.ToolTip, button.Opacity) = (false, Strings.Of("Main.OnlyInFirstHamster"), 0.4);
+    }
+
     void Settings_Click(object sender, RoutedEventArgs e) => ShowSettings();
 
     void ShowSettings()
@@ -211,7 +226,7 @@ public partial class MainWindow : Window
             settings.Activate();
             return;
         }
-        var window = settings = new SettingsWindow(themes, petFile.Load().ThemeName, ChooseTheme, characters, character.Name, ChooseCharacter, connectors, subscriptions) { Owner = this };
+        var window = settings = new SettingsWindow(ChooseLanguage, themes, petFile.Load().ThemeName, ChooseTheme, characters, character.Name, ChooseCharacter, connectors, subscriptions) { Owner = this };
         RememberSize(window, settingsSize);
         window.Closed += (_, _) => _ = CheckConnectorsAsync();
         window.Show();
@@ -253,7 +268,7 @@ public partial class MainWindow : Window
 
     void DismissProblem_Click(object sender, RoutedEventArgs e)
     {
-        dismissedProblems.Add((string)((FrameworkElement)sender).DataContext);
+        dismissedProblems.Add((ConnectorProblem)((FrameworkElement)sender).DataContext);
         ShowProblems();
     }
 
@@ -305,7 +320,7 @@ public partial class MainWindow : Window
         var track = music?.Track;
         MusicBubble.Visibility = track is null ? Visibility.Collapsed : Visibility.Visible;
         (TrackText.Text, MusicBubble.ToolTip) = (track?.Text, track?.Text);
-        (PlayPauseButton.Content, PlayPauseButton.ToolTip) = track?.Playing == true ? (PauseIcon, "Pause") : (PlayIcon, "Afspil");
+        (PlayPauseButton.Content, PlayPauseButton.ToolTip) = track?.Playing == true ? (PauseIcon, Strings.Of("Main.Pause")) : (PlayIcon, Strings.Of("Main.Play"));
         if (Status.Mood != mood)
             Animate();
     }
@@ -320,6 +335,14 @@ public partial class MainWindow : Window
     {
         petFile.Save(petFile.Load() with { CharacterName = chosen.Name });
         UseCharacter(chosen);
+    }
+
+    void ChooseLanguage(Translation chosen)
+    {
+        if (chosen == Strings.Current)
+            return;
+        petFile.Save(petFile.Load() with { LanguageName = chosen.Name });
+        ((App)Application.Current).Use(chosen);
     }
 
     void ChooseTheme(Theme chosen)
@@ -448,7 +471,7 @@ public partial class MainWindow : Window
     {
         CostText.Text = conversation.Cost.ToString("$0.00", CultureInfo.InvariantCulture);
         StopButton.Visibility = conversation.IsBusy ? Visibility.Visible : Visibility.Collapsed;
-        TasksText.Text = $"{conversation.BackgroundTasks} kører";
+        TasksText.Text = Strings.Format("Main.TasksRunning", conversation.BackgroundTasks);
         TasksText.Visibility = conversation.BackgroundTasks > 0 && !conversation.IsBusy ? Visibility.Visible : Visibility.Collapsed;
         PromptsButton.Visibility = StopButton.Visibility == Visibility.Collapsed && TasksText.Visibility == Visibility.Collapsed ? Visibility.Visible : Visibility.Collapsed;
         clock.IsEnabled = conversation.IsBusy;
@@ -662,7 +685,7 @@ public partial class MainWindow : Window
         }
         catch (Win32Exception)
         {
-            MessageBox.Show(this, "Kunne ikke åbne Windows' klippeværktøj.", "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, Strings.Of("Main.SnipFailed"), "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
         {
@@ -717,7 +740,7 @@ public partial class MainWindow : Window
     {
         var names = attachedFiles.Select(Path.GetFileName).Concat(attachedImages.Select(image => image.Name)).ToArray();
         AttachmentChip.Visibility = names.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        AttachmentChip.ToolTip = $"{string.Join('\n', names)}\n(klik for at fjerne)";
+        AttachmentChip.ToolTip = $"{string.Join('\n', names)}\n{Strings.Of("Main.ClickToRemove")}";
         AttachmentCount.Text = $"{names.Length}";
     }
 
@@ -751,8 +774,8 @@ public partial class MainWindow : Window
         FullScreenItem.IsChecked = beforeFullScreen is not null;
         SaveChatItem.IsEnabled = conversation.Chats.Count > 0;
         UsageItem.Header = conversation.Usage is { } usage
-            ? $"Forbrug: 5 t {usage.FiveHour:P0} · uge {usage.SevenDay:P0}"
-            : "Forbrug vises efter første svar";
+            ? Strings.Format("Main.Usage", usage.FiveHour, usage.SevenDay)
+            : Strings.Of("Main.UsageLater");
     }
 
     void Folder_Click(object sender, RoutedEventArgs e)
@@ -763,7 +786,7 @@ public partial class MainWindow : Window
         ShowFolder();
     }
 
-    void NewHamster_Click(object sender, RoutedEventArgs e) => Open(new ProcessStartInfo(Environment.ProcessPath!), "Kunne ikke starte en ny hamster.");
+    void NewHamster_Click(object sender, RoutedEventArgs e) => Open(new ProcessStartInfo(Environment.ProcessPath!), Strings.Of("Main.NewHamsterFailed"));
 
     void Chat_Click(object sender, RoutedEventArgs e)
     {
@@ -789,7 +812,7 @@ public partial class MainWindow : Window
         var folder = claude.Settings.WorkingDirectory;
         var idle = CanSwitch;
         (ChatButton.IsChecked, FolderButton.IsChecked, ChatButton.IsEnabled, FolderButton.IsEnabled) = (folder is null, folder is not null, idle, idle);
-        (ChatButton.ToolTip, FolderButton.ToolTip) = idle ? ("Chat uden mappe", folder ?? "Vælg en mappe, Claude skal arbejde i") : (SwitchWhenIdle, SwitchWhenIdle);
+        (ChatButton.ToolTip, FolderButton.ToolTip) = idle ? (Strings.Of("Main.ChatHint"), folder ?? Strings.Of("Main.FolderHint")) : (SwitchWhenIdle, SwitchWhenIdle);
         TemporaryBanner.Visibility = conversation.IsTemporary ? Visibility.Visible : Visibility.Collapsed;
         ShowInputHint();
     }
@@ -802,7 +825,7 @@ public partial class MainWindow : Window
     {
         Directory.CreateDirectory(Path.GetDirectoryName(instructionsFile)!);
         File.AppendAllText(instructionsFile, "");
-        Open(new ProcessStartInfo(instructionsFile) { UseShellExecute = true }, "Kunne ikke åbne instruktionerne.");
+        Open(new ProcessStartInfo(instructionsFile) { UseShellExecute = true }, Strings.Of("Main.InstructionsFailed"));
     }
 
     async void SaveChat_Click(object sender, RoutedEventArgs e)
@@ -811,7 +834,7 @@ public partial class MainWindow : Window
         {
             FileName = $"Hamster-chat {DateTime.Now:yyyy-MM-dd HH.mm}",
             DefaultExt = ".md",
-            Filter = "Markdown (*.md)|*.md|Tekst (*.txt)|*.txt",
+            Filter = $"Markdown (*.md)|*.md|{Strings.Of("Main.TextFiles")} (*.txt)|*.txt",
         };
         if (dialog.ShowDialog(this) != true)
             return;
@@ -821,7 +844,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, $"Kunne ikke gemme chatten: {exception.Message}", "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, Strings.Format("Main.SaveChatFailed", exception.Message), "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -838,14 +861,14 @@ public partial class MainWindow : Window
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
         }
-        menu.Items.Add(new MenuItem { Header = "+ Tilføj prompt…" });
+        menu.Items.Add(new MenuItem { Header = Strings.Of("Main.AddPrompt") });
     }
 
     async void Prompt_Click(object sender, RoutedEventArgs e)
     {
         if (((MenuItem)e.OriginalSource).Tag is not Prompt prompt)
         {
-            Open(new ProcessStartInfo(prompts.Folder) { UseShellExecute = true }, "Kunne ikke åbne mappen med prompts.");
+            Open(new ProcessStartInfo(prompts.Folder) { UseShellExecute = true }, Strings.Of("Main.PromptsFolderFailed"));
             return;
         }
         try
@@ -857,14 +880,14 @@ public partial class MainWindow : Window
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, $"Kunne ikke læse prompten: {exception.Message}", "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, Strings.Format("Main.PromptFailed", exception.Message), "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
     void OpenClaude_Click(object sender, RoutedEventArgs e) =>
-        Open(new ProcessStartInfo("claude://") { UseShellExecute = true }, "Kunne ikke åbne Claude-appen. Er den installeret?");
+        Open(new ProcessStartInfo("claude://") { UseShellExecute = true }, Strings.Of("Main.OpenClaudeFailed"));
 
-    void Login_Click(object sender, RoutedEventArgs e) => Open(new ProcessStartInfo("claude", "auth login"), "Kunne ikke starte claude. Er den installeret?");
+    void Login_Click(object sender, RoutedEventArgs e) => Open(new ProcessStartInfo("claude", "auth login"), Strings.Of("Main.LoginFailed"));
 
     void Open(ProcessStartInfo start, string failure)
     {
@@ -880,7 +903,7 @@ public partial class MainWindow : Window
 
     void Link_RequestNavigate(object sender, RequestNavigateEventArgs e)
     {
-        Open(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }, $"Kunne ikke åbne {e.Uri.AbsoluteUri}");
+        Open(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }, Strings.Format("Main.LinkFailed", e.Uri.AbsoluteUri));
         e.Handled = true;
     }
 

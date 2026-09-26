@@ -17,6 +17,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Characters\Hamster\*.txt" LogicalName="%(Filename)%(Extension)" />
     <EmbeddedResource Include="Themes\*.json" LogicalName="Themes/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Languages\*.json" LogicalName="Languages/%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

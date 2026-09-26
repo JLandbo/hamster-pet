@@ -13,7 +13,7 @@
     <Border BorderBrush="{DynamicResource Edge}" BorderThickness="1">
         <DockPanel>
             <DockPanel DockPanel.Dock="Top" Height="40" Margin="14,0,8,0">
-                <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="Luk" Click="Close_Click" Style="{StaticResource SmallIconButton}" FontSize="12"
+                <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="{DynamicResource Common.Close}" Click="Close_Click" Style="{StaticResource SmallIconButton}" FontSize="12"
                         VerticalAlignment="Center" WindowChrome.IsHitTestVisibleInChrome="True" />
                 <TextBlock Text="{Binding Title, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{DynamicResource Text}" FontSize="13" FontWeight="SemiBold"
                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />

@@ -15,7 +15,7 @@ public sealed partial class ClaudeFetcher(string workspace)
     static readonly TimeSpan AnswerTimeout = TimeSpan.FromMinutes(2);
     static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(1);
     static readonly TimeSpan ErrorWait = TimeSpan.FromSeconds(2);
-    const string Stopped = "claude stoppede uventet.";
+    static string Stopped => Strings.Of("Claude.Stopped");
 
     public async Task<IReadOnlyList<(ToolCall Call, string Text)>> CallAsync(Connector connector, string serverName, IReadOnlyList<ToolCall> calls)
     {
@@ -46,7 +46,7 @@ public sealed partial class ClaudeFetcher(string workspace)
         }
         catch (TimeoutException)
         {
-            throw new InvalidOperationException("claude svarede ikke.");
+            throw new InvalidOperationException(Strings.Of("Claude.NoAnswer"));
         }
         catch (OperationCanceledException) when (reading.IsCompleted)
         {
@@ -117,7 +117,7 @@ public sealed partial class ClaudeFetcher(string workspace)
             if (server?.Status is "failed" or "needs-auth")
                 throw new InvalidOperationException($"{serverName}: {Connector.StateOf(server)}");
             if (DateTime.UtcNow > deadline)
-                throw new InvalidOperationException($"{serverName} blev ikke forbundet.");
+                throw new InvalidOperationException(Strings.Format("Claude.NotConnected", serverName));
             await Task.Delay(CheckInterval);
         }
     }
@@ -155,7 +155,7 @@ public sealed partial class ClaudeFetcher(string workspace)
         {
             var matched = Matched();
             if (matched.Count < calls.Count)
-                done.TrySetException(new InvalidOperationException(result.IsError && result.Text.Length > 0 ? result.Text : "claude kaldte ikke værktøjerne."));
+                done.TrySetException(new InvalidOperationException(result.IsError && result.Text.Length > 0 ? result.Text : Strings.Of("Claude.NoToolCalls")));
             else
                 done.TrySetResult(matched);
         }

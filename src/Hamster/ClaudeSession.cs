@@ -44,13 +44,13 @@ public sealed class ClaudeSession(TextReader output, TextWriter input, IClaudeLi
         try
         {
             if (detached)
-                throw new InvalidOperationException("claude kører ikke.");
+                throw new InvalidOperationException(Strings.Of("Claude.NotRunning"));
             await Task.Run(() => Send(ClaudeProtocol.Control(request, id)));
             return await reply.Task.WaitAsync(timeout);
         }
         catch (TimeoutException)
         {
-            throw new InvalidOperationException("claude svarede ikke.");
+            throw new InvalidOperationException(Strings.Of("Claude.NoAnswer"));
         }
         finally
         {

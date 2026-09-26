@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Hamster"
-        Title="Indstillinger" Width="560" Height="660" MinWidth="480" MinHeight="200"
+        Title="{DynamicResource Settings.Title}" Width="560" Height="660" MinWidth="480" MinHeight="200"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="CanResize"
         ShowInTaskbar="False" WindowStartupLocation="CenterOwner" UseLayoutRounding="True"
         FontFamily="{StaticResource UiFont}" FontSize="13" Activated="Window_Activated" Loaded="Window_Loaded">
@@ -74,13 +74,22 @@
             MouseLeftButtonDown="Border_MouseLeftButtonDown">
         <DockPanel>
             <DockPanel DockPanel.Dock="Top" Margin="0,0,0,16">
-                <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="Luk" Click="Close_Click" Style="{StaticResource SmallIconButton}" FontSize="12" VerticalAlignment="Center" />
-                <TextBlock Text="Indstillinger" Foreground="{DynamicResource Text}" FontSize="18" FontWeight="SemiBold" />
+                <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="{DynamicResource Common.Close}" Click="Close_Click" Style="{StaticResource SmallIconButton}" FontSize="12" VerticalAlignment="Center" />
+                <TextBlock Text="{DynamicResource Settings.Title}" Foreground="{DynamicResource Text}" FontSize="18" FontWeight="SemiBold" />
             </DockPanel>
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
                 <StackPanel>
 
-                    <TextBlock Text="Tema" Foreground="{DynamicResource Muted}" Margin="0,0,0,8" />
+                    <DockPanel Margin="0,0,0,16">
+                        <Border DockPanel.Dock="Right" Padding="2" CornerRadius="8" Background="{DynamicResource Input}">
+                            <StackPanel Orientation="Horizontal">
+                                <ToggleButton x:Name="DanishButton" Content="Dansk" Click="Language_Click" Style="{StaticResource Segment}" />
+                                <ToggleButton x:Name="EnglishButton" Content="English" Click="Language_Click" Style="{StaticResource Segment}" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="{DynamicResource Settings.Language}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <TextBlock Text="{DynamicResource Settings.Theme}" Foreground="{DynamicResource Muted}" Margin="0,0,0,8" />
                     <ItemsControl x:Name="ThemeList">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -115,9 +124,9 @@
                     </ItemsControl>
 
                     <DockPanel Margin="0,16,0,8">
-                        <Button DockPanel.Dock="Right" Content="&#xE710;" ToolTip="Tilføj karakter (en kopi af hamsteren, som du kan tegne om)" Click="AddCharacter_Click"
+                        <Button DockPanel.Dock="Right" Content="&#xE710;" ToolTip="{DynamicResource Settings.AddCharacter}" Click="AddCharacter_Click"
                                 Style="{StaticResource SmallIconButton}" FontSize="12" VerticalAlignment="Center" />
-                        <TextBlock Text="Karakter" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" />
+                        <TextBlock Text="{DynamicResource Settings.Character}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" />
                     </DockPanel>
                     <ItemsControl x:Name="CharacterList">
                         <ItemsControl.ItemsPanel>
@@ -144,7 +153,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <TextBlock Text="Connectors" Foreground="{DynamicResource Muted}" Margin="0,16,0,8" />
+                    <TextBlock Text="{DynamicResource Settings.Connectors}" Foreground="{DynamicResource Muted}" Margin="0,16,0,8" />
                     <TextBlock x:Name="ConnectorProblem" Foreground="{DynamicResource Attention}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed" />
                     <ItemsControl x:Name="ConnectorList">
                         <ItemsControl.ItemTemplate>
@@ -154,13 +163,13 @@
                                         <DockPanel>
                                             <Border DockPanel.Dock="Right" VerticalAlignment="Center" Padding="2" CornerRadius="8" Background="{DynamicResource Input}">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <ToggleButton Content="Fra" Tag="{x:Static local:ConnectorSource.Off}" IsChecked="{Binding IsOff, Mode=OneWay}"
+                                                    <ToggleButton Content="{DynamicResource Settings.Off}" Tag="{x:Static local:ConnectorSource.Off}" IsChecked="{Binding IsOff, Mode=OneWay}"
                                                                   IsEnabled="{Binding Idle}" Click="Source_Click" Style="{StaticResource Segment}" />
                                                     <ToggleButton x:Name="HamsterSource" Content="Hamster" Tag="{x:Static local:ConnectorSource.Hamster}" IsChecked="{Binding IsHamster, Mode=OneWay}"
                                                                   IsEnabled="{Binding Idle}" Click="Source_Click" Style="{StaticResource Segment}" />
                                                     <ToggleButton Content="Claude AI" Tag="{x:Static local:ConnectorSource.ClaudeAi}" IsChecked="{Binding IsClaudeAi, Mode=OneWay}"
                                                                   IsEnabled="{Binding Idle}" Click="Source_Click" Style="{StaticResource Segment}" />
-                                                    <ToggleButton x:Name="LoginSource" Content="Login" Tag="{x:Static local:ConnectorSource.Login}" IsChecked="{Binding IsLogin, Mode=OneWay}"
+                                                    <ToggleButton x:Name="LoginSource" Content="{DynamicResource Settings.LoginSource}" Tag="{x:Static local:ConnectorSource.Login}" IsChecked="{Binding IsLogin, Mode=OneWay}"
                                                                   IsEnabled="{Binding Idle}" Click="Source_Click" Style="{StaticResource Segment}" />
                                                 </StackPanel>
                                             </Border>
@@ -169,7 +178,7 @@
                                         <DockPanel Margin="0,2,0,0">
                                             <Button x:Name="LoginButton" DockPanel.Dock="Right" Content="{Binding LoginLabel}" Click="Login_Click" IsEnabled="{Binding Idle}"
                                                     Style="{StaticResource TextButton}" Padding="6,2" Visibility="Collapsed" />
-                                            <Button x:Name="EditButton" DockPanel.Dock="Right" Content="Rediger token…" Click="Edit_Click"
+                                            <Button x:Name="EditButton" DockPanel.Dock="Right" Content="{DynamicResource Settings.EditToken}" Click="Edit_Click"
                                                     Style="{StaticResource TextButton}" Padding="6,2" Visibility="Collapsed" />
                                             <TextBlock DockPanel.Dock="Left" Text="{Binding State}" ToolTip="{Binding State}" Foreground="{DynamicResource Muted}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                             <TextBox x:Name="SiteBox" Text="{Binding SiteInput, UpdateSourceTrigger=PropertyChanged}" Margin="8,0,8,0" FontSize="11" VerticalAlignment="Center"
@@ -179,20 +188,20 @@
                                             <ItemsControl ItemsSource="{Binding Inputs}" />
                                             <DockPanel x:Name="Write" Margin="0,2,0,10" Visibility="Collapsed">
                                                 <ToggleButton DockPanel.Dock="Right" IsChecked="{Binding AllowWrite}" Style="{StaticResource Switch}" />
-                                                <TextBlock Text="Tillad skrivning" Foreground="{DynamicResource Text}" FontSize="11" VerticalAlignment="Center" />
+                                                <TextBlock Text="{DynamicResource Settings.AllowWrite}" Foreground="{DynamicResource Text}" FontSize="11" VerticalAlignment="Center" />
                                             </DockPanel>
                                             <DockPanel>
-                                                <Button DockPanel.Dock="Right" Content="Gem" Click="Install_Click" IsEnabled="{Binding Idle}" Style="{StaticResource PrimaryButton}" />
+                                                <Button DockPanel.Dock="Right" Content="{DynamicResource Settings.Save}" Click="Install_Click" IsEnabled="{Binding Idle}" Style="{StaticResource PrimaryButton}" />
                                                 <TextBlock VerticalAlignment="Center" FontSize="11">
-                                                    <Hyperlink NavigateUri="{Binding Connector.TokenPage}" RequestNavigate="TokenPage_RequestNavigate">Opret token</Hyperlink>
+                                                    <Hyperlink NavigateUri="{Binding Connector.TokenPage}" RequestNavigate="TokenPage_RequestNavigate"><Run Text="{DynamicResource Settings.CreateToken}" /></Hyperlink>
                                                 </TextBlock>
                                             </DockPanel>
                                         </StackPanel>
                                         <StackPanel x:Name="Subscribe" Margin="0,8,0,0" Visibility="Collapsed">
                                             <DockPanel>
-                                                <Button x:Name="FetchChoices" DockPanel.Dock="Right" Content="Hent boards" Click="FetchStatuses_Click" IsEnabled="{Binding Idle}"
+                                                <Button x:Name="FetchChoices" DockPanel.Dock="Right" Content="{DynamicResource Settings.FetchBoards}" Click="FetchStatuses_Click" IsEnabled="{Binding Idle}"
                                                         Style="{StaticResource TextButton}" Padding="6,2" Visibility="Collapsed" />
-                                                <TextBlock Text="Abonnér på" Foreground="{DynamicResource Muted}" FontSize="11" VerticalAlignment="Center" />
+                                                <TextBlock Text="{DynamicResource Settings.SubscribeTo}" Foreground="{DynamicResource Muted}" FontSize="11" VerticalAlignment="Center" />
                                             </DockPanel>
                                             <TextBlock x:Name="ChoicesText" Text="{Binding ChoicesText}" Foreground="{DynamicResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0" />
                                             <Grid>
@@ -201,11 +210,11 @@
                                                     <ColumnDefinition />
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel x:Name="Boards" Margin="0,0,12,0">
-                                                    <TextBlock Text="Boards" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,6,0,0" />
+                                                    <TextBlock Text="{DynamicResource Settings.Boards}" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,6,0,0" />
                                                     <ItemsControl ItemsSource="{Binding BoardChoices}" ItemTemplate="{StaticResource ChoiceTemplate}" />
                                                 </StackPanel>
                                                 <StackPanel x:Name="ChoicesPanel" Grid.Column="1">
-                                                    <TextBlock x:Name="ColumnsLabel" Text="Kolonner i din bane" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,6,0,0" />
+                                                    <TextBlock x:Name="ColumnsLabel" Text="{DynamicResource Settings.Columns}" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,6,0,0" />
                                                     <ItemsControl ItemsSource="{Binding Choices}" ItemTemplate="{StaticResource ChoiceTemplate}" />
                                                 </StackPanel>
                                             </Grid>

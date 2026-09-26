@@ -230,9 +230,9 @@
             </Style>
 
             <ContextMenu x:Key="TextMenu" x:Shared="False" Style="{StaticResource PopupMenu}">
-                <MenuItem Header="Klip" Command="ApplicationCommands.Cut" />
-                <MenuItem Header="Kopiér" Command="ApplicationCommands.Copy" />
-                <MenuItem Header="Sæt ind" Command="ApplicationCommands.Paste" />
+                <MenuItem Header="{DynamicResource Edit.Cut}" Command="ApplicationCommands.Cut" />
+                <MenuItem Header="{DynamicResource Edit.Copy}" Command="ApplicationCommands.Copy" />
+                <MenuItem Header="{DynamicResource Edit.Paste}" Command="ApplicationCommands.Paste" />
             </ContextMenu>
 
             <Style TargetType="TextBox">

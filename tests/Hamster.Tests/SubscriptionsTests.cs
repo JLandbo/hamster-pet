@@ -442,6 +442,19 @@ public sealed class SubscriptionsTests : IDisposable
     }
 
     [Fact]
+    public async Task SourcesAt_WhenTheGitHubGroupIsAFeedKey_ThenShowsTheFeedTitle()
+    {
+        // Arrange
+        var feed = await Refreshed(Item("a", "GitHub", "authored"));
+
+        // Act
+        var group = feed.SourcesAt(DateTimeOffset.Now, []).Single().Groups.Single();
+
+        // Assert
+        Assert.Equal("Mine åbne PR'er · 1", group.Title);
+    }
+
+    [Fact]
     public async Task SourcesAt_WhenASubscribedGroupIsEmpty_ThenShowsItWithZero()
     {
         // Arrange
@@ -739,7 +752,7 @@ public sealed class SubscriptionsTests : IDisposable
         // Assert
         Assert.Equal($"Sprint 2 · slutter {new DateTimeOffset(2026, 10, 1, 10, 0, 0, TimeSpan.Zero).ToLocalTime().ToString("d. MMM", CultureInfo.CurrentCulture)}", details.Sprint);
         Assert.Equal(["Status In Progress", "Prioritet High", "Story Points 3", "Reviewer Anna Reviewer", "Tester Bo Tester", "Kundenavn Idealcombi",
-            "Time tracking 2d estimeret · 1d 4h tilbage · 4h brugt", "Labels azure, bi", "Komponent Cloud",
+            "Tidsregistrering 2d estimeret · 1d 4h tilbage · 4h brugt", "Etiketter azure, bi", "Komponent Cloud",
             $"Oprettet {new DateTimeOffset(2026, 8, 27, 13, 55, 24, TimeSpan.FromHours(2)).ToLocalTime().ToString("d. MMM", CultureInfo.CurrentCulture)}"],
             details.Tags.Select(tag => $"{tag.Key} {tag.Value}"));
         Assert.Equal("Vi skal **teste**\n\n* det hele", details.Description);
@@ -1088,7 +1101,7 @@ public sealed class SubscriptionsTests : IDisposable
         var slots = subscriptions.Slots;
 
         // Assert
-        Assert.Equal([("Jira", "Under Review"), ("Jira", "Test"), ("GitHub", "Review anmodet af mig"), ("GitHub", "Mine åbne PR'er")], slots);
+        Assert.Equal([("Jira", "Under Review"), ("Jira", "Test"), ("GitHub", "review"), ("GitHub", "authored")], slots);
     }
 
     static Func<Task<IReadOnlyList<FeedItem>>> Returning(params FeedItem[] items) => () => Task.FromResult<IReadOnlyList<FeedItem>>(items);

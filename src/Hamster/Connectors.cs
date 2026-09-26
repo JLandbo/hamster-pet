@@ -19,27 +19,32 @@ public sealed record WebLogin(string SiteSuffix, string CheckPath)
             : null;
 }
 
+public sealed record ConnectorProblem(string Title, McpServer? Server)
+{
+    public string Text => $"{Title}: {(Server is null ? Connector.MissingOnClaudeAi : Connector.StateOf(Server))}";
+}
+
 public sealed record Connector(string Title, string Name, string Url, Uri? TokenPage, IReadOnlyList<ConnectorField> Fields, Func<IReadOnlyList<string>, string>? Authorization, bool CanBeReadOnly = false, string? ClaudeAiName = null, WebLogin? Login = null)
 {
-    public const string MissingOnClaudeAi = "Ikke fundet på claude.ai";
+    public static string MissingOnClaudeAi => Strings.Of("Settings.MissingOnClaudeAi");
 
     public bool Installable => Authorization is not null;
 
     public static string StateOf(McpServer server) => server.Status switch
     {
-        "connected" => "Forbundet",
-        "pending" => "Forbinder…",
-        "disabled" => "Slået fra",
-        "needs-auth" => "Mangler login",
-        "failed" => $"Fejl: {server.Error}",
+        "connected" => Strings.Of("Settings.Connected"),
+        "pending" => Strings.Of("Settings.Connecting"),
+        "disabled" => Strings.Of("Settings.TurnedOff"),
+        "needs-auth" => Strings.Of("Settings.NeedsLogin"),
+        "failed" => Strings.Format("Settings.Failed", server.Error),
         var status => status,
     };
 
-    public string? ProblemIn(IEnumerable<McpServer> servers, bool claudeAi) =>
+    public ConnectorProblem? ProblemIn(IEnumerable<McpServer> servers, bool claudeAi) =>
         FindIn(servers, claudeAi) switch
         {
-            null => claudeAi ? MissingOnClaudeAi : null,
-            { Status: "needs-auth" or "failed" } server => StateOf(server),
+            null => claudeAi ? new(Title, null) : null,
+            { Status: "needs-auth" or "failed" } server => new(Title, server),
             _ => null,
         };
 
@@ -116,7 +121,7 @@ public sealed class Connectors(IClaudeClient claude, Action restart, Func<bool> 
 
     public async Task<IReadOnlyList<McpServer>> ServersAsync() => ClaudeProtocol.McpServers(await claude.RequestAsync(ClaudeProtocol.McpStatus()));
 
-    public async Task<IReadOnlyList<string>> ProblemsAsync(TimeSpan interval)
+    public async Task<IReadOnlyList<ConnectorProblem>> ProblemsAsync(TimeSpan interval)
     {
         if (RestartPending)
             return [];
@@ -125,10 +130,10 @@ public sealed class Connectors(IClaudeClient claude, Action restart, Func<bool> 
             var servers = await ServersAsync();
             await EnableAsync(servers);
             var problems = All.Where(connector => SourceOf(connector) != ConnectorSource.Off)
-                .Select(connector => (connector.Title, Problem: connector.ProblemIn(servers, UsesClaudeAi(connector))))
+                .Select(connector => (Problem: connector.ProblemIn(servers, UsesClaudeAi(connector)), Missing: UsesClaudeAi(connector) && connector.FindIn(servers, claudeAi: true) is null))
                 .Where(found => found.Problem is not null).ToArray();
-            if (check == ClaudeAiChecks || !servers.Any(server => server.Status == "pending") && !problems.Any(found => found.Problem == Connector.MissingOnClaudeAi))
-                return [.. problems.Select(found => $"{found.Title}: {found.Problem}")];
+            if (check == ClaudeAiChecks || !servers.Any(server => server.Status == "pending") && !problems.Any(found => found.Missing))
+                return [.. problems.Select(found => found.Problem!)];
             await Task.Delay(interval);
         }
     }
@@ -189,7 +194,7 @@ public sealed class ConnectorRow(Connector connector, ConnectorSource source = C
     public bool IsClaudeAi => Source == ConnectorSource.ClaudeAi;
     public bool IsLogin => Source == ConnectorSource.Login;
     public bool NeedsSite => IsLogin && LoginSite is null;
-    public string LoginLabel => LoginSite is null ? "Log ind…" : "Log ud";
+    public string LoginLabel => LoginSite is null ? Strings.Of("Settings.LogIn") : Strings.Of("Settings.LogOut");
     public bool Installed => Server?.IsUsable == true;
     public bool CanInstall => Known && IsHamster && Connector.Installable && !Installed && !Restarting && !restartPending;
     public bool ShowForm => CanInstall || Editing;
@@ -197,21 +202,21 @@ public sealed class ConnectorRow(Connector connector, ConnectorSource source = C
     public bool HasChoices => !IsOff && (Choices.Count > 0 || CanFetchChoices);
     public bool ClaudeAiMissing => claudeAiMisses >= Connectors.ClaudeAiChecks;
 
-    public string State => IsOff ? "Slået fra"
-        : IsLogin ? LoginSite is null ? "Site:" : LoginConfirmed switch
+    public string State => IsOff ? Strings.Of("Settings.TurnedOff")
+        : IsLogin ? LoginSite is null ? Strings.Of("Settings.Site") : LoginConfirmed switch
         {
-            true => $"Logget ind på {new Uri(LoginSite).Host}",
-            null => $"Tjekker login på {new Uri(LoginSite).Host}…",
-            false => $"Kunne ikke tjekke login på {new Uri(LoginSite).Host}",
+            true => Strings.Format("Settings.LoggedIn", new Uri(LoginSite).Host),
+            null => Strings.Format("Settings.CheckingLogin", new Uri(LoginSite).Host),
+            false => Strings.Format("Settings.LoginCheckFailed", new Uri(LoginSite).Host),
         }
-        : !Known ? "Henter…"
-        : Server is null && restartPending ? "Skifter, når Claude er genstartet"
-        : Restarting && !Installed ? "Gemt – aktiveres, når Claude er genstartet"
-        : Server is null ? IsClaudeAi ? Connector.MissingOnClaudeAi : "Ikke installeret – udfyld felterne"
+        : !Known ? Strings.Of("Common.Fetching")
+        : Server is null && restartPending ? Strings.Of("Settings.SwitchesAfterRestart")
+        : Restarting && !Installed ? Strings.Of("Settings.SavedAfterRestart")
+        : Server is null ? IsClaudeAi ? Connector.MissingOnClaudeAi : Strings.Of("Settings.NotInstalled")
         : Server.Status switch
         {
-            "connected" => IsClaudeAi ? "Forbundet via claude.ai" : "Forbundet med dit token",
-            "needs-auth" => IsClaudeAi ? "Log ind på claude.ai" : "Tokenet blev afvist",
+            "connected" => IsClaudeAi ? Strings.Of("Settings.ConnectedViaClaudeAi") : Strings.Of("Settings.ConnectedWithToken"),
+            "needs-auth" => IsClaudeAi ? Strings.Of("Settings.LogInOnClaudeAi") : Strings.Of("Settings.TokenRejected"),
             _ => Connector.StateOf(Server),
         };
 

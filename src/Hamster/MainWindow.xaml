@@ -79,9 +79,9 @@
                                     Visibility="{Binding Shown, Converter={StaticResource VisibleWhenTrue}}">
                                 <StackPanel>
                                     <DockPanel>
-                                        <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="Slet besked" Click="DeleteChat_Click"
+                                        <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="{DynamicResource Main.DeleteChat}" Click="DeleteChat_Click"
                                                 Style="{StaticResource SmallIconButton}" Margin="6,-2,-6,0" VerticalAlignment="Top" />
-                                        <Button x:Name="Copy" DockPanel.Dock="Right" Content="&#xE8C8;" ToolTip="Kopiér svar" Click="CopyAnswer_Click"
+                                        <Button x:Name="Copy" DockPanel.Dock="Right" Content="&#xE8C8;" ToolTip="{DynamicResource Main.CopyAnswer}" Click="CopyAnswer_Click"
                                                 Style="{StaticResource SmallIconButton}" Margin="6,-2,0,0" VerticalAlignment="Top" />
                                         <Ellipse x:Name="Dot" DockPanel.Dock="Left" Width="8" Height="8" Margin="0,6,8,0"
                                                  VerticalAlignment="Top" Fill="{DynamicResource Link}" />
@@ -92,7 +92,7 @@
                                             <DataTemplate DataType="{x:Type local:ToolGroup}">
                                                 <StackPanel x:Name="Group" Margin="0,4,0,0">
                                                     <ToggleButton x:Name="Fold" Style="{StaticResource FoldButton}">
-                                                        <TextBlock><Run Text="{Binding Title, Mode=OneTime}" /> (<Run Text="{Binding Lines.Count, Mode=OneWay}" />)</TextBlock>
+                                                        <TextBlock><Run x:Name="GroupTitle" Text="{DynamicResource Chat.Commands}" /> (<Run Text="{Binding Lines.Count, Mode=OneWay}" />)</TextBlock>
                                                     </ToggleButton>
                                                     <ItemsControl ItemsSource="{Binding Lines}" Margin="14,0,0,0"
                                                                   Visibility="{Binding IsChecked, ElementName=Fold, Converter={StaticResource VisibleWhenTrue}}">
@@ -108,6 +108,9 @@
                                                     <DataTrigger Binding="{Binding Lines.Count}" Value="0">
                                                         <Setter TargetName="Group" Property="Visibility" Value="Collapsed" />
                                                     </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsWeb}" Value="True">
+                                                        <Setter TargetName="GroupTitle" Property="Text" Value="{DynamicResource Chat.Sources}" />
+                                                    </DataTrigger>
                                                 </DataTemplate.Triggers>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
@@ -116,23 +119,23 @@
                                                               VerticalScrollBarVisibility="Disabled" FocusVisualStyle="{x:Null}"
                                                               RequestBringIntoView="Answer_RequestBringIntoView" Hyperlink.RequestNavigate="Link_RequestNavigate"
                                                               Foreground="{DynamicResource Muted}" />
-                                    <Button Content="Log ind" Click="Login_Click" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Margin="16,8,0,0"
+                                    <Button Content="{DynamicResource Main.LogIn}" Click="Login_Click" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Margin="16,8,0,0"
                                             Visibility="{Binding NeedsLogin, Converter={StaticResource VisibleWhenTrue}}" />
                                     <ItemsControl ItemsSource="{Binding Requests}" Margin="16,0,0,0">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="{x:Type local:UserRequest}">
                                                 <StackPanel Margin="0,10,0,0">
-                                                    <TextBlock Text="Kræver din tilladelse" Foreground="{DynamicResource Attention}" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{DynamicResource Main.NeedsPermission}" Foreground="{DynamicResource Attention}" FontWeight="SemiBold" />
                                                     <TextBlock Text="{Binding Title}" Foreground="{DynamicResource Text}" Margin="0,4,0,2" TextWrapping="Wrap" />
                                                     <TextBlock Text="{Binding Details}" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"
                                                                FontFamily="{x:Static local:MarkdownConverter.CodeFont}" FontSize="12" />
-                                                    <TextBlock Text="{Binding AlwaysScope, StringFormat='Tillad altid gælder: {0}'}" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"
-                                                               FontSize="11" Margin="0,6,0,0" Visibility="{Binding CanAllowAlways, Converter={StaticResource VisibleWhenTrue}}" />
+                                                    <TextBlock Foreground="{DynamicResource Muted}" TextWrapping="Wrap"
+                                                               FontSize="11" Margin="0,6,0,0" Visibility="{Binding CanAllowAlways, Converter={StaticResource VisibleWhenTrue}}"><Run Text="{DynamicResource Main.AllowAlwaysScope}" /> <Run Text="{Binding AlwaysScope, Mode=OneWay}" /></TextBlock>
                                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-                                                        <Button Content="Afvis" Click="Deny_Click" Style="{StaticResource PillButton}" />
-                                                        <Button Content="Tillad altid" Click="AllowAlways_Click" Style="{StaticResource PillButton}" Margin="8,0,0,0"
-                                                                ToolTip="Tillad resten af denne session" Visibility="{Binding CanAllowAlways, Converter={StaticResource VisibleWhenTrue}}" />
-                                                        <Button Content="Tillad" Click="Allow_Click" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" />
+                                                        <Button Content="{DynamicResource Main.Deny}" Click="Deny_Click" Style="{StaticResource PillButton}" />
+                                                        <Button Content="{DynamicResource Main.AllowAlways}" Click="AllowAlways_Click" Style="{StaticResource PillButton}" Margin="8,0,0,0"
+                                                                ToolTip="{DynamicResource Main.AllowAlwaysHint}" Visibility="{Binding CanAllowAlways, Converter={StaticResource VisibleWhenTrue}}" />
+                                                        <Button Content="{DynamicResource Main.Allow}" Click="Allow_Click" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" />
                                                     </StackPanel>
                                                 </StackPanel>
                                             </DataTemplate>
@@ -161,14 +164,14 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </ScrollViewer>
-            <Thumb Style="{StaticResource ResizeGrip}" HorizontalAlignment="Left" VerticalAlignment="Top" ToolTip="Træk for at ændre størrelsen"
+            <Thumb Style="{StaticResource ResizeGrip}" HorizontalAlignment="Left" VerticalAlignment="Top" ToolTip="{DynamicResource Main.ResizeHint}"
                    DragStarted="ResizeGrip_DragStarted" DragDelta="ResizeGrip_DragDelta" DragCompleted="ResizeGrip_DragCompleted" />
         </Grid>
 
         <Border x:Name="TemporaryBanner" Margin="8,0,8,5" Padding="12,8" CornerRadius="12" Background="{DynamicResource Attention}" Visibility="Collapsed">
             <DockPanel>
                 <TextBlock DockPanel.Dock="Left" Text="&#xE823;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource OnAttention}" Margin="0,2,8,0" VerticalAlignment="Top" />
-                <TextBlock Text="Midlertidig chat – en anden hamster har denne samtale. Gemmes ikke." Foreground="{DynamicResource OnAttention}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock Text="{DynamicResource Main.TemporaryBanner}" Foreground="{DynamicResource OnAttention}" FontWeight="SemiBold" TextWrapping="Wrap" />
             </DockPanel>
         </Border>
 
@@ -178,13 +181,13 @@
                     <Border Margin="0,0,0,5" Padding="14,10" CornerRadius="14" Cursor="Hand" MouseLeftButtonUp="Problem_Click"
                             Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Attention}" BorderThickness="1">
                         <DockPanel>
-                            <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="Skjul" Click="DismissProblem_Click"
+                            <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="{DynamicResource Main.HideProblem}" Click="DismissProblem_Click"
                                     Style="{StaticResource SmallIconButton}" Margin="6,-2,-6,0" VerticalAlignment="Top" />
                             <Ellipse DockPanel.Dock="Left" Width="8" Height="8" Margin="0,6,8,0" VerticalAlignment="Top" Fill="{DynamicResource Attention}" />
                             <TextBlock TextWrapping="Wrap">
-                                <Run Text="{Binding Mode=OneWay}" Foreground="{DynamicResource Text}" FontWeight="SemiBold" />
+                                <Run Text="{Binding Text, Mode=OneWay}" Foreground="{DynamicResource Text}" FontWeight="SemiBold" />
                                 <LineBreak />
-                                <Run Text="Klik for at rette" Foreground="{DynamicResource Muted}" />
+                                <Run Text="{DynamicResource Main.ClickToFix}" Foreground="{DynamicResource Muted}" />
                             </TextBlock>
                         </DockPanel>
                     </Border>
@@ -201,9 +204,9 @@
                 <Border x:Name="MusicBubble" Margin="8,0,-8,6" Padding="14,0,8,0" Height="36" CornerRadius="18" Visibility="Collapsed"
                         Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Edge}" BorderThickness="1" Effect="{StaticResource Shadow}">
                     <DockPanel VerticalAlignment="Center">
-                        <Button DockPanel.Dock="Right" Content="&#xE893;" ToolTip="Næste" Click="NextTrack_Click" Style="{StaticResource SmallIconButton}" />
+                        <Button DockPanel.Dock="Right" Content="&#xE893;" ToolTip="{DynamicResource Main.NextTrack}" Click="NextTrack_Click" Style="{StaticResource SmallIconButton}" />
                         <Button x:Name="PlayPauseButton" DockPanel.Dock="Right" Click="PlayPause_Click" Style="{StaticResource SmallIconButton}" />
-                        <Button DockPanel.Dock="Right" Content="&#xE892;" ToolTip="Forrige" Click="PreviousTrack_Click" Style="{StaticResource SmallIconButton}" />
+                        <Button DockPanel.Dock="Right" Content="&#xE892;" ToolTip="{DynamicResource Main.PreviousTrack}" Click="PreviousTrack_Click" Style="{StaticResource SmallIconButton}" />
                         <TextBlock Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
                             <Run FontFamily="{StaticResource IconFont}" Text="&#xEC4F;" />
                             <Run x:Name="TrackText" />
@@ -224,7 +227,7 @@
                                         </TextBlock>
                                     </Button>
                                     <Grid>
-                                        <TextBlock x:Name="InputHint" Text="Midlertidig chat – gemmes ikke" Foreground="{DynamicResource Muted}" FontStyle="Italic"
+                                        <TextBlock x:Name="InputHint" Text="{DynamicResource Main.TemporaryHint}" Foreground="{DynamicResource Muted}" FontStyle="Italic"
                                                    Margin="2,0,0,0" IsHitTestVisible="False" Visibility="Collapsed" />
                                         <TextBox x:Name="Input" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource Text}"
                                                  CaretBrush="{DynamicResource Text}" TextWrapping="Wrap" AcceptsReturn="True" KeyDown="Input_KeyDown" PreviewKeyDown="Input_PreviewKeyDown"
@@ -245,7 +248,7 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
-                                <Button x:Name="ModelButton" Grid.Row="0" Grid.Column="0" ToolTip="Model" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
+                                <Button x:Name="ModelButton" Grid.Row="0" Grid.Column="0" ToolTip="{DynamicResource Main.Model}" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
                                     <Button.ContextMenu>
                                         <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Model_Click">
                                             <MenuItem Header="Fable 5.1" Tag="claude-fable-5-1" />
@@ -255,7 +258,7 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
-                                <Button x:Name="EffortButton" Grid.Row="0" Grid.Column="1" ToolTip="Effort" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
+                                <Button x:Name="EffortButton" Grid.Row="0" Grid.Column="1" ToolTip="{DynamicResource Main.Effort}" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
                                     <Button.ContextMenu>
                                         <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Effort_Click">
                                             <MenuItem Header="low" Tag="low" />
@@ -266,7 +269,7 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
-                                <Button x:Name="ModeButton" Grid.Row="0" Grid.Column="2" ToolTip="Mode" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
+                                <Button x:Name="ModeButton" Grid.Row="0" Grid.Column="2" ToolTip="{DynamicResource Main.Mode}" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
                                     <Button.ContextMenu>
                                         <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Mode_Click">
                                             <MenuItem Header="plan" Tag="plan" />
@@ -276,40 +279,40 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
-                                <TextBlock x:Name="CostText" Grid.Row="0" Grid.Column="3" ToolTip="Claudes estimerede pris for samtalen" Foreground="{DynamicResource Muted}"
+                                <TextBlock x:Name="CostText" Grid.Row="0" Grid.Column="3" ToolTip="{DynamicResource Main.CostHint}" Foreground="{DynamicResource Muted}"
                                     FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6,0" />
-                                <Button x:Name="MoreButton" Grid.Row="1" Grid.Column="0" Content="&#xE712;" ToolTip="Mere" Click="ShowChoices_Click" Style="{StaticResource IconButton}"
+                                <Button x:Name="MoreButton" Grid.Row="1" Grid.Column="0" Content="&#xE712;" ToolTip="{DynamicResource Main.More}" Click="ShowChoices_Click" Style="{StaticResource IconButton}"
                                         ToolTipService.ShowOnDisabled="True">
                                     <Button.ContextMenu>
                                         <ContextMenu Style="{StaticResource ChoiceMenu}" Opened="MoreMenu_Opened">
-                                            <MenuItem x:Name="FullScreenItem" Header="Fuld skærm" Click="FullScreen_Click" />
-                                            <MenuItem Header="Instruktioner…" Click="Instructions_Click" />
-                                            <MenuItem x:Name="SaveChatItem" Header="Gem chat…" Click="SaveChat_Click" />
-                                            <MenuItem Header="Åbn Claude-appen" Click="OpenClaude_Click" />
-                                            <MenuItem Header="Indstillinger…" Click="Settings_Click" />
+                                            <MenuItem x:Name="FullScreenItem" Header="{DynamicResource Main.FullScreen}" Click="FullScreen_Click" />
+                                            <MenuItem Header="{DynamicResource Main.Instructions}" Click="Instructions_Click" />
+                                            <MenuItem x:Name="SaveChatItem" Header="{DynamicResource Main.SaveChat}" Click="SaveChat_Click" />
+                                            <MenuItem Header="{DynamicResource Main.OpenClaude}" Click="OpenClaude_Click" />
+                                            <MenuItem Header="{DynamicResource Main.Settings}" Click="Settings_Click" />
                                             <MenuItem x:Name="UsageItem" IsEnabled="False" />
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
-                                <Button x:Name="ToggleChats" Grid.Row="1" Grid.Column="1" ToolTip="Vis/skjul chats" Click="ToggleChats_Click" Style="{StaticResource IconButton}" />
-                                <Button x:Name="SnipButton" Grid.Row="1" Grid.Column="2" Content="&#xE8C6;" ToolTip="Klip fra skærmen" Click="Snip_Click" Style="{StaticResource IconButton}" />
-                                <Button x:Name="PromptsButton" Grid.Row="1" Grid.Column="3" Content="&#xE945;" ToolTip="Prompts" Click="ShowChoices_Click" Style="{StaticResource IconButton}">
+                                <Button x:Name="ToggleChats" Grid.Row="1" Grid.Column="1" ToolTip="{DynamicResource Main.ToggleChats}" Click="ToggleChats_Click" Style="{StaticResource IconButton}" />
+                                <Button x:Name="SnipButton" Grid.Row="1" Grid.Column="2" Content="&#xE8C6;" ToolTip="{DynamicResource Main.Snip}" Click="Snip_Click" Style="{StaticResource IconButton}" />
+                                <Button x:Name="PromptsButton" Grid.Row="1" Grid.Column="3" Content="&#xE945;" ToolTip="{DynamicResource Main.Prompts}" Click="ShowChoices_Click" Style="{StaticResource IconButton}">
                                     <Button.ContextMenu>
                                         <ContextMenu Style="{StaticResource ChoiceMenu}" Opened="PromptsMenu_Opened" MenuItem.Click="Prompt_Click" />
                                     </Button.ContextMenu>
                                 </Button>
-                                <Button x:Name="StopButton" Grid.Row="1" Grid.Column="3" Content="&#xE71A;" ToolTip="Stop" Click="Stop_Click" Style="{StaticResource IconButton}" Visibility="Collapsed" />
-                                <TextBlock x:Name="TasksText" Grid.Row="1" Grid.Column="3" ToolTip="Baggrundsopgaver, der kører" Foreground="{DynamicResource Muted}"
+                                <Button x:Name="StopButton" Grid.Row="1" Grid.Column="3" Content="&#xE71A;" ToolTip="{DynamicResource Main.Stop}" Click="Stop_Click" Style="{StaticResource IconButton}" Visibility="Collapsed" />
+                                <TextBlock x:Name="TasksText" Grid.Row="1" Grid.Column="3" ToolTip="{DynamicResource Main.TasksHint}" Foreground="{DynamicResource Muted}"
                                     FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
                                 <Border Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="3" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0"
                                         Padding="2" CornerRadius="8" Background="{DynamicResource Input}">
                                     <StackPanel Orientation="Horizontal">
-                                        <ToggleButton x:Name="ChatButton" Content="Chat" Click="Chat_Click" Style="{StaticResource Segment}" ToolTipService.ShowOnDisabled="True" />
-                                        <ToggleButton x:Name="FolderButton" Content="Mappe" Click="Folder_Click" Style="{StaticResource Segment}" ToolTipService.ShowOnDisabled="True" />
+                                        <ToggleButton x:Name="ChatButton" Content="{DynamicResource Main.Chat}" Click="Chat_Click" Style="{StaticResource Segment}" ToolTipService.ShowOnDisabled="True" />
+                                        <ToggleButton x:Name="FolderButton" Content="{DynamicResource Main.Folder}" Click="Folder_Click" Style="{StaticResource Segment}" ToolTipService.ShowOnDisabled="True" />
                                     </StackPanel>
                                 </Border>
                                 <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Left">
-                                    <Button x:Name="FeedButton" ToolTip="Opgaver" Click="Feed_Click"
+                                    <Button x:Name="FeedButton" ToolTip="{DynamicResource Common.Tasks}" Click="Feed_Click"
                                             Style="{StaticResource IconButton}" Foreground="{DynamicResource Muted}" ToolTipService.ShowOnDisabled="True">
                                         <StackPanel Orientation="Horizontal">
                                             <Viewbox Width="16" Height="16">
@@ -326,7 +329,7 @@
                                             </Border>
                                         </StackPanel>
                                     </Button>
-                                    <Button ToolTip="Åbn en ny hamster" Click="NewHamster_Click" Style="{StaticResource IconButton}">
+                                    <Button ToolTip="{DynamicResource Main.NewHamster}" Click="NewHamster_Click" Style="{StaticResource IconButton}">
                                         <Viewbox Width="16" Height="16">
                                             <Canvas Width="24" Height="24">
                                                 <Path Data="M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -8.666 M4.012 16.737a2 2 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1 M11 14h6 M14 11v6"
@@ -340,7 +343,7 @@
                         </StackPanel>
                     </Border>
                     <Thumb x:Name="WidthGrip" Style="{StaticResource ResizeGrip}" Cursor="SizeWE" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,-10,0,0"
-                           ToolTip="Træk for at ændre bredden" DragStarted="ResizeGrip_DragStarted" DragDelta="ResizeGrip_DragDelta" DragCompleted="ResizeGrip_DragCompleted" />
+                           ToolTip="{DynamicResource Main.ResizeWidthHint}" DragStarted="ResizeGrip_DragStarted" DragDelta="ResizeGrip_DragDelta" DragCompleted="ResizeGrip_DragCompleted" />
                 </Grid>
             </StackPanel>
             <Grid x:Name="PetArea" Grid.Column="1" VerticalAlignment="Bottom" Width="160" Height="144" Margin="0,0,8,0">
@@ -353,8 +356,8 @@
                     </Image.RenderTransform>
                     <Image.ContextMenu>
                         <ContextMenu Style="{StaticResource ChoiceMenu}">
-                            <MenuItem Header="Ny samtale" Click="NewChat_Click" />
-                            <MenuItem Header="Afslut" Click="Exit_Click" />
+                            <MenuItem Header="{DynamicResource Main.NewChat}" Click="NewChat_Click" />
+                            <MenuItem Header="{DynamicResource Main.Exit}" Click="Exit_Click" />
                         </ContextMenu>
                     </Image.ContextMenu>
                 </Image>

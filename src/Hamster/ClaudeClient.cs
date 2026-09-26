@@ -75,10 +75,10 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
     }
 
     public Task SendAsync(string id, string prompt, IReadOnlyList<ImageAttachment> images) =>
-        current is var (_, session) ? session.SendAsync(id, prompt, images) : throw new InvalidOperationException("claude kører ikke.");
+        current is var (_, session) ? session.SendAsync(id, prompt, images) : throw new InvalidOperationException(Strings.Of("Claude.NotRunning"));
 
     public Task<JsonObject?> RequestAsync(JsonObject request) =>
-        current is var (_, session) ? session.RequestAsync(request, RequestTimeout) : throw new InvalidOperationException("claude kører ikke.");
+        current is var (_, session) ? session.RequestAsync(request, RequestTimeout) : throw new InvalidOperationException(Strings.Of("Claude.NotRunning"));
 
     public void Interrupt()
     {
@@ -130,7 +130,7 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
             if (current?.Process != process)
                 return;
             current = null;
-            listener.Exited(error.Length > 0 ? error : $"claude stoppede uventet (exit code {process.ExitCode}).");
+            listener.Exited(error.Length > 0 ? error : Strings.Format("Claude.StoppedWithExitCode", process.ExitCode));
         }
     }
 

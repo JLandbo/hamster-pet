@@ -565,7 +565,36 @@ public sealed class ConnectorsTests : IDisposable
         var problems = await new Connectors(claude, () => { }, () => false).ProblemsAsync(TimeSpan.Zero);
 
         // Assert
-        Assert.Equal([expected], problems);
+        Assert.Equal([expected], problems.Select(problem => problem.Text));
+    }
+
+    [Fact]
+    public async Task ProblemsAsync_WhenTheSameProblemIsFoundAgain_ThenItIsEqual()
+    {
+        // Arrange
+        var claude = new StatusClaude(Status(("hamster-github", "needs-auth", "https://api.githubcopilot.com/mcp/", null, false)));
+        var connectors = new Connectors(claude, () => { }, () => false);
+
+        // Act
+        var (first, second) = (await connectors.ProblemsAsync(TimeSpan.Zero), await connectors.ProblemsAsync(TimeSpan.Zero));
+
+        // Assert
+        Assert.Equal(Assert.Single(first), Assert.Single(second));
+    }
+
+    [Fact]
+    public async Task ProblemsAsync_WhenTheProblemChanges_ThenItIsAnotherProblem()
+    {
+        // Arrange
+        var claude = new StatusClaude(Status(("hamster-github", "needs-auth", "https://api.githubcopilot.com/mcp/", null, false)),
+            Status(("hamster-github", "failed", "https://api.githubcopilot.com/mcp/", "401", false)));
+        var connectors = new Connectors(claude, () => { }, () => false);
+
+        // Act
+        var (first, second) = (await connectors.ProblemsAsync(TimeSpan.Zero), await connectors.ProblemsAsync(TimeSpan.Zero));
+
+        // Assert
+        Assert.NotEqual(Assert.Single(first), Assert.Single(second));
     }
 
     [Fact]
@@ -668,7 +697,7 @@ public sealed class ConnectorsTests : IDisposable
         var problems = await new Connectors(claude, () => { }, () => false).ProblemsAsync(TimeSpan.Zero);
 
         // Assert
-        Assert.Equal(("Microsoft 365: Ikke fundet på claude.ai", Connectors.ClaudeAiChecks), (Assert.Single(problems), claude.Requests));
+        Assert.Equal(("Microsoft 365: Ikke fundet på claude.ai", Connectors.ClaudeAiChecks), (Assert.Single(problems).Text, claude.Requests));
     }
 
     [Fact]

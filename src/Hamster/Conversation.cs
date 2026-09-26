@@ -7,8 +7,8 @@ namespace Hamster;
 public sealed class Conversation : IClaudeListener
 {
     public const int MaxChats = 100;
-    public const string BackgroundPrompt = "Fra Claude";
-    public const string AnsweredAbove = "Besvaret sammen med beskeden ovenfor.";
+    public static string BackgroundPrompt => Strings.Of("Chat.FromClaude");
+    public static string AnsweredAbove => Strings.Of("Chat.AnsweredAbove");
     public static readonly TimeSpan AnswerShownTime = TimeSpan.FromSeconds(30);
 
     readonly IClaudeClient claude;
@@ -103,7 +103,7 @@ public sealed class Conversation : IClaudeListener
         {
             if (!waiting.Remove(id))
                 return;
-            (chat.Answer, chat.Status) = ($"Kunne ikke tale med claude: {exception.Message}", ChatStatus.Error);
+            (chat.Answer, chat.Status) = (Strings.Format("Chat.CouldNotTalkToClaude", exception.Message), ChatStatus.Error);
             MarkAnswered(chat, stopped: false);
             Save();
             Changed?.Invoke();
@@ -217,7 +217,7 @@ public sealed class Conversation : IClaudeListener
             using var registration = cancellationToken.Register(question.Cancel);
             var answer = await question.Answer;
             if (answer == PermissionAnswer.Deny)
-                chat.Commands.Lines.Add($"Afvist: {request.ToolName}");
+                chat.Commands.Lines.Add(Strings.Format("Chat.Denied", request.ToolName));
             return answer;
         }
         finally
@@ -324,7 +324,7 @@ public sealed class Conversation : IClaudeListener
     static void Finish(ChatItem chat, ClaudeResult result, bool stopped)
     {
         chat.NeedsLogin = !stopped && result.NeedsLogin;
-        chat.Answer = stopped ? "Afbrudt." : chat.NeedsLogin ? "Du er ikke logget ind i claude." : result.Text;
+        chat.Answer = stopped ? Strings.Of("Chat.Stopped") : chat.NeedsLogin ? Strings.Of("Chat.NotLoggedIn") : result.Text;
         chat.Status = result.IsError ? ChatStatus.Error : ChatStatus.Done;
     }
 

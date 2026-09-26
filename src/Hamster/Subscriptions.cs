@@ -30,15 +30,15 @@ public sealed record FeedItem(string Source, string Group, string Id, string Tit
     public IssueRef Ref => new(Id, Title, Kind, Url);
 
     public string DetailAt(DateTimeOffset now) =>
-        string.Join(" · ", new[] { Repository, Draft ? "kladde" : "", Updated is { } updated ? Ago(now - updated) : "" }.Where(part => part.Length > 0));
+        string.Join(" · ", new[] { Repository, Draft ? Strings.Of("Tasks.Draft") : "", Updated is { } updated ? Ago(now - updated) : "" }.Where(part => part.Length > 0));
 
     public static string Ago(TimeSpan elapsed) => elapsed switch
     {
-        { TotalMinutes: < 1 } => "nu",
-        { TotalHours: < 1 } => $"{(int)elapsed.TotalMinutes} min",
-        { TotalDays: < 1 } => $"{(int)elapsed.TotalHours} t",
-        { TotalDays: < 2 } => "i går",
-        _ => $"{(int)elapsed.TotalDays} dage",
+        { TotalMinutes: < 1 } => Strings.Of("Tasks.Now"),
+        { TotalHours: < 1 } => Strings.Format("Tasks.MinutesAgo", (int)elapsed.TotalMinutes),
+        { TotalDays: < 1 } => Strings.Format("Tasks.HoursAgo", (int)elapsed.TotalHours),
+        { TotalDays: < 2 } => Strings.Of("Tasks.Yesterday"),
+        _ => Strings.Format("Tasks.DaysAgo", (int)elapsed.TotalDays),
     };
 
     static int CompareKeys(string? first, string? second)
@@ -74,7 +74,16 @@ public sealed record JiraBoard(int Id, string Name, string Site)
     public string Key => $"{Site}#{Id}";
 }
 
-public sealed record GitHubFeed(string Key, string Title, string Query, IReadOnlyList<string> Tools);
+public sealed record GitHubFeed(string Key, string Query, IReadOnlyList<string> Tools)
+{
+    public string Title => Key switch
+    {
+        "review" => Strings.Of("Tasks.GitHubReview"),
+        "authored" => Strings.Of("Tasks.GitHubAuthored"),
+        "assigned" => Strings.Of("Tasks.GitHubAssigned"),
+        _ => Key,
+    };
+}
 
 public enum ChoiceKind { Column, Board, GitHub }
 
@@ -114,7 +123,7 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(5);
     public const string JiraSource = "Jira";
     public const string GitHubSource = "GitHub";
-    const string NotLoggedIn = "Ikke logget ind. Log ind under Indstillinger.";
+    static string NotLoggedIn => Strings.Of("Tasks.NotLoggedIn");
     const int PageSize = 100;
     const int DescriptionLength = 1500;
     static readonly MarkdownPipeline SourcePositions = new MarkdownPipelineBuilder().UsePreciseSourceLocation().Build();
@@ -127,9 +136,9 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
 
     public static readonly IReadOnlyList<GitHubFeed> GitHubFeeds =
     [
-        new("review", "Review anmodet af mig", "is:open is:pr review-requested:@me archived:false", ["search_pull_requests"]),
-        new("authored", "Mine åbne PR'er", "is:open is:pr author:@me archived:false", ["search_pull_requests"]),
-        new("assigned", "Tildelt mig", "is:open assignee:@me archived:false", ["search_issues", "search_pull_requests"]),
+        new("review", "is:open is:pr review-requested:@me archived:false", ["search_pull_requests"]),
+        new("authored", "is:open is:pr author:@me archived:false", ["search_pull_requests"]),
+        new("assigned", "is:open assignee:@me archived:false", ["search_issues", "search_pull_requests"]),
     ];
 
     public static Connector Jira { get; } = Connectors.All.Single(connector => connector.Name == "hamster-atlassian-rovo");
@@ -162,7 +171,7 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
                     yield return (JiraSource, column);
             if (connectors.SourceOf(GitHub) != ConnectorSource.Off)
                 foreach (var feed in GitHubFeeds.Where(feed => settings.GitHub.Contains(feed.Key)))
-                    yield return (GitHubSource, feed.Title);
+                    yield return (GitHubSource, feed.Key);
         }
     }
 
@@ -228,7 +237,7 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
                     break;
             }
         if (found.Count == 0)
-            throw new InvalidOperationException("Jira gav ingen boards. Log ind igen, eller tjek dit token.");
+            throw new InvalidOperationException(Strings.Of("Settings.NoBoards"));
         var chosen = Settings.ChosenBoards;
         Dictionary<string, IReadOnlyDictionary<string, string>> jiraFields = new(Settings.JiraFields);
         foreach (var site in sites)
@@ -377,7 +386,7 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
         GitHubFeed[] feeds = [.. GitHubFeeds.Where(feed => Settings.GitHub.Contains(feed.Key))];
         return feeds.Length > 0 && connectors.SourceOf(GitHub) != ConnectorSource.Off
             ? [.. (await CallAllPagesAsync(GitHub, [.. feeds.SelectMany(feed => feed.Tools.Select(tool => GitHubSearch(tool, feed.Query)))], NextGitHubPage))
-                .SelectMany(found => GitHubItems(found.Text, feeds.First(feed => feed.Query == (string?)found.Call.Arguments["query"]).Title)).DistinctBy(item => item.Url)]
+                .SelectMany(found => GitHubItems(found.Text, feeds.First(feed => feed.Query == (string?)found.Call.Arguments["query"]).Key)).DistinctBy(item => item.Url)]
             : [];
     }
 
@@ -443,14 +452,14 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
     {
         IssueTag?[] tags =
         [
-            Tag("Status", TextOf(fields?["status"])),
-            Tag("Prioritet", TextOf(fields?["priority"])),
+            Tag(Strings.Of("Tasks.Status"), TextOf(fields?["status"])),
+            Tag(Strings.Of("Tasks.Priority"), TextOf(fields?["priority"])),
             .. CustomFieldNames.Select(name => Tag(name, customFields.GetValueOrDefault(name) is { } id ? TextOf(fields?[id]) : null)),
-            Tag("Time tracking", TimeTrackingOf(fields?["timetracking"])),
-            Tag("Due date", DateOf(fields?["duedate"])),
-            Tag("Labels", TextOf(fields?["labels"])),
-            Tag("Komponent", TextOf(fields?["components"])),
-            Tag("Oprettet", DateOf(fields?["created"])),
+            Tag(Strings.Of("Tasks.TimeTracking"), TimeTrackingOf(fields?["timetracking"])),
+            Tag(Strings.Of("Tasks.DueDate"), DateOf(fields?["duedate"])),
+            Tag(Strings.Of("Tasks.Labels"), TextOf(fields?["labels"])),
+            Tag(Strings.Of("Tasks.Component"), TextOf(fields?["components"])),
+            Tag(Strings.Of("Tasks.Created"), DateOf(fields?["created"])),
         ];
         var details = new IssueDetails(SprintOf(fields), [.. tags.OfType<IssueTag>()], DescriptionOf(fields?["description"]));
         return details is { Sprint: null, Tags.Count: 0, Description: "" } ? null : details;
@@ -470,7 +479,7 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
     static string? DateOf(JsonNode? date) => TimeOf(date)?.ToLocalTime().ToString("d. MMM", CultureInfo.CurrentCulture);
 
     static string? TimeTrackingOf(JsonNode? tracking) =>
-        string.Join(" · ", new[] { (Field: "originalEstimate", Label: "estimeret"), (Field: "remainingEstimate", Label: "tilbage"), (Field: "timeSpent", Label: "brugt") }
+        string.Join(" · ", new[] { (Field: "originalEstimate", Label: Strings.Of("Tasks.Estimated")), (Field: "remainingEstimate", Label: Strings.Of("Tasks.Remaining")), (Field: "timeSpent", Label: Strings.Of("Tasks.Spent")) }
             .Select(part => (string?)tracking?[part.Field] is { } time ? $"{time} {part.Label}" : null).OfType<string>()) is { Length: > 0 } text ? text : null;
 
     static string? SprintOf(JsonNode? fields)
@@ -480,7 +489,7 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
         if ((sprints.FirstOrDefault(sprint => (string?)sprint["state"] == "active") ?? sprints.LastOrDefault()) is not { } sprint)
             return null;
         return (string?)sprint["state"] == "active" && TimeOf(sprint["endDate"]) is { } end
-            ? $"{(string?)sprint["name"]} · slutter {end.ToLocalTime().ToString("d. MMM", CultureInfo.CurrentCulture)}"
+            ? Strings.Format("Tasks.SprintEnds", (string?)sprint["name"], end.ToLocalTime().ToString("d. MMM", CultureInfo.CurrentCulture))
             : (string?)sprint["name"];
     }
 
@@ -648,7 +657,7 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
         if (connectors.SourceOf(Jira) == ConnectorSource.Login)
             return await web.ReaderAsync(LoginSiteOf(Jira) ?? throw new InvalidOperationException(NotLoggedIn));
         var authorization = (await OwnEndpointAsync(Jira))?.Headers.GetValueOrDefault("Authorization")
-            ?? throw new InvalidOperationException("Kræver dit token (Hamster) eller Login.");
+            ?? throw new InvalidOperationException(Strings.Of("Settings.NeedsTokenOrLogin"));
         return url => GetWithTokenAsync(url, authorization);
     }
 
@@ -658,7 +667,7 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
             return await CheckLoginAsync(Jira) is { } site ? ([site], await web.ReaderAsync(site)) : throw new InvalidOperationException(NotLoggedIn);
         var get = await JiraGetAsync();
         string[] sites = [.. JiraSites((await CallAsync(Jira, [new("getAccessibleAtlassianResources", new JsonObject())])).Single().Text).Where(IsJiraSite)];
-        return sites.Length > 0 ? (sites, get) : throw new InvalidOperationException("Ingen Jira-sites fundet.");
+        return sites.Length > 0 ? (sites, get) : throw new InvalidOperationException(Strings.Of("Settings.NoJiraSites"));
     }
 
     static async Task<string> GetWithTokenAsync(string url, string authorization)
@@ -669,7 +678,7 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
         using var response = await Http.SendAsync(request);
         return response.IsSuccessStatusCode
             ? await response.Content.ReadAsStringAsync()
-            : throw new InvalidOperationException($"Jira afviste token'et ({(int)response.StatusCode} {response.ReasonPhrase}).");
+            : throw new InvalidOperationException(Strings.Format("Settings.JiraRejectedToken", (int)response.StatusCode, response.ReasonPhrase));
     }
 
     async Task<IReadOnlyList<(ToolCall Call, string Text)>> CallAsync(Connector connector, IReadOnlyList<ToolCall> calls) => connectors.SourceOf(connector) switch
@@ -678,8 +687,8 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
             ?? throw new InvalidOperationException($"{connector.Title}: {Connector.MissingOnClaudeAi}"), calls),
         ConnectorSource.Hamster => await OwnEndpointAsync(connector) is { } endpoint
             ? [.. calls.Zip(await McpClient.CallAsync(endpoint, calls))]
-            : throw new InvalidOperationException($"{connector.Title} er ikke installeret."),
-        _ => throw new InvalidOperationException($"{connector.Title} er slået fra."),
+            : throw new InvalidOperationException(Strings.Format("Tasks.NotInstalled", connector.Title)),
+        _ => throw new InvalidOperationException(Strings.Format("Tasks.TurnedOff", connector.Title)),
     };
 }
 
@@ -708,7 +717,8 @@ public sealed class Feed(IReadOnlyList<(string Source, Func<Task<IReadOnlyList<F
     FeedGroup GroupOf((string Source, string Group) slot, DateTimeOffset now)
     {
         FeedItem[] items = [.. Items.Where(item => (item.Source, item.Group) == slot)];
-        return new FeedGroup($"{slot.Group} · {items.Length}", [.. Boxes(items, now)]);
+        var title = slot.Source == Subscriptions.GitHubSource ? Subscriptions.GitHubFeeds.FirstOrDefault(feed => feed.Key == slot.Group)?.Title ?? slot.Group : slot.Group;
+        return new FeedGroup($"{title} · {items.Length}", [.. Boxes(items, now)]);
     }
 
     static IEnumerable<FeedBox> Boxes(FeedItem[] items, DateTimeOffset now)

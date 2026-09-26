@@ -18,6 +18,8 @@ public partial class FeedWindow : Window
         InitializeComponent();
         (this.feed, this.subscriptions) = (feed, subscriptions);
         ShowFeed();
+        Strings.Changed += ShowFeed;
+        Closed += (_, _) => Strings.Changed -= ShowFeed;
     }
 
     public void ShowFeed()
@@ -25,12 +27,12 @@ public partial class FeedWindow : Window
         FeedSource[] sources = [.. feed.SourcesAt(DateTimeOffset.Now, subscriptions.Slots)];
         SourceList.ItemsSource = sources;
         EmptyText.Visibility = sources.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        UpdatedText.Text = feed.UpdatedAt is { } updated ? $"Opdateret {updated:HH:mm}" : "";
+        UpdatedText.Text = feed.UpdatedAt is { } updated ? Strings.Format("Tasks.Updated", updated) : "";
     }
 
     async void Refresh_Click(object sender, RoutedEventArgs e)
     {
-        (RefreshButton.IsEnabled, UpdatedText.Text) = (false, "Henter…");
+        (RefreshButton.IsEnabled, UpdatedText.Text) = (false, Strings.Of("Common.Fetching"));
         await feed.RefreshAsync();
         RefreshButton.IsEnabled = true;
         ShowFeed();

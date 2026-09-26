@@ -59,7 +59,7 @@ public sealed class MarkdownConverter : IValueConverter
     static Section Code(string text)
     {
         var icon = new Run(ClipboardText.CopyIcon);
-        var copy = Themed(Themed(new Hyperlink(icon) { TextDecorations = null, ToolTip = "Kopiér" }, TextElement.ForegroundProperty, Subtle),
+        var copy = Themed(Themed(new Hyperlink(icon) { TextDecorations = null, ToolTip = Strings.Of("Code.Copy") }, TextElement.ForegroundProperty, Subtle),
             TextElement.FontFamilyProperty, Icons);
         copy.Click += (_, _) => ClipboardText.Copy(text, glyph => icon.Text = glyph);
         return Themed(new Section

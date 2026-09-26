@@ -40,6 +40,7 @@ public sealed record ThemeChoice(Theme Theme, ResourceDictionary Defaults, bool 
 
 public partial class SettingsWindow : Window
 {
+    readonly Action<Translation> chooseLanguage;
     readonly ThemeLibrary themes;
     readonly Action<Theme> chooseTheme;
     readonly CharacterLibrary characters;
@@ -51,10 +52,12 @@ public partial class SettingsWindow : Window
     string chosen;
     string? chosenTheme;
 
-    public SettingsWindow(ThemeLibrary themes, string? chosenTheme, Action<Theme> chooseTheme, CharacterLibrary characters, string chosen, Action<Character> choose,
-        Connectors connectors, Subscriptions subscriptions)
+    public SettingsWindow(Action<Translation> chooseLanguage, ThemeLibrary themes, string? chosenTheme, Action<Theme> chooseTheme, CharacterLibrary characters, string chosen,
+        Action<Character> choose, Connectors connectors, Subscriptions subscriptions)
     {
         InitializeComponent();
+        this.chooseLanguage = chooseLanguage;
+        ShowLanguage();
         (this.themes, this.chosenTheme, this.chooseTheme) = (themes, chosenTheme, chooseTheme);
         (this.characters, this.chosen, this.choose, this.connectors, this.subscriptions) = (characters, chosen, choose, connectors, subscriptions);
         rows = [.. Connectors.All.Select(connector => new ConnectorRow(connector, connectors.SourceOf(connector)))];
@@ -75,7 +78,7 @@ public partial class SettingsWindow : Window
         {
             if (row.Connector.Login!.SiteFrom(row.SiteInput) is not { } site)
             {
-                row.Finish("Skriv jeres site, fx firma.atlassian.net.");
+                row.Finish(Strings.Of("Settings.EnterSite"));
                 return;
             }
             row.Finish(null);
@@ -128,7 +131,7 @@ public partial class SettingsWindow : Window
     async Task FetchChoicesAsync(ConnectorRow row)
     {
         row.Start();
-        ShowChoices(row, "Henter…");
+        ShowChoices(row, Strings.Of("Common.Fetching"));
         try
         {
             await subscriptions.FetchJiraBoardsAsync();
@@ -187,6 +190,16 @@ public partial class SettingsWindow : Window
     {
         ShowThemes();
         await ShowCharactersAsync();
+    }
+
+    void ShowLanguage() => (DanishButton.IsChecked, EnglishButton.IsChecked) = (Strings.Current == Translation.Danish, Strings.Current == Translation.English);
+
+    void Language_Click(object sender, RoutedEventArgs e)
+    {
+        chooseLanguage(sender == EnglishButton ? Translation.English : Translation.Danish);
+        ShowLanguage();
+        foreach (var row in rows)
+            ShowChoices(row, row.ChoicesText);
     }
 
     void ShowThemes()
@@ -303,7 +316,7 @@ public partial class SettingsWindow : Window
         var values = row.Inputs.Select(input => input.Value.Trim()).ToArray();
         if (values.Any(value => value.Length == 0))
         {
-            row.Finish("Udfyld alle felter.");
+            row.Finish(Strings.Of("Settings.FillInAllFields"));
             return;
         }
         if (!await RunAsync(row, () => connectors.InstallAsync(row.Connector, values, row.AllowWrite)))

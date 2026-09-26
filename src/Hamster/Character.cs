@@ -49,7 +49,7 @@ public sealed record Character(string Name, IReadOnlyDictionary<char, uint> Pale
         }
         catch (Exception exception) when (exception is FormatException or OverflowException or ArgumentException)
         {
-            throw new InvalidDataException($"{PaletteFile}: hver linje skal være et tegn og en farve, fx \"a E3D3B7\".", exception);
+            throw new InvalidDataException(Strings.Format("Character.BadPalette", PaletteFile), exception);
         }
     }
 
@@ -58,14 +58,14 @@ public sealed record Character(string Name, IReadOnlyDictionary<char, uint> Pale
         Frame[] frames = [.. text.ReplaceLineEndings("\n").Trim('\n').Split("\n\n").Select(frame => ParseFrame(frame.Split('\n'), file))];
         return frames.All(frame => (frame.Width, frame.Height) == (frames[0].Width, frames[0].Height))
             ? frames
-            : throw new InvalidDataException($"{file}: alle frames skal have samme størrelse som den første ({frames[0].Width}×{frames[0].Height}).");
+            : throw new InvalidDataException(Strings.Format("Character.FramesDiffer", file, frames[0].Width, frames[0].Height));
     }
 
     static Frame ParseFrame(string[] lines, string file) =>
         int.TryParse(lines[0], CultureInfo.InvariantCulture, out var milliseconds) && milliseconds > 0
             && lines.Length > 1 && lines.Skip(1).All(row => row.Length == lines[1].Length)
             ? new Frame(lines[1..], milliseconds)
-            : throw new InvalidDataException($"{file}: hver frame skal have en varighed i millisekunder og derefter linjer, der alle er lige lange.");
+            : throw new InvalidDataException(Strings.Format("Character.BadFrame", file));
 
-    static InvalidDataException Missing(string name, string file) => new($"{name} mangler {file}.");
+    static InvalidDataException Missing(string name, string file) => new(Strings.Format("Character.MissingFile", name, file));
 }

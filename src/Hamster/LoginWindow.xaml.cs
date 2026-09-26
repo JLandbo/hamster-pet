@@ -14,8 +14,8 @@ public partial class LoginWindow : Window
     {
         InitializeComponent();
         (this.session, login, start) = (session, connector.Login!, site);
-        Title = $"Log ind – {new Uri(site).Host}";
-        Hint.Text = $"Log ind på {new Uri(site).Host}. Vinduet lukker af sig selv, når du er logget ind.";
+        Title = Strings.Format("Login.Title", new Uri(site).Host);
+        Hint.Text = Strings.Format("Login.Hint", new Uri(site).Host);
     }
 
     public string? Site { get; private set; }

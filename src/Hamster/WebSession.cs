@@ -51,7 +51,7 @@ public sealed class WebSession(string folder)
     {
         using var response = await SendAsync(url, cookies);
         return response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
-            ? throw new InvalidOperationException("Log ind igen i hamsteren.")
+            ? throw new InvalidOperationException(Strings.Of("Web.LogInAgain"))
             : response.IsSuccessStatusCode
                 ? await response.Content.ReadAsStringAsync()
                 : throw new InvalidOperationException($"{(int)response.StatusCode} {response.ReasonPhrase}");

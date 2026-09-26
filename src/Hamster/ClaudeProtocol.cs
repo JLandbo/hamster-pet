@@ -24,7 +24,7 @@ public sealed record PermissionRequest(string RequestId, string ToolName, JsonOb
         suggestion["rules"] is JsonArray rules
             ? rules.OfType<JsonObject>().Select(rule => (string?)rule["ruleContent"] is { } content ? $"{(string?)rule["toolName"]}({content})" : (string?)rule["toolName"] ?? "")
             : suggestion["directories"] is JsonArray directories
-                ? directories.Select(directory => $"mappen {(string?)directory}")
+                ? directories.Select(directory => Strings.Format("Claude.FolderScope", (string?)directory))
                 : [];
 }
 
