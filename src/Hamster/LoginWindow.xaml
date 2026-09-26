@@ -5,7 +5,7 @@
         Width="520" Height="720" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         FontFamily="{StaticResource UiFont}" Loaded="Window_Loaded">
     <DockPanel>
-        <TextBlock x:Name="Hint" DockPanel.Dock="Top" Padding="12,8" TextWrapping="Wrap" Background="#262626" Foreground="#F2F2F2" />
+        <TextBlock x:Name="Hint" DockPanel.Dock="Top" Padding="12,8" TextWrapping="Wrap" Background="{DynamicResource Surface}" Foreground="{DynamicResource Text}" />
         <wv2:WebView2 x:Name="Web" NavigationCompleted="Web_NavigationCompleted" />
     </DockPanel>
 </Window>

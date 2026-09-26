@@ -28,8 +28,20 @@ public sealed class CharacterChoice(string name, Character? character, ImageSour
     }
 }
 
+public sealed record ThemeChoice(Theme Theme, ResourceDictionary Defaults, bool Selected)
+{
+    public string Name => Theme.Name;
+    public Brush Surface => Theme.BrushOf(nameof(Surface), Defaults);
+    public Brush Edge => Theme.BrushOf(nameof(Edge), Defaults);
+    public Brush Text => Theme.BrushOf(nameof(Text), Defaults);
+    public Brush Muted => Theme.BrushOf(nameof(Muted), Defaults);
+    public Brush Attention => Theme.BrushOf(nameof(Attention), Defaults);
+}
+
 public partial class SettingsWindow : Window
 {
+    readonly ThemeLibrary themes;
+    readonly Action<Theme> chooseTheme;
     readonly CharacterLibrary characters;
     readonly Action<Character> choose;
     readonly Connectors connectors;
@@ -37,10 +49,13 @@ public partial class SettingsWindow : Window
     readonly ObservableCollection<CharacterChoice> tiles = [];
     readonly ConnectorRow[] rows;
     string chosen;
+    string? chosenTheme;
 
-    public SettingsWindow(CharacterLibrary characters, string chosen, Action<Character> choose, Connectors connectors, Subscriptions subscriptions)
+    public SettingsWindow(ThemeLibrary themes, string? chosenTheme, Action<Theme> chooseTheme, CharacterLibrary characters, string chosen, Action<Character> choose,
+        Connectors connectors, Subscriptions subscriptions)
     {
         InitializeComponent();
+        (this.themes, this.chosenTheme, this.chooseTheme) = (themes, chosenTheme, chooseTheme);
         (this.characters, this.chosen, this.choose, this.connectors, this.subscriptions) = (characters, chosen, choose, connectors, subscriptions);
         rows = [.. Connectors.All.Select(connector => new ConnectorRow(connector, connectors.SourceOf(connector)))];
         CharacterList.ItemsSource = tiles;
@@ -168,7 +183,26 @@ public partial class SettingsWindow : Window
             row.ShowLogin(null);
     }
 
-    async void Window_Activated(object sender, EventArgs e) => await ShowCharactersAsync();
+    async void Window_Activated(object sender, EventArgs e)
+    {
+        ShowThemes();
+        await ShowCharactersAsync();
+    }
+
+    void ShowThemes()
+    {
+        Theme[] all = [.. themes.Themes];
+        var current = ThemeLibrary.Find(all, chosenTheme).Name;
+        ThemeList.ItemsSource = all.Select(theme => new ThemeChoice(theme, ((App)Application.Current).DefaultColors, theme.Name == current)).ToArray();
+    }
+
+    void Theme_Click(object sender, RoutedEventArgs e)
+    {
+        var choice = (ThemeChoice)((FrameworkElement)sender).DataContext;
+        chosenTheme = choice.Name;
+        chooseTheme(choice.Theme);
+        ShowThemes();
+    }
 
     async Task ShowCharactersAsync()
     {

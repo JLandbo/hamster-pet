@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace Hamster;
 
-public sealed class JsonFile<T>(string path, T empty)
+public sealed class JsonFile<T>(string path, T empty, bool readOnly = false)
 {
     static readonly JsonSerializerOptions Options = new()
     {
@@ -30,6 +30,8 @@ public sealed class JsonFile<T>(string path, T empty)
 
     public void Save(T value)
     {
+        if (readOnly)
+            return;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);

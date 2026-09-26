@@ -12,67 +12,13 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="VisibleWhenTrue" />
         <local:MarkdownConverter x:Key="Markdown" />
-        <Style TargetType="FlowDocument">
-            <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="TextAlignment" Value="Left" />
-            <Setter Property="PagePadding" Value="0" />
-        </Style>
-        <Style TargetType="Hyperlink">
-            <Setter Property="Foreground" Value="#6FA8FF" />
-        </Style>
 
-        <Style x:Key="ChoiceItem" TargetType="MenuItem">
-            <Setter Property="Foreground" Value="{StaticResource Text}" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="MenuItem">
-                        <Border x:Name="Root" Background="Transparent" CornerRadius="6" Padding="8,5,14,5">
-                            <DockPanel>
-                                <TextBlock x:Name="Check" DockPanel.Dock="Left" Width="18" VerticalAlignment="Center" Visibility="Hidden"
-                                           Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="10"
-                                           Foreground="{StaticResource Attention}" />
-                                <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
-                            </DockPanel>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Check" Property="Visibility" Value="Visible" />
-                            </Trigger>
-                            <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="Root" Property="Background" Value="{StaticResource Edge}" />
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="{StaticResource Muted}" />
-                                <Setter Property="Cursor" Value="Arrow" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="ChoiceMenu" TargetType="ContextMenu">
-            <Setter Property="HasDropShadow" Value="False" />
-            <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="ItemContainerStyle" Value="{StaticResource ChoiceItem}" />
+        <Style x:Key="ChoiceMenu" TargetType="ContextMenu" BasedOn="{StaticResource PopupMenu}">
             <EventSetter Event="Closed" Handler="Choices_Closed" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ContextMenu">
-                        <Border Margin="8" Padding="4" CornerRadius="10" Background="{StaticResource Surface}"
-                                BorderBrush="{StaticResource Edge}" BorderThickness="1" Effect="{StaticResource Shadow}">
-                            <ItemsPresenter />
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
         </Style>
 
         <Style x:Key="FoldButton" TargetType="ToggleButton">
-            <Setter Property="Foreground" Value="{StaticResource Muted}" />
+            <Setter Property="Foreground" Value="{DynamicResource Muted}" />
             <Setter Property="FontSize" Value="11" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Focusable" Value="False" />
@@ -88,7 +34,7 @@
                                 <Setter TargetName="Chevron" Property="Text" Value="&#xE70D;" />
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Foreground" Value="{StaticResource Text}" />
+                                <Setter Property="Foreground" Value="{DynamicResource Text}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -102,7 +48,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Thumb">
                         <Border Background="#01000000" Padding="3">
-                            <Path Data="M0,10 L0,0 L10,0" Stroke="#99FFFFFF" StrokeThickness="2" />
+                            <Path Data="M0,10 L0,0 L10,0" Stroke="{DynamicResource Attention}" StrokeThickness="2" />
                         </Border>
                     </ControlTemplate>
                 </Setter.Value>
@@ -129,7 +75,7 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type local:ChatItem}">
                             <Border x:Name="Bubble" Margin="0,0,0,5" Padding="14,10" CornerRadius="14"
-                                    Background="{StaticResource Surface}" BorderBrush="{StaticResource Edge}" BorderThickness="1"
+                                    Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Edge}" BorderThickness="1"
                                     Visibility="{Binding Shown, Converter={StaticResource VisibleWhenTrue}}">
                                 <StackPanel>
                                     <DockPanel>
@@ -138,8 +84,8 @@
                                         <Button x:Name="Copy" DockPanel.Dock="Right" Content="&#xE8C8;" ToolTip="Kopiér svar" Click="CopyAnswer_Click"
                                                 Style="{StaticResource SmallIconButton}" Margin="6,-2,0,0" VerticalAlignment="Top" />
                                         <Ellipse x:Name="Dot" DockPanel.Dock="Left" Width="8" Height="8" Margin="0,6,8,0"
-                                                 VerticalAlignment="Top" Fill="#6FA8FF" />
-                                        <TextBlock Text="{Binding DisplayPrompt}" Foreground="{StaticResource Text}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                                 VerticalAlignment="Top" Fill="{DynamicResource Link}" />
+                                        <TextBlock Text="{Binding DisplayPrompt}" Foreground="{DynamicResource Text}" FontWeight="SemiBold" TextWrapping="Wrap" />
                                     </DockPanel>
                                     <ItemsControl ItemsSource="{Binding ToolGroups}" Margin="16,0,0,0">
                                         <ItemsControl.ItemTemplate>
@@ -153,7 +99,7 @@
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
                                                                 <TextBlock Text="{Binding}" ToolTip="{Binding}" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"
-                                                                           Foreground="{StaticResource Muted}" FontFamily="{x:Static local:MarkdownConverter.CodeFont}" FontSize="11" />
+                                                                           Foreground="{DynamicResource Muted}" FontFamily="{x:Static local:MarkdownConverter.CodeFont}" FontSize="11" />
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
@@ -169,18 +115,18 @@
                                     <FlowDocumentScrollViewer Document="{Binding DisplayAnswer, Converter={StaticResource Markdown}}" Margin="16,4,0,0"
                                                               VerticalScrollBarVisibility="Disabled" FocusVisualStyle="{x:Null}"
                                                               RequestBringIntoView="Answer_RequestBringIntoView" Hyperlink.RequestNavigate="Link_RequestNavigate"
-                                                              Foreground="{StaticResource Muted}" />
+                                                              Foreground="{DynamicResource Muted}" />
                                     <Button Content="Log ind" Click="Login_Click" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Margin="16,8,0,0"
                                             Visibility="{Binding NeedsLogin, Converter={StaticResource VisibleWhenTrue}}" />
                                     <ItemsControl ItemsSource="{Binding Requests}" Margin="16,0,0,0">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="{x:Type local:UserRequest}">
                                                 <StackPanel Margin="0,10,0,0">
-                                                    <TextBlock Text="Kræver din tilladelse" Foreground="{StaticResource Attention}" FontWeight="SemiBold" />
-                                                    <TextBlock Text="{Binding Title}" Foreground="{StaticResource Text}" Margin="0,4,0,2" TextWrapping="Wrap" />
-                                                    <TextBlock Text="{Binding Details}" Foreground="{StaticResource Muted}" TextWrapping="Wrap"
+                                                    <TextBlock Text="Kræver din tilladelse" Foreground="{DynamicResource Attention}" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding Title}" Foreground="{DynamicResource Text}" Margin="0,4,0,2" TextWrapping="Wrap" />
+                                                    <TextBlock Text="{Binding Details}" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"
                                                                FontFamily="{x:Static local:MarkdownConverter.CodeFont}" FontSize="12" />
-                                                    <TextBlock Text="{Binding AlwaysScope, StringFormat='Tillad altid gælder: {0}'}" Foreground="{StaticResource Muted}" TextWrapping="Wrap"
+                                                    <TextBlock Text="{Binding AlwaysScope, StringFormat='Tillad altid gælder: {0}'}" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"
                                                                FontSize="11" Margin="0,6,0,0" Visibility="{Binding CanAllowAlways, Converter={StaticResource VisibleWhenTrue}}" />
                                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
                                                         <Button Content="Afvis" Click="Deny_Click" Style="{StaticResource PillButton}" />
@@ -196,19 +142,19 @@
                             </Border>
                             <DataTemplate.Triggers>
                                 <DataTrigger Binding="{Binding Status}" Value="Busy">
-                                    <Setter TargetName="Dot" Property="Fill" Value="#E08F60" />
+                                    <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource Busy}" />
                                     <Setter TargetName="Copy" Property="Visibility" Value="Collapsed" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding Status}" Value="Error">
-                                    <Setter TargetName="Dot" Property="Fill" Value="#FF6B6B" />
+                                    <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource Error}" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding NeedsLogin}" Value="True">
-                                    <Setter TargetName="Dot" Property="Fill" Value="{StaticResource Attention}" />
-                                    <Setter TargetName="Bubble" Property="BorderBrush" Value="{StaticResource Attention}" />
+                                    <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource Attention}" />
+                                    <Setter TargetName="Bubble" Property="BorderBrush" Value="{DynamicResource Attention}" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding NeedsAction}" Value="True">
-                                    <Setter TargetName="Dot" Property="Fill" Value="{StaticResource Attention}" />
-                                    <Setter TargetName="Bubble" Property="BorderBrush" Value="{StaticResource Attention}" />
+                                    <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource Attention}" />
+                                    <Setter TargetName="Bubble" Property="BorderBrush" Value="{DynamicResource Attention}" />
                                 </DataTrigger>
                             </DataTemplate.Triggers>
                         </DataTemplate>
@@ -219,19 +165,26 @@
                    DragStarted="ResizeGrip_DragStarted" DragDelta="ResizeGrip_DragDelta" DragCompleted="ResizeGrip_DragCompleted" />
         </Grid>
 
+        <Border x:Name="TemporaryBanner" Margin="8,0,8,5" Padding="12,8" CornerRadius="12" Background="{DynamicResource Attention}" Visibility="Collapsed">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left" Text="&#xE823;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource OnAttention}" Margin="0,2,8,0" VerticalAlignment="Top" />
+                <TextBlock Text="Midlertidig chat – en anden hamster har denne samtale. Gemmes ikke." Foreground="{DynamicResource OnAttention}" FontWeight="SemiBold" TextWrapping="Wrap" />
+            </DockPanel>
+        </Border>
+
         <ItemsControl x:Name="ProblemList" Padding="8,0">
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
                     <Border Margin="0,0,0,5" Padding="14,10" CornerRadius="14" Cursor="Hand" MouseLeftButtonUp="Problem_Click"
-                            Background="{StaticResource Surface}" BorderBrush="{StaticResource Attention}" BorderThickness="1">
+                            Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Attention}" BorderThickness="1">
                         <DockPanel>
                             <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="Skjul" Click="DismissProblem_Click"
                                     Style="{StaticResource SmallIconButton}" Margin="6,-2,-6,0" VerticalAlignment="Top" />
-                            <Ellipse DockPanel.Dock="Left" Width="8" Height="8" Margin="0,6,8,0" VerticalAlignment="Top" Fill="{StaticResource Attention}" />
+                            <Ellipse DockPanel.Dock="Left" Width="8" Height="8" Margin="0,6,8,0" VerticalAlignment="Top" Fill="{DynamicResource Attention}" />
                             <TextBlock TextWrapping="Wrap">
-                                <Run Text="{Binding Mode=OneWay}" Foreground="{StaticResource Text}" FontWeight="SemiBold" />
+                                <Run Text="{Binding Mode=OneWay}" Foreground="{DynamicResource Text}" FontWeight="SemiBold" />
                                 <LineBreak />
-                                <Run Text="Klik for at rette" Foreground="{StaticResource Muted}" />
+                                <Run Text="Klik for at rette" Foreground="{DynamicResource Muted}" />
                             </TextBlock>
                         </DockPanel>
                     </Border>
@@ -246,129 +199,149 @@
             </Grid.ColumnDefinitions>
             <StackPanel x:Name="ToolbarArea" VerticalAlignment="Bottom">
                 <Border x:Name="MusicBubble" Margin="8,0,-8,6" Padding="14,0,8,0" Height="36" CornerRadius="18" Visibility="Collapsed"
-                        Background="{StaticResource Surface}" BorderBrush="{StaticResource Edge}" BorderThickness="1" Effect="{StaticResource Shadow}">
+                        Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Edge}" BorderThickness="1" Effect="{StaticResource Shadow}">
                     <DockPanel VerticalAlignment="Center">
                         <Button DockPanel.Dock="Right" Content="&#xE893;" ToolTip="Næste" Click="NextTrack_Click" Style="{StaticResource SmallIconButton}" />
                         <Button x:Name="PlayPauseButton" DockPanel.Dock="Right" Click="PlayPause_Click" Style="{StaticResource SmallIconButton}" />
                         <Button DockPanel.Dock="Right" Content="&#xE892;" ToolTip="Forrige" Click="PreviousTrack_Click" Style="{StaticResource SmallIconButton}" />
-                        <TextBlock Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                        <TextBlock Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
                             <Run FontFamily="{StaticResource IconFont}" Text="&#xEC4F;" />
                             <Run x:Name="TrackText" />
                         </TextBlock>
                     </DockPanel>
                 </Border>
-                <Border x:Name="Toolbar" Margin="8,0,-8,0" Padding="4" CornerRadius="16"
-                        Background="{StaticResource Surface}" BorderBrush="{StaticResource Edge}" BorderThickness="1" Effect="{StaticResource Shadow}">
-                    <StackPanel>
-                        <Border Margin="4,4,4,2" Padding="4,5" CornerRadius="10" Background="{StaticResource Edge}">
-                            <DockPanel>
-                                <Button x:Name="AttachmentChip" DockPanel.Dock="Left" Visibility="Collapsed" Click="ClearAttachments_Click"
-                                        Style="{StaticResource PillButton}" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Top">
-                                    <TextBlock FontSize="11">
-                                        <Run FontFamily="{StaticResource IconFont}" Text="&#xE723;" />
-                                        <Run x:Name="AttachmentCount" />
-                                    </TextBlock>
-                                </Button>
-                                <TextBox x:Name="Input" Background="Transparent" BorderThickness="0" Foreground="{StaticResource Text}"
-                                         CaretBrush="{StaticResource Text}" TextWrapping="Wrap" AcceptsReturn="True" KeyDown="Input_KeyDown" PreviewKeyDown="Input_PreviewKeyDown"
-                                         MaxLines="3" VerticalScrollBarVisibility="Auto" />
-                            </DockPanel>
-                        </Border>
-                        <Grid x:Name="Buttons">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <Button x:Name="ModelButton" Grid.Row="0" Grid.Column="0" ToolTip="Model" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
-                                <Button.ContextMenu>
-                                    <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Model_Click">
-                                        <MenuItem Header="Fable 5.1" Tag="claude-fable-5-1" />
-                                        <MenuItem Header="Opus 5.5" Tag="claude-opus-5-5" />
-                                        <MenuItem Header="Sonnet 5" Tag="claude-sonnet-5" />
-                                        <MenuItem Header="Haiku 4.5" Tag="claude-haiku-4-5-20251001" />
-                                    </ContextMenu>
-                                </Button.ContextMenu>
-                            </Button>
-                            <Button x:Name="EffortButton" Grid.Row="0" Grid.Column="1" ToolTip="Effort" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
-                                <Button.ContextMenu>
-                                    <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Effort_Click">
-                                        <MenuItem Header="low" Tag="low" />
-                                        <MenuItem Header="medium" Tag="medium" />
-                                        <MenuItem Header="high" Tag="high" />
-                                        <MenuItem Header="xhigh" Tag="xhigh" />
-                                        <MenuItem Header="max" Tag="max" />
-                                    </ContextMenu>
-                                </Button.ContextMenu>
-                            </Button>
-                            <Button x:Name="ModeButton" Grid.Row="0" Grid.Column="2" ToolTip="Mode" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
-                                <Button.ContextMenu>
-                                    <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Mode_Click">
-                                        <MenuItem Header="plan" Tag="plan" />
-                                        <MenuItem Header="manual" Tag="default" />
-                                        <MenuItem Header="auto edit" Tag="acceptEdits" />
-                                        <MenuItem Header="auto" Tag="auto" />
-                                    </ContextMenu>
-                                </Button.ContextMenu>
-                            </Button>
-                            <TextBlock x:Name="CostText" Grid.Row="0" Grid.Column="3" ToolTip="Claudes estimerede pris for samtalen" Foreground="{StaticResource Muted}"
-                                FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6,0" />
-                            <Button x:Name="MoreButton" Grid.Row="1" Grid.Column="0" Content="&#xE712;" ToolTip="Mere" Click="ShowChoices_Click" Style="{StaticResource IconButton}">
-                                <Button.ContextMenu>
-                                    <ContextMenu Style="{StaticResource ChoiceMenu}" Opened="MoreMenu_Opened">
-                                        <MenuItem x:Name="FullScreenItem" Header="Fuld skærm" Click="FullScreen_Click" />
-                                        <MenuItem Header="Instruktioner…" Click="Instructions_Click" />
-                                        <MenuItem x:Name="SaveChatItem" Header="Gem chat…" Click="SaveChat_Click" />
-                                        <MenuItem Header="Åbn Claude-appen" Click="OpenClaude_Click" />
-                                        <MenuItem Header="Indstillinger…" Click="Settings_Click" />
-                                        <MenuItem x:Name="UsageItem" IsEnabled="False" />
-                                    </ContextMenu>
-                                </Button.ContextMenu>
-                            </Button>
-                            <Button x:Name="ToggleChats" Grid.Row="1" Grid.Column="1" ToolTip="Vis/skjul chats" Click="ToggleChats_Click" Style="{StaticResource IconButton}" />
-                            <Button x:Name="SnipButton" Grid.Row="1" Grid.Column="2" Content="&#xE8C6;" ToolTip="Klip fra skærmen" Click="Snip_Click" Style="{StaticResource IconButton}" />
-                            <Button x:Name="PromptsButton" Grid.Row="1" Grid.Column="3" Content="&#xE945;" ToolTip="Prompts" Click="ShowChoices_Click" Style="{StaticResource IconButton}">
-                                <Button.ContextMenu>
-                                    <ContextMenu Style="{StaticResource ChoiceMenu}" Opened="PromptsMenu_Opened" MenuItem.Click="Prompt_Click" />
-                                </Button.ContextMenu>
-                            </Button>
-                            <Button x:Name="StopButton" Grid.Row="1" Grid.Column="3" Content="&#xE71A;" ToolTip="Stop" Click="Stop_Click" Style="{StaticResource IconButton}" Visibility="Collapsed" />
-                            <TextBlock x:Name="TasksText" Grid.Row="1" Grid.Column="3" ToolTip="Baggrundsopgaver, der kører" Foreground="{StaticResource Muted}"
-                                FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
-                            <Border Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="3" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0"
-                                    Padding="2" CornerRadius="8" Background="#1E1E1E">
-                                <StackPanel Orientation="Horizontal">
-                                    <ToggleButton x:Name="ChatButton" Content="Chat" Click="Chat_Click" Style="{StaticResource Segment}" ToolTipService.ShowOnDisabled="True" />
-                                    <ToggleButton x:Name="FolderButton" Content="Mappe" Click="Folder_Click" Style="{StaticResource Segment}" ToolTipService.ShowOnDisabled="True" />
-                                </StackPanel>
+                <Grid>
+                    <Border x:Name="Toolbar" Margin="8,0,-8,0" Padding="4" CornerRadius="16"
+                            Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Edge}" BorderThickness="1" Effect="{StaticResource Shadow}">
+                        <StackPanel>
+                            <Border Margin="4,4,4,2" Padding="4,5" CornerRadius="10" Background="{DynamicResource Edge}">
+                                <DockPanel>
+                                    <Button x:Name="AttachmentChip" DockPanel.Dock="Left" Visibility="Collapsed" Click="ClearAttachments_Click"
+                                            Style="{StaticResource PillButton}" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Top">
+                                        <TextBlock FontSize="11">
+                                            <Run FontFamily="{StaticResource IconFont}" Text="&#xE723;" />
+                                            <Run x:Name="AttachmentCount" />
+                                        </TextBlock>
+                                    </Button>
+                                    <Grid>
+                                        <TextBlock x:Name="InputHint" Text="Midlertidig chat – gemmes ikke" Foreground="{DynamicResource Muted}" FontStyle="Italic"
+                                                   Margin="2,0,0,0" IsHitTestVisible="False" Visibility="Collapsed" />
+                                        <TextBox x:Name="Input" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource Text}"
+                                                 CaretBrush="{DynamicResource Text}" TextWrapping="Wrap" AcceptsReturn="True" KeyDown="Input_KeyDown" PreviewKeyDown="Input_PreviewKeyDown"
+                                                 TextChanged="Input_TextChanged" MaxLines="3" VerticalScrollBarVisibility="Auto" />
+                                    </Grid>
+                                </DockPanel>
                             </Border>
-                            <Button x:Name="FeedButton" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" HorizontalAlignment="Left" ToolTip="Opgaver" Click="Feed_Click"
-                                    Style="{StaticResource IconButton}" Foreground="{StaticResource Muted}">
-                                <StackPanel Orientation="Horizontal">
-                                    <Viewbox Width="16" Height="16">
-                                        <Canvas Width="24" Height="24">
-                                            <Path Data="M9.615 20h-2.615a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8 M14 19l2 2l4 -4 M9 8h4 M9 12h2"
-                                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="2"
-                                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
-                                        </Canvas>
-                                    </Viewbox>
-                                    <Border x:Name="FeedBadge" MinWidth="16" Height="16" Padding="4,0" Margin="6,0,0,0" CornerRadius="8" VerticalAlignment="Center"
-                                            Background="{StaticResource Muted}">
-                                        <TextBlock x:Name="FeedCount" Text="0" FontFamily="{StaticResource UiFont}" FontSize="11" FontWeight="SemiBold" Foreground="#1E1E1E"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                    </Border>
+                            <Grid x:Name="Buttons">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Button x:Name="ModelButton" Grid.Row="0" Grid.Column="0" ToolTip="Model" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
+                                    <Button.ContextMenu>
+                                        <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Model_Click">
+                                            <MenuItem Header="Fable 5.1" Tag="claude-fable-5-1" />
+                                            <MenuItem Header="Opus 5.5" Tag="claude-opus-5-5" />
+                                            <MenuItem Header="Sonnet 5" Tag="claude-sonnet-5" />
+                                            <MenuItem Header="Haiku 4.5" Tag="claude-haiku-4-5-20251001" />
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
+                                <Button x:Name="EffortButton" Grid.Row="0" Grid.Column="1" ToolTip="Effort" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
+                                    <Button.ContextMenu>
+                                        <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Effort_Click">
+                                            <MenuItem Header="low" Tag="low" />
+                                            <MenuItem Header="medium" Tag="medium" />
+                                            <MenuItem Header="high" Tag="high" />
+                                            <MenuItem Header="xhigh" Tag="xhigh" />
+                                            <MenuItem Header="max" Tag="max" />
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
+                                <Button x:Name="ModeButton" Grid.Row="0" Grid.Column="2" ToolTip="Mode" Click="ShowChoices_Click" Style="{StaticResource TextButton}">
+                                    <Button.ContextMenu>
+                                        <ContextMenu Style="{StaticResource ChoiceMenu}" MenuItem.Click="Mode_Click">
+                                            <MenuItem Header="plan" Tag="plan" />
+                                            <MenuItem Header="manual" Tag="default" />
+                                            <MenuItem Header="auto edit" Tag="acceptEdits" />
+                                            <MenuItem Header="auto" Tag="auto" />
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
+                                <TextBlock x:Name="CostText" Grid.Row="0" Grid.Column="3" ToolTip="Claudes estimerede pris for samtalen" Foreground="{DynamicResource Muted}"
+                                    FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6,0" />
+                                <Button x:Name="MoreButton" Grid.Row="1" Grid.Column="0" Content="&#xE712;" ToolTip="Mere" Click="ShowChoices_Click" Style="{StaticResource IconButton}"
+                                        ToolTipService.ShowOnDisabled="True">
+                                    <Button.ContextMenu>
+                                        <ContextMenu Style="{StaticResource ChoiceMenu}" Opened="MoreMenu_Opened">
+                                            <MenuItem x:Name="FullScreenItem" Header="Fuld skærm" Click="FullScreen_Click" />
+                                            <MenuItem Header="Instruktioner…" Click="Instructions_Click" />
+                                            <MenuItem x:Name="SaveChatItem" Header="Gem chat…" Click="SaveChat_Click" />
+                                            <MenuItem Header="Åbn Claude-appen" Click="OpenClaude_Click" />
+                                            <MenuItem Header="Indstillinger…" Click="Settings_Click" />
+                                            <MenuItem x:Name="UsageItem" IsEnabled="False" />
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
+                                <Button x:Name="ToggleChats" Grid.Row="1" Grid.Column="1" ToolTip="Vis/skjul chats" Click="ToggleChats_Click" Style="{StaticResource IconButton}" />
+                                <Button x:Name="SnipButton" Grid.Row="1" Grid.Column="2" Content="&#xE8C6;" ToolTip="Klip fra skærmen" Click="Snip_Click" Style="{StaticResource IconButton}" />
+                                <Button x:Name="PromptsButton" Grid.Row="1" Grid.Column="3" Content="&#xE945;" ToolTip="Prompts" Click="ShowChoices_Click" Style="{StaticResource IconButton}">
+                                    <Button.ContextMenu>
+                                        <ContextMenu Style="{StaticResource ChoiceMenu}" Opened="PromptsMenu_Opened" MenuItem.Click="Prompt_Click" />
+                                    </Button.ContextMenu>
+                                </Button>
+                                <Button x:Name="StopButton" Grid.Row="1" Grid.Column="3" Content="&#xE71A;" ToolTip="Stop" Click="Stop_Click" Style="{StaticResource IconButton}" Visibility="Collapsed" />
+                                <TextBlock x:Name="TasksText" Grid.Row="1" Grid.Column="3" ToolTip="Baggrundsopgaver, der kører" Foreground="{DynamicResource Muted}"
+                                    FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
+                                <Border Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="3" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0"
+                                        Padding="2" CornerRadius="8" Background="{DynamicResource Input}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ToggleButton x:Name="ChatButton" Content="Chat" Click="Chat_Click" Style="{StaticResource Segment}" ToolTipService.ShowOnDisabled="True" />
+                                        <ToggleButton x:Name="FolderButton" Content="Mappe" Click="Folder_Click" Style="{StaticResource Segment}" ToolTipService.ShowOnDisabled="True" />
+                                    </StackPanel>
+                                </Border>
+                                <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Left">
+                                    <Button x:Name="FeedButton" ToolTip="Opgaver" Click="Feed_Click"
+                                            Style="{StaticResource IconButton}" Foreground="{DynamicResource Muted}" ToolTipService.ShowOnDisabled="True">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Viewbox Width="16" Height="16">
+                                                <Canvas Width="24" Height="24">
+                                                    <Path Data="M9.615 20h-2.615a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8 M14 19l2 2l4 -4 M9 8h4 M9 12h2"
+                                                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="2"
+                                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                                                </Canvas>
+                                            </Viewbox>
+                                            <Border x:Name="FeedBadge" MinWidth="16" Height="16" Padding="4,0" Margin="6,0,0,0" CornerRadius="8" VerticalAlignment="Center"
+                                                    Background="{DynamicResource Muted}">
+                                                <TextBlock x:Name="FeedCount" Text="0" FontFamily="{StaticResource UiFont}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource OnAttention}"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button ToolTip="Åbn en ny hamster" Click="NewHamster_Click" Style="{StaticResource IconButton}">
+                                        <Viewbox Width="16" Height="16">
+                                            <Canvas Width="24" Height="24">
+                                                <Path Data="M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -8.666 M4.012 16.737a2 2 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1 M11 14h6 M14 11v6"
+                                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="2"
+                                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                                            </Canvas>
+                                        </Viewbox>
+                                    </Button>
                                 </StackPanel>
-                            </Button>
-                        </Grid>
-                    </StackPanel>
-                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                    <Thumb x:Name="WidthGrip" Style="{StaticResource ResizeGrip}" Cursor="SizeWE" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,-10,0,0"
+                           ToolTip="Træk for at ændre bredden" DragStarted="ResizeGrip_DragStarted" DragDelta="ResizeGrip_DragDelta" DragCompleted="ResizeGrip_DragCompleted" />
+                </Grid>
             </StackPanel>
             <Grid x:Name="PetArea" Grid.Column="1" VerticalAlignment="Bottom" Width="160" Height="144" Margin="0,0,8,0">
                 <Image x:Name="Pet" VerticalAlignment="Bottom" HorizontalAlignment="Center" Cursor="Hand"

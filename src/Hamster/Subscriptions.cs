@@ -7,6 +7,9 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Windows;
+using Markdig;
+using Markdig.Syntax;
+using Markdig.Syntax.Inlines;
 
 namespace Hamster;
 
@@ -14,8 +17,12 @@ public enum IssueKind { Other, Epic, Task, SubTask }
 
 public sealed record IssueRef(string Key, string Title, IssueKind Kind, string Url);
 
+public sealed record IssueTag(string Key, string Value);
+
+public sealed record IssueDetails(string? Sprint, IReadOnlyList<IssueTag> Tags, string Description);
+
 public sealed record FeedItem(string Source, string Group, string Id, string Title, string Url, string Repository = "", DateTimeOffset? Updated = null, bool Draft = false,
-    IssueKind Kind = IssueKind.Other, IssueRef? Parent = null, IssueRef? Epic = null)
+    IssueKind Kind = IssueKind.Other, IssueRef? Parent = null, IssueRef? Epic = null, IssueDetails? Details = null)
 {
     public static readonly IComparer<string> KeyOrder = Comparer<string>.Create(CompareKeys);
 
@@ -47,7 +54,7 @@ public sealed record FeedItem(string Source, string Group, string Id, string Tit
     }
 }
 
-public sealed record FeedRow(string Id, string Title, string Url, string Detail, IssueKind Kind = IssueKind.Other, int Depth = 0, bool Muted = false);
+public sealed record FeedRow(string Id, string Title, string Url, string Detail, IssueKind Kind = IssueKind.Other, int Depth = 0, bool Muted = false, IssueDetails? Details = null);
 
 public sealed record FeedBox(FeedRow? Epic, IReadOnlyList<FeedRow> Rows);
 
@@ -81,6 +88,7 @@ public sealed record SubscriptionSettings
     public IReadOnlyList<string> JiraColumns { get; init; } = [];
     public IReadOnlyList<string> GitHub { get; init; } = [];
     public IReadOnlyDictionary<string, string> LoginSites { get; init; } = new Dictionary<string, string>();
+    public IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> JiraFields { get; init; } = new Dictionary<string, IReadOnlyDictionary<string, string>>();
 
     public IEnumerable<JiraBoard> Chosen => JiraBoards.Where(board => ChosenBoards.Contains(board.Key));
 
@@ -107,6 +115,11 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
     public const string GitHubSource = "GitHub";
     const string NotLoggedIn = "Ikke logget ind. Log ind under Indstillinger.";
     const int PageSize = 100;
+    const int DescriptionLength = 1500;
+    static readonly MarkdownPipeline SourcePositions = new MarkdownPipelineBuilder().UsePreciseSourceLocation().Build();
+    const string SprintName = "Sprint";
+    static readonly string[] CustomFieldNames = ["Story Points", "Reviewer", "Tester", "Kundenavn"];
+    static readonly IReadOnlyDictionary<string, string> DefaultFields = new Dictionary<string, string> { [SprintName] = "customfield_10020" };
     const int GitHubSearchLimit = 1000;
     static readonly IReadOnlyDictionary<string, string> NoColumns = new Dictionary<string, string>();
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
@@ -216,11 +229,28 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
         if (found.Count == 0)
             throw new InvalidOperationException("Jira gav ingen boards. Log ind igen, eller tjek dit token.");
         var chosen = Settings.ChosenBoards;
+        Dictionary<string, IReadOnlyDictionary<string, string>> jiraFields = new(Settings.JiraFields);
+        foreach (var site in sites)
+            jiraFields[site] = JiraFieldsOf(await get($"{site.TrimEnd('/')}/rest/api/3/field"));
         JiraBoard[] merged = [.. Merged(found, Settings.JiraBoards)];
         await Parallel.ForEachAsync(Enumerable.Range(0, merged.Length).Where(i => chosen.Contains(merged[i].Key)), async (i, _) =>
             merged[i] = Configured(merged[i], await get(ConfigurationUrl(merged[i]))));
-        Settings = Settings with { JiraBoards = merged };
+        Settings = Settings with { JiraBoards = merged, JiraFields = jiraFields };
     }
+
+    public static IReadOnlyDictionary<string, string> JiraFieldsOf(string json)
+    {
+        JsonObject[] fields = [.. (JsonNode.Parse(json) as JsonArray ?? []).OfType<JsonObject>()];
+        Dictionary<string, string> found = [];
+        if (fields.FirstOrDefault(field => (string?)field["schema"]?["custom"] == "com.pyxis.greenhopper.jira:gh-sprint")?["id"]?.ToString() is { } sprint)
+            found[SprintName] = sprint;
+        foreach (var name in CustomFieldNames)
+            if (fields.FirstOrDefault(field => (string?)field["name"] == name)?["id"]?.ToString() is { } id)
+                found[name] = id;
+        return found;
+    }
+
+    IReadOnlyDictionary<string, string> FieldsFor(string site) => Settings.JiraFields.GetValueOrDefault(site) ?? DefaultFields;
 
     public static IEnumerable<JiraBoard> Merged(IEnumerable<JiraBoard> found, IReadOnlyList<JiraBoard> known) =>
         found.Select(board => known.FirstOrDefault(other => other.Key == board.Key) is { } stored ? stored with { Name = board.Name } : board)
@@ -239,7 +269,7 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
         if (source == ConnectorSource.Login && await CheckLoginAsync(Jira) is null)
             throw new InvalidOperationException(NotLoggedIn);
         var results = await SearchJiraAsync(source, [.. searches.Select(search => (search.Board.Site, search.Jql!)).Distinct()]);
-        FeedItem[] items = [.. results.SelectMany(result => JiraItems(result.Text, result.Site, columns)).DistinctBy(item => item.Url)];
+        FeedItem[] items = [.. results.SelectMany(result => JiraItems(result.Text, result.Site, columns, FieldsFor(result.Site))).DistinctBy(item => item.Url)];
         await LookUpEpicsAsync(source, [.. TasksWithUnknownEpic(items).Where(task => !epicsOfTasks.ContainsKey(task.Url))]);
         return WithEpics(items, epicsOfTasks);
     }
@@ -266,23 +296,24 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
     async Task<IReadOnlyList<(string Site, string Text)>> SearchJiraAsync(ConnectorSource source, IReadOnlyList<(string Site, string Jql)> searches)
     {
         if (source != ConnectorSource.Login)
-            return [.. (await CallAllPagesAsync(Jira, [.. searches.Select(search => JiraSearch(search.Site, search.Jql))], NextJiraPage))
+            return [.. (await CallAllPagesAsync(Jira, [.. searches.Select(search => JiraSearch(search.Site, search.Jql, FieldsFor(search.Site).Values))], NextJiraPage))
                 .Select(result => ((string)result.Call.Arguments["cloudId"]!, result.Text))];
         Dictionary<string, Func<string, Task<string>>> readers = [];
         foreach (var site in searches.Select(search => search.Site).Distinct())
             readers[site] = await web.ReaderAsync(site);
         var pages = new IReadOnlyList<string>[searches.Count];
-        await Parallel.ForEachAsync(Enumerable.Range(0, searches.Count), async (i, _) => pages[i] = await PagesAsync(readers[searches[i].Site], searches[i].Site, searches[i].Jql));
+        var customFields = searches.Select(search => FieldsFor(search.Site).Values).ToArray();
+        await Parallel.ForEachAsync(Enumerable.Range(0, searches.Count), async (i, _) => pages[i] = await PagesAsync(readers[searches[i].Site], searches[i].Site, searches[i].Jql, customFields[i]));
         return [.. searches.Zip(pages).SelectMany(found => found.Second.Select(page => (found.First.Site, page)))];
     }
 
-    public static async Task<IReadOnlyList<string>> PagesAsync(Func<string, Task<string>> get, string site, string jql)
+    public static async Task<IReadOnlyList<string>> PagesAsync(Func<string, Task<string>> get, string site, string jql, IEnumerable<string> customFields)
     {
         List<string> pages = [];
         string? token = null;
         do
         {
-            var page = await get(SearchUrl(site, jql, token));
+            var page = await get(SearchUrl(site, jql, customFields, token));
             pages.Add(page);
             token = NextPageToken(page);
         }
@@ -349,8 +380,8 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
             : [];
     }
 
-    public static string SearchUrl(string site, string jql, string? pageToken = null) =>
-        $"{site.TrimEnd('/')}/rest/api/3/search/jql?jql={Uri.EscapeDataString(jql)}&fields=summary,status,updated,issuetype,parent&maxResults={PageSize}"
+    public static string SearchUrl(string site, string jql, IEnumerable<string> customFields, string? pageToken = null) =>
+        $"{site.TrimEnd('/')}/rest/api/3/search/jql?jql={Uri.EscapeDataString(jql)}&fields={string.Join(',', IssueFields.Concat(customFields))}&maxResults={PageSize}"
         + (pageToken is null ? "" : $"&nextPageToken={Uri.EscapeDataString(pageToken)}");
 
     public static string? BoardJql(JiraBoard board, IReadOnlyList<string> columns) =>
@@ -392,7 +423,7 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
             } ?? []).OfType<JsonObject>()
             .Select(site => (string?)site["url"]).OfType<string>()];
 
-    public static IEnumerable<FeedItem> JiraItems(string json, string site, IReadOnlyDictionary<string, string> columns) =>
+    public static IEnumerable<FeedItem> JiraItems(string json, string site, IReadOnlyDictionary<string, string> columns, IReadOnlyDictionary<string, string>? customFields = null) =>
         JiraIssues(json)
             .Select(issue => (Key: (string?)issue["key"], Fields: issue["fields"], Site: site))
             .Where(issue => issue.Key is not null)
@@ -404,7 +435,133 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
                 $"{issue.Site.TrimEnd('/')}/browse/{issue.Key}",
                 Updated: TimeOf(issue.Fields?["updated"]),
                 Kind: KindOf(issue.Fields?["issuetype"]),
-                Parent: ParentOf(issue.Fields?["parent"], issue.Site)));
+                Parent: ParentOf(issue.Fields?["parent"], issue.Site),
+                Details: DetailsOf(issue.Fields, customFields ?? DefaultFields)));
+
+    static IssueDetails? DetailsOf(JsonNode? fields, IReadOnlyDictionary<string, string> customFields)
+    {
+        IssueTag?[] tags =
+        [
+            Tag("Status", TextOf(fields?["status"])),
+            Tag("Prioritet", TextOf(fields?["priority"])),
+            .. CustomFieldNames.Select(name => Tag(name, customFields.GetValueOrDefault(name) is { } id ? TextOf(fields?[id]) : null)),
+            Tag("Time tracking", TimeTrackingOf(fields?["timetracking"])),
+            Tag("Due date", DateOf(fields?["duedate"])),
+            Tag("Labels", TextOf(fields?["labels"])),
+            Tag("Komponent", TextOf(fields?["components"])),
+            Tag("Oprettet", DateOf(fields?["created"])),
+        ];
+        var details = new IssueDetails(SprintOf(fields), [.. tags.OfType<IssueTag>()], DescriptionOf(fields?["description"]));
+        return details is { Sprint: null, Tags.Count: 0, Description: "" } ? null : details;
+    }
+
+    static IssueTag? Tag(string key, string? value) => string.IsNullOrWhiteSpace(value) ? null : new(key, value);
+
+    static string? TextOf(JsonNode? value) => value switch
+    {
+        JsonArray values => values.Select(TextOf).OfType<string>().ToArray() is { Length: > 0 } texts ? string.Join(", ", texts) : null,
+        JsonObject item => (string?)item["displayName"] ?? (string?)item["value"] ?? (string?)item["name"],
+        JsonValue number when number.TryGetValue(out double amount) => amount.ToString(CultureInfo.CurrentCulture),
+        JsonValue text when text.TryGetValue(out string? words) => words,
+        _ => null,
+    };
+
+    static string? DateOf(JsonNode? date) => TimeOf(date)?.ToLocalTime().ToString("d. MMM", CultureInfo.CurrentCulture);
+
+    static string? TimeTrackingOf(JsonNode? tracking) =>
+        string.Join(" · ", new[] { (Field: "originalEstimate", Label: "estimeret"), (Field: "remainingEstimate", Label: "tilbage"), (Field: "timeSpent", Label: "brugt") }
+            .Select(part => (string?)tracking?[part.Field] is { } time ? $"{time} {part.Label}" : null).OfType<string>()) is { Length: > 0 } text ? text : null;
+
+    static string? SprintOf(JsonNode? fields)
+    {
+        var sprints = (fields as JsonObject)?.Select(field => field.Value).OfType<JsonArray>()
+            .FirstOrDefault(values => values.OfType<JsonObject>().Any(value => value["boardId"] is not null && value["state"] is not null))?.OfType<JsonObject>().ToArray() ?? [];
+        if ((sprints.FirstOrDefault(sprint => (string?)sprint["state"] == "active") ?? sprints.LastOrDefault()) is not { } sprint)
+            return null;
+        return (string?)sprint["state"] == "active" && TimeOf(sprint["endDate"]) is { } end
+            ? $"{(string?)sprint["name"]} · slutter {end.ToLocalTime().ToString("d. MMM", CultureInfo.CurrentCulture)}"
+            : (string?)sprint["name"];
+    }
+
+    static string DescriptionOf(JsonNode? description)
+    {
+        var markdown = WithoutImages(description switch
+        {
+            JsonValue value when value.TryGetValue(out string? text) => text,
+            JsonObject document => MarkdownOf(document),
+            _ => "",
+        }).Trim();
+        if (markdown.Length <= DescriptionLength)
+            return markdown;
+        var cut = markdown[..DescriptionLength];
+        return $"{(cut.LastIndexOfAny([' ', '\n', '\r', '\t']) is > 0 and var space ? cut[..space] : cut).TrimEnd()} …";
+    }
+
+    static string WithoutImages(string markdown) =>
+        Markdown.Parse(markdown, SourcePositions).Descendants<LinkInline>().Where(link => link.IsImage && !InsideImage(link)).Reverse()
+            .Aggregate(markdown, (text, image) => text.Remove(image.Span.Start, image.Span.Length));
+
+    static bool InsideImage(Inline inline) => inline.Parent is { } parent && (parent is LinkInline { IsImage: true } || InsideImage(parent));
+
+    static string MarkdownOf(JsonNode? node) => node is not JsonObject item ? "" : (string?)item["type"] switch
+    {
+        "text" => MarkedOf(item),
+        "hardBreak" => "  \n",
+        "paragraph" => $"{ChildrenOf(item)}\n\n",
+        "heading" => $"{new string('#', Math.Clamp((int?)item["attrs"]?["level"] ?? 1, 1, 6))} {ChildrenOf(item)}\n\n",
+        "bulletList" or "taskList" or "decisionList" => $"{string.Concat(ItemsOf(item).Select(text => $"{Nested("- ", text)}\n"))}\n",
+        "orderedList" => $"{string.Concat(ItemsOf(item).Select((text, index) => $"{Nested($"{StartOf(item) + index}. ", text)}\n"))}\n",
+        "codeBlock" => $"```\n{ChildrenOf(item)}\n```\n\n",
+        "blockquote" => $"> {ChildrenOf(item).Trim().Replace("\n", "\n> ")}\n\n",
+        "rule" => "---\n\n",
+        "inlineCard" => (string?)item["attrs"]?["url"] ?? "",
+        "blockCard" or "embedCard" => $"{(string?)item["attrs"]?["url"]}\n\n",
+        "date" => DayOf(item["attrs"]?["timestamp"]),
+        "mention" or "emoji" or "status" => (string?)item["attrs"]?["text"] ?? (string?)item["attrs"]?["shortName"] ?? "",
+        _ => ChildrenOf(item),
+    };
+
+    static int StartOf(JsonObject list) => int.TryParse(list["attrs"]?["order"]?.ToString(), out var order) ? order : 1;
+
+    static string DayOf(JsonNode? timestamp) =>
+        long.TryParse(timestamp?.ToString(), out var stamp) && stamp >= DateTimeOffset.MinValue.ToUnixTimeMilliseconds() && stamp <= DateTimeOffset.MaxValue.ToUnixTimeMilliseconds()
+            ? DateTimeOffset.FromUnixTimeMilliseconds(stamp).ToString("d. MMM", CultureInfo.CurrentCulture)
+            : "";
+
+    static string Nested(string marker, string text) => $"{marker}{text.Replace("\n", $"\n{new string(' ', marker.Length)}")}";
+
+    static string MarkedOf(JsonObject item)
+    {
+        var text = (string?)item["text"] ?? "";
+        var (start, end) = (text.Length - text.TrimStart().Length, text.TrimEnd().Length);
+        if (start >= end)
+            return text;
+        var marked = (item["marks"] as JsonArray ?? []).OfType<JsonObject>().OrderBy(mark => (string?)mark["type"] == "link").Aggregate(text[start..end], (inner, mark) => (string?)mark["type"] switch
+        {
+            "strong" => $"**{inner}**",
+            "em" => $"*{inner}*",
+            "code" => $"`{inner}`",
+            "link" => $"[{inner}]({(string?)mark["attrs"]?["href"]})",
+            _ => inner,
+        });
+        return $"{text[..start]}{marked}{text[end..]}";
+    }
+
+    static string ChildrenOf(JsonObject item) => string.Concat((item["content"] as JsonArray ?? []).Select(MarkdownOf));
+
+    static IEnumerable<string> ItemsOf(JsonObject list)
+    {
+        var items = new List<string>();
+        foreach (var entry in (list["content"] as JsonArray ?? []).OfType<JsonObject>())
+        {
+            var nested = (string?)entry["type"] == "taskList";
+            if (nested && items.Count > 0)
+                items[^1] += $"\n{MarkdownOf(entry).Trim()}";
+            else
+                items.Add((nested ? MarkdownOf(entry) : ChildrenOf(entry)).Trim());
+        }
+        return items;
+    }
 
     static IssueKind KindOf(JsonNode? type) =>
         (int?)type?["hierarchyLevel"] == 1 ? IssueKind.Epic
@@ -438,12 +595,15 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
             _ => null,
         } ?? []).OfType<JsonObject>();
 
-    static ToolCall JiraSearch(string site, string jql) => new("searchJiraIssuesUsingJql", new JsonObject
+    static readonly string[] IssueFields = ["summary", "status", "updated", "issuetype", "parent", "priority", "labels", "components", "created", "description", "duedate", "timetracking"];
+
+    public static ToolCall JiraSearch(string site, string jql, IEnumerable<string> customFields) => new("searchJiraIssuesUsingJql", new JsonObject
     {
         ["cloudId"] = site,
         ["jql"] = jql,
         ["maxResults"] = PageSize,
-        ["fields"] = new JsonArray("summary", "status", "updated", "issuetype", "parent"),
+        ["fields"] = new JsonArray([.. IssueFields.Concat(customFields).Select(field => (JsonNode)field)]),
+        ["responseContentFormat"] = "markdown",
     });
 
     static ToolCall GitHubSearch(string tool, string query) => new(tool, new JsonObject
@@ -556,7 +716,7 @@ public sealed class Feed(IReadOnlyList<(string Source, Func<Task<IReadOnlyList<F
         }
     }
 
-    static FeedRow RowOf(FeedItem item, DateTimeOffset now) => new(item.Id, item.Title, item.Url, item.DetailAt(now), item.Kind);
+    static FeedRow RowOf(FeedItem item, DateTimeOffset now) => new(item.Id, item.Title, item.Url, item.DetailAt(now), item.Kind, Details: item.Details);
 
     static FeedRow RowOf(IssueRef issue) => new(issue.Key, issue.Title, issue.Url, "", issue.Kind);
 

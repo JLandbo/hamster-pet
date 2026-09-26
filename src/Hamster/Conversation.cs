@@ -12,7 +12,7 @@ public sealed class Conversation : IClaudeListener
     public static readonly TimeSpan AnswerShownTime = TimeSpan.FromSeconds(30);
 
     readonly IClaudeClient claude;
-    JsonFile<SavedChats> store;
+    JsonFile<SavedChats>? store;
     readonly HashSet<string> webTools = [];
     readonly Dictionary<string, ChatItem> waiting = [];
     readonly Dictionary<string, ChatItem> toolChats = [];
@@ -20,10 +20,10 @@ public sealed class Conversation : IClaudeListener
     ChatItem? turn, lastAnswered;
     bool turnRunning, autonomous, stopping, restartWhenIdle;
 
-    public Conversation(IClaudeClient claude, JsonFile<SavedChats> store)
+    public Conversation(IClaudeClient claude, JsonFile<SavedChats>? store)
     {
         (this.claude, this.store) = (claude, store);
-        Usage = Show(store.Load()).Usage;
+        Usage = Show(store?.Load() ?? SavedChats.Empty).Usage;
     }
 
     public event Action? Changed;
@@ -33,6 +33,7 @@ public sealed class Conversation : IClaudeListener
     public event Action<string>? PermissionModeChanged;
 
     public ObservableCollection<ChatItem> Chats { get; } = [];
+    public bool IsTemporary => store is null;
     public decimal Cost { get; private set; }
     public Usage? Usage { get; private set; }
     public int BackgroundTasks { get; private set; }
@@ -111,11 +112,11 @@ public sealed class Conversation : IClaudeListener
 
     public void Reset() => Reset(SavedChats.Empty);
 
-    public void Switch(JsonFile<SavedChats> target)
+    public void Switch(Func<JsonFile<SavedChats>?> target)
     {
         Save();
-        store = target;
-        Reset(target.Load());
+        store = target();
+        Reset(store?.Load() ?? SavedChats.Empty);
     }
 
     void Reset(SavedChats saved)
@@ -327,5 +328,5 @@ public sealed class Conversation : IClaudeListener
         chat.Status = result.IsError ? ChatStatus.Error : ChatStatus.Done;
     }
 
-    public void Save() => store.Save(new SavedChats(sessionId, [.. Chats.Where(chat => chat.Status != ChatStatus.Busy).Select(chat => chat.ToRecord())], Cost, Usage));
+    public void Save() => store?.Save(new SavedChats(sessionId, [.. Chats.Where(chat => chat.Status != ChatStatus.Busy).Select(chat => chat.ToRecord())], Cost, Usage));
 }

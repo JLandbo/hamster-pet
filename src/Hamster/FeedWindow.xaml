@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Hamster"
-        Title="Opgaver" Width="540" MinWidth="360" MinHeight="140" SizeToContent="Height" MaxHeight="660"
+        Title="Opgaver" Width="1080" MinWidth="360" MinHeight="140" SizeToContent="Height" MaxHeight="660"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="CanResize"
         ShowInTaskbar="False" WindowStartupLocation="CenterOwner" UseLayoutRounding="True"
         FontFamily="{StaticResource UiFont}" FontSize="13" ContentRendered="Window_ContentRendered">
@@ -12,6 +12,40 @@
     </WindowChrome.WindowChrome>
 
     <Window.Resources>
+        <Style TargetType="ScrollBar" BasedOn="{StaticResource {x:Type ScrollBar}}">
+            <Setter Property="Margin" Value="5,0,0,0" />
+        </Style>
+        <BooleanToVisibilityConverter x:Key="VisibleWhenTrue" />
+        <local:MarkdownConverter x:Key="Markdown" />
+        <Style TargetType="FlowDocument" BasedOn="{StaticResource {x:Type FlowDocument}}">
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+
+        <Style x:Key="ExpandButton" TargetType="ToggleButton">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+            <Setter Property="ToolTip" Value="Vis detaljer" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="Transparent" Padding="6,2">
+                            <TextBlock x:Name="Chevron" Text="&#xE70D;" FontFamily="{StaticResource IconFont}" FontSize="10" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Chevron" Property="Text" Value="&#xE70E;" />
+                                <Setter Property="Foreground" Value="{DynamicResource Text}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource Text}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Geometry x:Key="JiraLogo">M20 4h-9v1.5a2.5 2.5 0 0 0 2.5 2.5h1.5a1 1 0 0 1 1 1v1.5a2.5 2.5 0 0 0 2.5 2.5h1.5v-9 M15 8h-8v1.5a2.5 2.5 0 0 0 2.5 2.5h1.5a1 1 0 0 1 1 1v1.5a2.5 2.5 0 0 0 2.5 2.5h1.5v-8a1 1 0 0 0 -1 -1 M11 12h-8v1.5a2.5 2.5 0 0 0 2.5 2.5h1.5a1 1 0 0 1 1 1v1.5a2.5 2.5 0 0 0 2.5 2.5h1.5v-8a1 1 0 0 0 -1 -1</Geometry>
         <Geometry x:Key="GitHubLogo">M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5</Geometry>
 
@@ -26,7 +60,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Back" Property="Background" Value="#0FFFFFFF" />
+                                <Setter TargetName="Back" Property="Background" Value="{DynamicResource Hover}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -35,90 +69,135 @@
         </Style>
 
         <DataTemplate x:Key="RowTemplate" DataType="{x:Type local:FeedRow}">
-            <Button x:Name="Row" Click="Row_Click" ToolTip="{Binding Url}" Style="{StaticResource RowButton}">
+            <StackPanel x:Name="Row">
+            <Button Click="Row_Click" ToolTip="{Binding Url}" Style="{StaticResource RowButton}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" MinWidth="74" SharedSizeGroup="Id" />
                         <ColumnDefinition />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <Border x:Name="Chip" CornerRadius="5" Margin="0,0,10,0" HorizontalAlignment="Left" VerticalAlignment="Center">
-                        <TextBlock x:Name="Key" Text="{Binding Id}" Foreground="#6FA8FF" FontFamily="Cascadia Mono, Consolas" FontSize="11" />
+                        <TextBlock x:Name="Key" Text="{Binding Id}" Foreground="{DynamicResource Link}" FontFamily="Cascadia Mono, Consolas" FontSize="11" />
                     </Border>
-                    <TextBlock x:Name="Title" Grid.Column="1" Text="{Binding Title}" Foreground="{StaticResource Text}"
+                    <TextBlock x:Name="Title" Grid.Column="1" Text="{Binding Title}" Foreground="{DynamicResource Text}"
                                TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="2" Text="{Binding Detail}" Foreground="{StaticResource Muted}" FontSize="11"
+                    <TextBlock Grid.Column="2" Text="{Binding Detail}" Foreground="{DynamicResource Muted}" FontSize="11"
                                Margin="10,0,0,0" VerticalAlignment="Center" />
+                    <ToggleButton x:Name="Expand" Grid.Column="3" Style="{StaticResource ExpandButton}" Margin="6,0,0,0" Loaded="Expand_Loaded" Click="Expand_Click" />
                 </Grid>
             </Button>
+            <Border Margin="10,0,6,6" Padding="12,8,12,10" CornerRadius="8" Background="{DynamicResource Hover}"
+                    Visibility="{Binding IsChecked, ElementName=Expand, Converter={StaticResource VisibleWhenTrue}}">
+                <StackPanel>
+                    <StackPanel x:Name="SprintLine" Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="&#xE916;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource Attention}" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBlock Text="Sprint" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,0,6,0" />
+                        <TextBlock Text="{Binding Details.Sprint}" Foreground="{DynamicResource Text}" FontSize="12" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <ItemsControl ItemsSource="{Binding Details.Tags}" Margin="0,0,0,6">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type local:IssueTag}">
+                                <Border Margin="0,0,5,5" Padding="7,1" CornerRadius="6" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+                                    <TextBlock FontSize="11">
+                                        <Run Text="{Binding Key, Mode=OneWay}" Foreground="{DynamicResource Muted}" />
+                                        <Run Text="{Binding Value, Mode=OneWay}" Foreground="{DynamicResource Text}" />
+                                    </TextBlock>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <FlowDocumentScrollViewer x:Name="Description" VerticalScrollBarVisibility="Disabled" FocusVisualStyle="{x:Null}" Foreground="{DynamicResource Muted}"
+                                              Hyperlink.RequestNavigate="Link_RequestNavigate" RequestBringIntoView="Description_RequestBringIntoView" />
+                </StackPanel>
+            </Border>
+            </StackPanel>
             <DataTemplate.Triggers>
                 <DataTrigger Binding="{Binding Kind}" Value="Epic">
-                    <Setter TargetName="Chip" Property="Background" Value="#59904EE2" />
+                    <Setter TargetName="Chip" Property="Background" Value="{DynamicResource Epic}" />
                     <Setter TargetName="Chip" Property="Padding" Value="6,1" />
-                    <Setter TargetName="Key" Property="Foreground" Value="#E6D6FF" />
+                    <Setter TargetName="Key" Property="Foreground" Value="{DynamicResource EpicText}" />
                     <Setter TargetName="Title" Property="FontWeight" Value="SemiBold" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Kind}" Value="Task">
-                    <Setter TargetName="Chip" Property="Background" Value="#474BADE8" />
+                    <Setter TargetName="Chip" Property="Background" Value="{DynamicResource Task}" />
                     <Setter TargetName="Chip" Property="Padding" Value="6,1" />
-                    <Setter TargetName="Key" Property="Foreground" Value="#D6EEFF" />
+                    <Setter TargetName="Key" Property="Foreground" Value="{DynamicResource TaskText}" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Kind}" Value="SubTask">
-                    <Setter TargetName="Chip" Property="Background" Value="#472EC4B6" />
+                    <Setter TargetName="Chip" Property="Background" Value="{DynamicResource SubTask}" />
                     <Setter TargetName="Chip" Property="Padding" Value="6,1" />
-                    <Setter TargetName="Key" Property="Foreground" Value="#D2FFF9" />
+                    <Setter TargetName="Key" Property="Foreground" Value="{DynamicResource SubTaskText}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Details}" Value="{x:Null}">
+                    <Setter TargetName="Expand" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Details.Sprint}" Value="{x:Null}">
+                    <Setter TargetName="SprintLine" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <Trigger SourceName="Expand" Property="IsChecked" Value="True">
+                    <Setter TargetName="Description" Property="Document" Value="{Binding Details.Description, Converter={StaticResource Markdown}}" />
+                </Trigger>
+                <DataTrigger Binding="{Binding Details.Description}" Value="">
+                    <Setter TargetName="Description" Property="Visibility" Value="Collapsed" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Depth}" Value="1">
                     <Setter TargetName="Row" Property="Margin" Value="22,0,0,0" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Muted}" Value="True">
-                    <Setter TargetName="Title" Property="Foreground" Value="{StaticResource Muted}" />
+                    <Setter TargetName="Title" Property="Foreground" Value="{DynamicResource Muted}" />
                     <Setter TargetName="Chip" Property="Opacity" Value="0.6" />
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
     </Window.Resources>
 
-    <Border Margin="12" Padding="18,16,18,16" CornerRadius="16" Background="{StaticResource Surface}"
-            BorderBrush="{StaticResource Edge}" BorderThickness="1" Effect="{StaticResource Shadow}"
+    <Border Margin="12" Padding="18,16,18,16" CornerRadius="16" Background="{DynamicResource Surface}"
+            BorderBrush="{DynamicResource Edge}" BorderThickness="1" Effect="{StaticResource Shadow}"
             MouseLeftButtonDown="Border_MouseLeftButtonDown">
         <DockPanel>
             <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
-                <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="Luk" Click="Close_Click" Style="{StaticResource SmallIconButton}" FontSize="10" VerticalAlignment="Center" />
+                <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="Luk" Click="Close_Click" Style="{StaticResource SmallIconButton}" FontSize="12" VerticalAlignment="Center" />
                 <Button x:Name="RefreshButton" DockPanel.Dock="Right" Content="&#xE72C;" ToolTip="Hent igen" Click="Refresh_Click"
                         Style="{StaticResource SmallIconButton}" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
-                <TextBlock Text="Opgaver" Foreground="{StaticResource Text}" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center" />
-                <TextBlock x:Name="UpdatedText" Foreground="{StaticResource Muted}" FontSize="11" Margin="10,3,0,0" VerticalAlignment="Center" />
+                <TextBlock Text="Opgaver" Foreground="{DynamicResource Text}" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <TextBlock x:Name="UpdatedText" Foreground="{DynamicResource Muted}" FontSize="11" Margin="10,3,0,0" VerticalAlignment="Center" />
             </DockPanel>
 
-            <TextBlock x:Name="EmptyText" DockPanel.Dock="Top" Text="Ingen opgaver" Foreground="{StaticResource Muted}" Visibility="Collapsed" />
+            <TextBlock x:Name="EmptyText" DockPanel.Dock="Top" Text="Ingen opgaver" Foreground="{DynamicResource Muted}" Visibility="Collapsed" />
 
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+            <ScrollViewer x:Name="List" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" PreviewMouseWheel="List_PreviewMouseWheel">
                 <ItemsControl x:Name="SourceList" Grid.IsSharedSizeScope="True">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type local:FeedSource}">
-                            <Border x:Name="Separator" BorderBrush="{StaticResource Edge}" BorderThickness="0,1,0,0" Margin="0,14,0,0" Padding="0,12,0,0">
+                            <Border x:Name="Separator" BorderBrush="{DynamicResource Edge}" BorderThickness="0,1,0,0" Margin="0,14,0,0" Padding="0,12,0,0">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                         <Viewbox Width="13" Height="13" Margin="0,0,6,0" VerticalAlignment="Center">
                                             <Canvas Width="24" Height="24">
-                                                <Path x:Name="Logo" Data="{StaticResource JiraLogo}" Stroke="{StaticResource Muted}" StrokeThickness="2"
+                                                <Path x:Name="Logo" Data="{StaticResource JiraLogo}" Stroke="{DynamicResource Muted}" StrokeThickness="2"
                                                       StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
                                             </Canvas>
                                         </Viewbox>
-                                        <TextBlock Text="{Binding Title}" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding Title}" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" />
                                     </StackPanel>
-                                    <TextBlock x:Name="Error" Text="{Binding Error}" Foreground="#FF6B6B" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock x:Name="Error" Text="{Binding Error}" Foreground="{DynamicResource Error}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <ItemsControl ItemsSource="{Binding Groups}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="{x:Type local:FeedGroup}">
                                                 <StackPanel>
-                                                    <TextBlock Text="{Binding Title}" Foreground="{StaticResource Attention}" FontSize="11" Margin="0,8,0,4" />
+                                                    <TextBlock Text="{Binding Title}" Foreground="{DynamicResource Attention}" FontSize="11" Margin="0,8,0,4" />
                                                     <ItemsControl ItemsSource="{Binding Boxes}">
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate DataType="{x:Type local:FeedBox}">
                                                                 <Border x:Name="Box" Margin="0,0,0,6" Padding="4,2,4,2" CornerRadius="10" BorderThickness="1"
-                                                                        BorderBrush="#1FFFFFFF" Background="#08FFFFFF">
+                                                                        BorderBrush="{DynamicResource BoxEdge}" Background="{DynamicResource Box}">
                                                                     <StackPanel>
                                                                         <ContentControl x:Name="Header" Content="{Binding Epic}" ContentTemplate="{StaticResource RowTemplate}" Focusable="False" />
                                                                         <ItemsControl x:Name="Tasks" ItemsSource="{Binding Rows}" ItemTemplate="{StaticResource RowTemplate}" Margin="18,0,0,0" />

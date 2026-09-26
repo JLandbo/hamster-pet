@@ -7,7 +7,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
@@ -31,9 +30,9 @@ public partial class MainWindow : Window
     static readonly TimeSpan ClickTime = TimeSpan.FromMilliseconds(300);
     static readonly TimeSpan ChatsIdleTime = TimeSpan.FromSeconds(60);
     static readonly TimeSpan ToolbarIdleTime = TimeSpan.FromSeconds(2);
-    static readonly Brush FeedBackground = new SolidColorBrush(Color.FromArgb(0x24, 0xF5, 0xC5, 0x42));
     const string CollapseIcon = "\uE70D";
     const string SwitchWhenIdle = "Stop Claude, eller vent til den er færdig, for at skifte";
+    const string OnlyInFirstHamster = "Kun i den første hamster";
     const string ExpandIcon = "\uE70E";
     const string PlayIcon = "\uE768";
     const string PauseIcon = "\uE769";
@@ -41,12 +40,18 @@ public partial class MainWindow : Window
     readonly ClaudeClient claude;
     readonly Conversation conversation;
     readonly JsonFile<Placement> placementFile;
+    readonly JsonFile<WindowSize?> settingsSize;
+    readonly JsonFile<WindowSize?> feedSize;
     readonly string instructionsFile;
     readonly string data;
+    readonly ChatOwner owner = new();
+    readonly ChatOwner settingsOwner = new();
+    readonly bool chatOnly;
     readonly List<string> attachedFiles = [];
     readonly List<ImageAttachment> attachedImages = [];
     readonly CharacterLibrary characters;
     readonly PromptLibrary prompts;
+    readonly ThemeLibrary themes;
     readonly JsonFile<PetSettings> petFile;
     readonly Connectors connectors;
     readonly Subscriptions subscriptions;
@@ -79,19 +84,25 @@ public partial class MainWindow : Window
         InitializeComponent();
         (Width, Height) = (SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
         data = DataFolder.Current;
+        var settingsFile = Path.Combine(data, "settings.json");
+        chatOnly = !settingsOwner.TryOwn(settingsFile);
         instructionsFile = Path.Combine(data, "instructions.txt");
         claude = new ClaudeClient(Path.Combine(data, "workspace"), instructionsFile,
-            new JsonFile<ClaudeSettings>(Path.Combine(data, "settings.json"), ClaudeSettings.Default));
-        SavedChats.Migrate(data, claude.Settings.WorkingDirectory);
-        conversation = new Conversation(claude, new JsonFile<SavedChats>(SavedChats.FileFor(data, claude.Settings.WorkingDirectory), SavedChats.Empty));
-        placementFile = new JsonFile<Placement>(Path.Combine(data, "placement.json"), DefaultPlacement);
+            new JsonFile<ClaudeSettings>(settingsFile, ClaudeSettings.Default, chatOnly));
+        if (!chatOnly)
+            SavedChats.Migrate(data, claude.Settings.WorkingDirectory);
+        conversation = new Conversation(claude, StoreFor(claude.Settings.WorkingDirectory));
+        placementFile = new JsonFile<Placement>(Path.Combine(data, "placement.json"), DefaultPlacement, chatOnly);
         placement = placementFile.Load();
+        settingsSize = new JsonFile<WindowSize?>(Path.Combine(data, "settings-window.json"), null, chatOnly);
+        feedSize = new JsonFile<WindowSize?>(Path.Combine(data, "feed-window.json"), null, chatOnly);
         characters = new CharacterLibrary(Path.Combine(data, "Characters"));
         prompts = new PromptLibrary(Path.Combine(data, "Prompts"));
-        petFile = new JsonFile<PetSettings>(Path.Combine(data, "pet.json"), PetSettings.Default);
+        themes = new ThemeLibrary(Path.Combine(data, "Themes"));
+        petFile = new JsonFile<PetSettings>(Path.Combine(data, "pet.json"), PetSettings.Default, chatOnly);
         connectors = new Connectors(claude, conversation.Restart, () => conversation.RestartPending);
         subscriptions = new Subscriptions(connectors, new ClaudeFetcher(Path.Combine(data, "workspace")), new WebSession(Path.Combine(data, "WebLogin")),
-            new JsonFile<SubscriptionSettings>(Path.Combine(data, "subscriptions.json"), SubscriptionSettings.Empty));
+            new JsonFile<SubscriptionSettings>(Path.Combine(data, "subscriptions.json"), SubscriptionSettings.Empty, chatOnly));
         feed = new Feed([(Subscriptions.JiraSource, subscriptions.FetchJiraAsync), (Subscriptions.GitHubSource, subscriptions.FetchGitHubAsync)]);
         feed.Changed += news =>
         {
@@ -107,15 +118,20 @@ public partial class MainWindow : Window
         Choose(EffortButton, claude.Settings.Effort);
         Choose(ModeButton, claude.Settings.PermissionMode);
         ToggleChats.Content = CollapseIcon;
+        if (chatOnly)
+            foreach (var button in new[] { MoreButton, FeedButton })
+                (button.IsEnabled, button.ToolTip, button.Opacity) = (false, OnlyInFirstHamster, 0.4);
         ShowFolder();
         ChatList.ItemsSource = conversation.Chats;
         conversation.Changed += Conversation_Changed;
         conversation.Started += () =>
         {
+            if (chatOnly)
+                return;
             _ = CheckConnectorsAsync();
             _ = feed.RefreshAsync();
         };
-        conversation.PermissionModeChanged += mode => claude.Remember(claude.Settings with { PermissionMode = Choose(ModeButton, mode) });
+        conversation.PermissionModeChanged += mode => claude.Settings = claude.Settings with { PermissionMode = Choose(ModeButton, mode) };
         timer.Tick += (_, _) =>
         {
             UpdateChatList();
@@ -127,7 +143,9 @@ public partial class MainWindow : Window
             foreach (var chat in conversation.Chats)
                 chat.RefreshElapsed();
         };
-        UseCharacter(LoadCharacter(petFile.Load().CharacterName));
+        var pet = petFile.Load();
+        ((App)Application.Current).Use(themes.Find(pet.ThemeName));
+        UseCharacter(LoadCharacter(pet.CharacterName));
     }
 
     static Placement DefaultPlacement => new(SystemParameters.WorkArea.Right, SystemParameters.WorkArea.Bottom, DefaultWidth, DefaultChatHeight);
@@ -191,9 +209,23 @@ public partial class MainWindow : Window
             settings.Activate();
             return;
         }
-        settings = new SettingsWindow(characters, character.Name, ChooseCharacter, connectors, subscriptions) { Owner = this };
-        settings.Closed += (_, _) => _ = CheckConnectorsAsync();
-        settings.Show();
+        var window = settings = new SettingsWindow(themes, petFile.Load().ThemeName, ChooseTheme, characters, character.Name, ChooseCharacter, connectors, subscriptions) { Owner = this };
+        RememberSize(window, settingsSize);
+        window.Closed += (_, _) => _ = CheckConnectorsAsync();
+        window.Show();
+    }
+
+    void RememberSize(Window window, JsonFile<WindowSize?> file)
+    {
+        var size = (file.Load() ?? new WindowSize(window.Width, window.Height)).FitIn(ScreenArea.Of(Pet));
+        window.Width = size.Width;
+        if (!double.IsNaN(size.Height))
+            (window.SizeToContent, window.MaxHeight, window.Height) = (SizeToContent.Manual, double.PositiveInfinity, size.Height);
+        window.Closed += (_, _) =>
+        {
+            if (window.WindowState == WindowState.Normal)
+                file.Save(new WindowSize(window.ActualWidth, window.ActualHeight));
+        };
     }
 
     async Task CheckConnectorsAsync()
@@ -227,9 +259,12 @@ public partial class MainWindow : Window
     {
         var any = feed.Items.Count > 0;
         FeedCount.Text = feed.Items.Count.ToString(CultureInfo.CurrentCulture);
-        FeedBadge.Background = (Brush)FindResource(any ? "Attention" : "Muted");
-        FeedButton.Foreground = (Brush)FindResource(any ? "Attention" : "Muted");
-        FeedButton.Background = any ? FeedBackground : Brushes.Transparent;
+        FeedBadge.SetResourceReference(Border.BackgroundProperty, any ? "Attention" : "Muted");
+        FeedButton.SetResourceReference(ForegroundProperty, any ? "Attention" : "Muted");
+        if (any)
+            FeedButton.SetResourceReference(BackgroundProperty, "AttentionSoft");
+        else
+            FeedButton.ClearValue(BackgroundProperty);
         feedWindow?.ShowFeed();
         if (Status.Mood != mood)
             Animate();
@@ -243,6 +278,7 @@ public partial class MainWindow : Window
             return;
         }
         feedWindow = new FeedWindow(feed, subscriptions) { Owner = this };
+        RememberSize(feedWindow, feedSize);
         feedWindow.Closed += (_, _) => feedWindow = null;
         feedWindow.Show();
     }
@@ -279,8 +315,14 @@ public partial class MainWindow : Window
 
     void ChooseCharacter(Character chosen)
     {
-        petFile.Save(new PetSettings(chosen.Name));
+        petFile.Save(petFile.Load() with { CharacterName = chosen.Name });
         UseCharacter(chosen);
+    }
+
+    void ChooseTheme(Theme chosen)
+    {
+        petFile.Save(petFile.Load() with { ThemeName = chosen.Name });
+        ((App)Application.Current).Use(chosen);
     }
 
     void Touch()
@@ -320,7 +362,8 @@ public partial class MainWindow : Window
         ScrollToNewest();
         _ = conversation.StartAsync();
         _ = StartMusicAsync();
-        feedTimer.Start();
+        if (!chatOnly)
+            feedTimer.Start();
     }
 
     Placement OnScreen(Placement saved)
@@ -372,6 +415,8 @@ public partial class MainWindow : Window
     void Window_Closed(object sender, EventArgs e)
     {
         conversation.Save();
+        owner.Dispose();
+        settingsOwner.Dispose();
         claude.End();
     }
 
@@ -493,7 +538,8 @@ public partial class MainWindow : Window
     void ResizeGrip_DragDelta(object sender, DragDeltaEventArgs e)
     {
         var moved = resizeStart.Mouse - Mouse.GetPosition(this);
-        Apply(placement with { Width = resizeStart.Width + moved.X, ChatHeight = resizeStart.ChatHeight + moved.Y });
+        var width = resizeStart.Width + moved.X;
+        Apply(sender == WidthGrip ? placement with { Width = width } : placement with { Width = width, ChatHeight = resizeStart.ChatHeight + moved.Y });
         FreezeHiddenChats();
     }
 
@@ -714,6 +760,8 @@ public partial class MainWindow : Window
         ShowFolder();
     }
 
+    void NewHamster_Click(object sender, RoutedEventArgs e) => Open(new ProcessStartInfo(Environment.ProcessPath!), "Kunne ikke starte en ny hamster.");
+
     void Chat_Click(object sender, RoutedEventArgs e)
     {
         UseFolder(null);
@@ -722,19 +770,30 @@ public partial class MainWindow : Window
 
     void UseFolder(string? folder)
     {
-        if (folder == claude.Settings.WorkingDirectory)
+        if (folder == claude.Settings.WorkingDirectory || !CanSwitch)
             return;
         claude.Settings = claude.Settings with { WorkingDirectory = folder, LastFolder = folder ?? claude.Settings.WorkingDirectory };
-        conversation.Switch(new JsonFile<SavedChats>(SavedChats.FileFor(data, folder), SavedChats.Empty));
+        conversation.Switch(() => StoreFor(folder));
     }
+
+    bool CanSwitch => !conversation.IsBusy && conversation.BackgroundTasks == 0;
+
+    JsonFile<SavedChats>? StoreFor(string? folder) =>
+        SavedChats.FileFor(data, folder) is var file && owner.TryOwn(file) ? new JsonFile<SavedChats>(file, SavedChats.Empty) : null;
 
     void ShowFolder()
     {
         var folder = claude.Settings.WorkingDirectory;
-        var idle = !conversation.IsBusy && conversation.BackgroundTasks == 0;
+        var idle = CanSwitch;
         (ChatButton.IsChecked, FolderButton.IsChecked, ChatButton.IsEnabled, FolderButton.IsEnabled) = (folder is null, folder is not null, idle, idle);
         (ChatButton.ToolTip, FolderButton.ToolTip) = idle ? ("Chat uden mappe", folder ?? "Vælg en mappe, Claude skal arbejde i") : (SwitchWhenIdle, SwitchWhenIdle);
+        TemporaryBanner.Visibility = conversation.IsTemporary ? Visibility.Visible : Visibility.Collapsed;
+        ShowInputHint();
     }
+
+    void Input_TextChanged(object sender, TextChangedEventArgs e) => ShowInputHint();
+
+    void ShowInputHint() => InputHint.Visibility = conversation.IsTemporary && Input.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
 
     void Instructions_Click(object sender, RoutedEventArgs e)
     {
@@ -839,14 +898,23 @@ public partial class MainWindow : Window
         closedByItsButton = ((ContextMenu)sender).PlacementTarget is Button button && Mouse.LeftButton == MouseButtonState.Pressed
             && new Rect(button.RenderSize).Contains(Mouse.GetPosition(button)) ? button : null;
 
-    void Model_Click(object sender, RoutedEventArgs e) =>
-        claude.Settings = claude.Settings with { Model = Choose(ModelButton, (string)((MenuItem)e.OriginalSource).Tag) };
+    void Model_Click(object sender, RoutedEventArgs e)
+    {
+        var model = Choose(ModelButton, (string)((MenuItem)e.OriginalSource).Tag);
+        claude.Choose(claude.Settings with { Model = model }, ClaudeProtocol.SetModel(model));
+    }
 
-    void Effort_Click(object sender, RoutedEventArgs e) =>
-        claude.Settings = claude.Settings with { Effort = Choose(EffortButton, (string)((MenuItem)e.OriginalSource).Tag) };
+    void Effort_Click(object sender, RoutedEventArgs e)
+    {
+        var effort = Choose(EffortButton, (string)((MenuItem)e.OriginalSource).Tag);
+        claude.Choose(claude.Settings with { Effort = effort }, ClaudeProtocol.SetEffort(effort));
+    }
 
-    void Mode_Click(object sender, RoutedEventArgs e) =>
-        claude.Settings = claude.Settings with { PermissionMode = Choose(ModeButton, (string)((MenuItem)e.OriginalSource).Tag) };
+    void Mode_Click(object sender, RoutedEventArgs e)
+    {
+        var mode = Choose(ModeButton, (string)((MenuItem)e.OriginalSource).Tag);
+        claude.Choose(claude.Settings with { PermissionMode = mode }, ClaudeProtocol.SetPermissionMode(mode));
+    }
 
     static string Choose(Button button, string value)
     {

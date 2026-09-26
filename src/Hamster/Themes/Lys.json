@@ -1,0 +1,27 @@
+{
+  "colors": {
+    "Surface": "#F5FAFAF8",
+    "Edge": "#1F000000",
+    "Text": "#1F1F1F",
+    "Muted": "#5F6368",
+    "Attention": "#C27C0E",
+    "AttentionSoft": "#26C27C0E",
+    "OnAttention": "#FFFFFF",
+    "Input": "#E8E8E5",
+    "Button": "#E3E3E0",
+    "Link": "#1A66D9",
+    "Busy": "#C8641E",
+    "Error": "#D93025",
+    "Handle": "#66000000",
+    "Hover": "#0D000000",
+    "Card": "#0A000000",
+    "Box": "#06000000",
+    "BoxEdge": "#1A000000",
+    "Epic": "#33904EE2",
+    "EpicText": "#5B2DA8",
+    "Task": "#334BADE8",
+    "TaskText": "#1D5F8C",
+    "SubTask": "#332EC4B6",
+    "SubTaskText": "#13706A"
+  }
+}

@@ -155,15 +155,11 @@ public static class ClaudeProtocol
                 (string?)server["source"] == "claudeai"))]
             : [];
 
-    public static IEnumerable<string> Changes(ClaudeSettings old, ClaudeSettings value)
-    {
-        if (value.Model != old.Model)
-            yield return Control(new JsonObject { ["subtype"] = "set_model", ["model"] = value.Model });
-        if (value.Effort != old.Effort)
-            yield return Control(new JsonObject { ["subtype"] = "apply_flag_settings", ["settings"] = new JsonObject { ["effortLevel"] = value.Effort } });
-        if (value.PermissionMode != old.PermissionMode)
-            yield return Control(new JsonObject { ["subtype"] = "set_permission_mode", ["mode"] = value.PermissionMode });
-    }
+    public static string SetModel(string model) => Control(new JsonObject { ["subtype"] = "set_model", ["model"] = model });
+
+    public static string SetEffort(string effort) => Control(new JsonObject { ["subtype"] = "apply_flag_settings", ["settings"] = new JsonObject { ["effortLevel"] = effort } });
+
+    public static string SetPermissionMode(string mode) => Control(new JsonObject { ["subtype"] = "set_permission_mode", ["mode"] = mode });
 
     public static string Allow(PermissionRequest request, bool always = false)
     {

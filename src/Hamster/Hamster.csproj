@@ -16,6 +16,11 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Characters\Hamster\*.txt" LogicalName="%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Themes\*.json" LogicalName="Themes/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Hamster.Tests" />
   </ItemGroup>
 
 </Project>

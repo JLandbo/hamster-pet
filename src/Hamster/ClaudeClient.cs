@@ -36,7 +36,7 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
     static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
     static readonly TimeSpan RequestTimeout = TimeSpan.FromMinutes(1);
 
-    (Process Process, ClaudeSession Session)? current;
+    (Process? Process, ClaudeSession Session)? current;
     int starts;
     ClaudeSettings settings = store.Load();
 
@@ -45,19 +45,19 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
         get => settings;
         set
         {
-            var old = settings;
-            Remember(value);
-            if (current is var (_, session))
-                foreach (var change in ClaudeProtocol.Changes(old, value))
-                    TrySend(session, change);
+            settings = value;
+            store.Save(value);
         }
     }
 
-    public void Remember(ClaudeSettings value)
+    public void Choose(ClaudeSettings value, string control)
     {
-        settings = value;
-        store.Save(value);
+        Settings = value;
+        if (current is var (_, session))
+            TrySend(session, control);
     }
+
+    internal void Attach(ClaudeSession session) => current = (null, session);
 
     public bool IsRunning => current is not null;
 
@@ -104,7 +104,7 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
         TrySend(session, ClaudeProtocol.EndSession());
         try
         {
-            process.StandardInput.Close();
+            process?.StandardInput.Close();
         }
         catch (IOException)
         {
@@ -134,10 +134,10 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
         }
     }
 
-    static async Task KillAfterAsync(Process process, Func<bool> stuck)
+    static async Task KillAfterAsync(Process? process, Func<bool> stuck)
     {
         await Task.Delay(StopTimeout);
-        if (stuck())
+        if (process is not null && stuck())
             TryKill(process);
     }
 
