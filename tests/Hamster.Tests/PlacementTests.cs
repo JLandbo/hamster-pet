@@ -18,4 +18,34 @@ public class PlacementTests
         // Assert
         Assert.Equal(new Placement(expectedRight, expectedBottom, 400, 900), placement);
     }
+
+    [Fact]
+    public void CenteredIn_WhenTheScreenIsGiven_ThenPutsThePetInTheMiddleWithItsSize()
+    {
+        // Act
+        var placement = new Placement(1920, 1080, 400, 900).CenteredIn(Screen, new Size(160, 144));
+
+        // Assert
+        Assert.Equal(new Placement(1040, 612, 400, 900), placement);
+    }
+
+    [Fact]
+    public void FitIn_WhenTheScreenIsSmaller_ThenShrinksToIt()
+    {
+        // Act
+        var size = new WindowSize(2400, 1400).FitIn(Screen);
+
+        // Assert
+        Assert.Equal(new WindowSize(1920, 1080), size);
+    }
+
+    [Fact]
+    public void FitIn_WhenTheHeightFollowsTheContent_ThenKeepsItThatWay()
+    {
+        // Act
+        var size = new WindowSize(1080, double.NaN).FitIn(Screen);
+
+        // Assert
+        Assert.True(double.IsNaN(size.Height));
+    }
 }

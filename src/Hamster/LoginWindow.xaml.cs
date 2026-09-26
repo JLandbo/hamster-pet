@@ -42,4 +42,6 @@ public partial class LoginWindow : Window
         Site = site;
         Close();
     }
+
+    void Close_Click(object sender, RoutedEventArgs e) => Close();
 }

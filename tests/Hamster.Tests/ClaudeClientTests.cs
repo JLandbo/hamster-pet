@@ -34,16 +34,46 @@ public sealed class ClaudeClientTests : IDisposable
     }
 
     [Fact]
-    public void Remember_WhenClaudeReportsAMode_ThenTheNextStartUsesIt()
+    public void Choose_WhenClaudeIsNotRunning_ThenTheNextStartUsesTheChoice()
     {
         // Arrange
         var client = new ClaudeClient("workspace", "instructions.txt", Store());
 
         // Act
-        client.Remember(client.Settings with { PermissionMode = "plan" });
+        client.Choose(client.Settings with { Effort = "low" }, ClaudeProtocol.SetEffort("low"));
 
         // Assert
-        Assert.Equal("plan", new ClaudeClient("workspace", "instructions.txt", Store()).Settings.PermissionMode);
+        Assert.Equal("low", new ClaudeClient("workspace", "instructions.txt", Store()).Settings.Effort);
+    }
+
+    [Fact]
+    public void Choose_WhenClaudeRunsWithTheSameEffort_ThenStillSendsIt()
+    {
+        // Arrange
+        var client = new ClaudeClient("workspace", "instructions.txt", Store());
+        var input = new StringWriter();
+        client.Attach(new ClaudeSession(new StringReader(""), input, new ClaudeSessionTests.FakeListener()));
+
+        // Act
+        client.Choose(client.Settings, ClaudeProtocol.SetEffort(client.Settings.Effort));
+
+        // Assert
+        Assert.Contains("\"effortLevel\":\"xhigh\"", input.ToString());
+    }
+
+    [Fact]
+    public void Settings_WhenClaudeRuns_ThenSendsNothing()
+    {
+        // Arrange
+        var client = new ClaudeClient("workspace", "instructions.txt", Store());
+        var input = new StringWriter();
+        client.Attach(new ClaudeSession(new StringReader(""), input, new ClaudeSessionTests.FakeListener()));
+
+        // Act
+        client.Settings = client.Settings with { PermissionMode = "plan" };
+
+        // Assert
+        Assert.Empty(input.ToString());
     }
 
     [Fact]

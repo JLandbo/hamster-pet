@@ -498,23 +498,33 @@ public class ClaudeProtocolTests
     }
 
     [Fact]
-    public void Changes_WhenModelEffortAndModeChange_ThenSendsOneControlRequestEach()
+    public void SetModel_WhenCalled_ThenAsksClaudeToSwitchModel()
     {
         // Act
-        var changes = ClaudeProtocol.Changes(ClaudeSettings.Default, new ClaudeSettings("claude-sonnet-5", "low", "plan"));
+        var control = ClaudeProtocol.SetModel("claude-sonnet-5");
 
         // Assert
-        Assert.Equal(["set_model:claude-sonnet-5", "apply_flag_settings:low", "set_permission_mode:plan"], changes.Select(Summary));
+        Assert.Equal("set_model:claude-sonnet-5", Summary(control));
     }
 
     [Fact]
-    public void Changes_WhenOnlyTheFolderChanges_ThenSendsNothing()
+    public void SetEffort_WhenCalled_ThenAppliesTheEffortLevel()
     {
         // Act
-        var changes = ClaudeProtocol.Changes(ClaudeSettings.Default, ClaudeSettings.Default with { WorkingDirectory = @"C:\projekt" });
+        var control = ClaudeProtocol.SetEffort("low");
 
         // Assert
-        Assert.Empty(changes);
+        Assert.Equal("apply_flag_settings:low", Summary(control));
+    }
+
+    [Fact]
+    public void SetPermissionMode_WhenCalled_ThenAsksClaudeToSwitchMode()
+    {
+        // Act
+        var control = ClaudeProtocol.SetPermissionMode("plan");
+
+        // Assert
+        Assert.Equal("set_permission_mode:plan", Summary(control));
     }
 
     [Fact]

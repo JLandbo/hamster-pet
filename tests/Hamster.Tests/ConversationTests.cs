@@ -117,7 +117,7 @@ public sealed class ConversationTests : IDisposable
         folder.Save(new SavedChats("session-folder", [new ChatRecord("mappe", "svar", ChatStatus.Done)]));
 
         // Act
-        conversation.Switch(folder);
+        conversation.Switch(() => folder);
 
         // Assert
         Assert.Equal(("mappe", "session-folder"), (Assert.Single(conversation.Chats).Prompt, claude.Starts[^1]));
@@ -128,10 +128,10 @@ public sealed class ConversationTests : IDisposable
     {
         // Arrange
         await conversation.SendAsync("hej");
-        conversation.Switch(new JsonFile<SavedChats>(Path.Combine(directory, "folder.json"), SavedChats.Empty));
+        conversation.Switch(() => new JsonFile<SavedChats>(Path.Combine(directory, "folder.json"), SavedChats.Empty));
 
         // Act
-        conversation.Switch(Store());
+        conversation.Switch(Store);
 
         // Assert
         Assert.Equal(("hej", "session-1"), (Assert.Single(conversation.Chats).Prompt, claude.Starts[^1]));
@@ -143,13 +143,61 @@ public sealed class ConversationTests : IDisposable
         // Arrange
         await conversation.SendAsync("hej");
         conversation.ToolStarted(new ToolUse("toolu_late", "Bash", "dotnet test"));
-        conversation.Switch(new JsonFile<SavedChats>(Path.Combine(directory, "folder.json"), SavedChats.Empty));
+        conversation.Switch(() => new JsonFile<SavedChats>(Path.Combine(directory, "folder.json"), SavedChats.Empty));
 
         // Act
-        conversation.Switch(Store());
+        conversation.Switch(Store);
 
         // Assert
         Assert.Equal(["Bash: dotnet test"], Assert.Single(conversation.Chats).Commands.Lines);
+    }
+
+    [Fact]
+    public async Task Switch_WhenTheTargetIsChosen_ThenTheCurrentChatsAreAlreadySaved()
+    {
+        // Arrange
+        await conversation.SendAsync("hej");
+        conversation.ToolStarted(new ToolUse("toolu_late", "Bash", "dotnet test"));
+        IReadOnlyList<string>? saved = null;
+
+        // Act
+        conversation.Switch(() =>
+        {
+            saved = Store().Load().Chats.Single().Commands;
+            return null;
+        });
+
+        // Assert
+        Assert.Equal(["Bash: dotnet test"], saved);
+    }
+
+    [Fact]
+    public async Task Switch_WhenLeavingATemporaryChat_ThenItsChatsAreNotSaved()
+    {
+        // Arrange
+        await conversation.SendAsync("hej");
+        conversation.Switch(() => null);
+        await conversation.SendAsync("midlertidig");
+
+        // Act
+        conversation.Switch(Store);
+
+        // Assert
+        Assert.Equal("hej", Assert.Single(conversation.Chats).Prompt);
+    }
+
+    [Fact]
+    public async Task Switch_WhenThePlaceIsOwnedElsewhere_ThenStartsAnEmptyTemporaryChat()
+    {
+        // Arrange
+        await conversation.SendAsync("hej");
+
+        // Act
+        conversation.Switch(() => null);
+
+        // Assert
+        Assert.Equal((true, 0), (conversation.IsTemporary, conversation.Chats.Count));
+        Assert.Equal([null, null], claude.Starts);
     }
 
     [Fact]
@@ -161,7 +209,7 @@ public sealed class ConversationTests : IDisposable
         folder.Save(SavedChats.Empty with { Usage = new Usage(0.1, 0.1) });
 
         // Act
-        conversation.Switch(folder);
+        conversation.Switch(() => folder);
 
         // Assert
         Assert.Equal(new Usage(0.5, 0.2), conversation.Usage);

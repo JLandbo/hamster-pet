@@ -57,6 +57,19 @@ public sealed class JsonFileTests : IDisposable
     }
 
     [Fact]
+    public void Save_WhenReadOnly_ThenKeepsTheFileAsItWas()
+    {
+        // Arrange
+        Store().Save(SavedChats.Empty);
+
+        // Act
+        new JsonFile<SavedChats>(FilePath, SavedChats.Empty, readOnly: true).Save(new SavedChats("session-1", [], 0.5m));
+
+        // Assert
+        Assert.Null(Store().Load().SessionId);
+    }
+
+    [Fact]
     public void Save_WhenFileIsLocked_ThenDoesNotThrow()
     {
         // Arrange

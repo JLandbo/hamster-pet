@@ -8,6 +8,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Windows;
 using Markdig;
+using Markdig.Helpers;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 
@@ -511,7 +512,7 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
         "heading" => $"{new string('#', Math.Clamp((int?)item["attrs"]?["level"] ?? 1, 1, 6))} {ChildrenOf(item)}\n\n",
         "bulletList" or "taskList" or "decisionList" => $"{string.Concat(ItemsOf(item).Select(text => $"{Nested("- ", text)}\n"))}\n",
         "orderedList" => $"{string.Concat(ItemsOf(item).Select((text, index) => $"{Nested($"{StartOf(item) + index}. ", text)}\n"))}\n",
-        "codeBlock" => $"```\n{ChildrenOf(item)}\n```\n\n",
+        "codeBlock" => CodeBlockOf(item),
         "blockquote" => $"> {ChildrenOf(item).Trim().Replace("\n", "\n> ")}\n\n",
         "rule" => "---\n\n",
         "inlineCard" => (string?)item["attrs"]?["url"] ?? "",
@@ -536,16 +537,36 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
         var (start, end) = (text.Length - text.TrimStart().Length, text.TrimEnd().Length);
         if (start >= end)
             return text;
-        var marked = (item["marks"] as JsonArray ?? []).OfType<JsonObject>().OrderBy(mark => (string?)mark["type"] == "link").Aggregate(text[start..end], (inner, mark) => (string?)mark["type"] switch
+        var marks = (item["marks"] as JsonArray ?? []).OfType<JsonObject>().OrderBy(mark => (string?)mark["type"] == "link").ToArray();
+        var core = marks.Any(mark => (string?)mark["type"] == "code") ? text[start..end] : Escaped(text[start..end]);
+        var marked = marks.Aggregate(core, (inner, mark) => (string?)mark["type"] switch
         {
             "strong" => $"**{inner}**",
             "em" => $"*{inner}*",
-            "code" => $"`{inner}`",
+            "code" => CodeSpan(inner),
             "link" => $"[{inner}]({(string?)mark["attrs"]?["href"]})",
             _ => inner,
         });
         return $"{text[..start]}{marked}{text[end..]}";
     }
+
+    static string Escaped(string text) => string.Concat(text.Select(character => CharHelper.IsAsciiPunctuation(character) ? $"\\{character}" : $"{character}"));
+
+    static string CodeSpan(string code)
+    {
+        var ticks = Backticks(code, 1);
+        return code.StartsWith('`') || code.EndsWith('`') ? $"{ticks} {code} {ticks}" : $"{ticks}{code}{ticks}";
+    }
+
+    static string CodeBlockOf(JsonObject item)
+    {
+        var code = string.Concat((item["content"] as JsonArray ?? []).Select(node => (string?)node?["text"]));
+        var fence = Backticks(code, 3);
+        return $"{fence}\n{code}\n{fence}\n\n";
+    }
+
+    static string Backticks(string code, int least) =>
+        new('`', Math.Max(least, code.Aggregate((Longest: 0, Run: 0), (runs, character) => character == '`' ? (Math.Max(runs.Longest, runs.Run + 1), runs.Run + 1) : (runs.Longest, 0)).Longest + 1));
 
     static string ChildrenOf(JsonObject item) => string.Concat((item["content"] as JsonArray ?? []).Select(MarkdownOf));
 

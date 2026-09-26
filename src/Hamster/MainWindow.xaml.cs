@@ -94,6 +94,8 @@ public partial class MainWindow : Window
         conversation = new Conversation(claude, StoreFor(claude.Settings.WorkingDirectory));
         placementFile = new JsonFile<Placement>(Path.Combine(data, "placement.json"), DefaultPlacement, chatOnly);
         placement = placementFile.Load();
+        if (chatOnly)
+            placement = placement.CenteredIn(SystemParameters.WorkArea, new Size(PetArea.Width, PetArea.Height));
         settingsSize = new JsonFile<WindowSize?>(Path.Combine(data, "settings-window.json"), null, chatOnly);
         feedSize = new JsonFile<WindowSize?>(Path.Combine(data, "feed-window.json"), null, chatOnly);
         characters = new CharacterLibrary(Path.Combine(data, "Characters"));
@@ -261,6 +263,7 @@ public partial class MainWindow : Window
         FeedCount.Text = feed.Items.Count.ToString(CultureInfo.CurrentCulture);
         FeedBadge.SetResourceReference(Border.BackgroundProperty, any ? "Attention" : "Muted");
         FeedButton.SetResourceReference(ForegroundProperty, any ? "Attention" : "Muted");
+        FeedCount.SetResourceReference(TextBlock.ForegroundProperty, any ? "OnAttention" : "Surface");
         if (any)
             FeedButton.SetResourceReference(BackgroundProperty, "AttentionSoft");
         else

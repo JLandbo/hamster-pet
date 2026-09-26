@@ -319,7 +319,7 @@ public sealed class ClaudeSessionTests
         public ValueTask<string> NextAsync() => lines.Reader.ReadAsync(Token);
     }
 
-    sealed class FakeListener(PermissionAnswer? answer = PermissionAnswer.Allow) : IClaudeListener
+    internal sealed class FakeListener(PermissionAnswer? answer = PermissionAnswer.Allow) : IClaudeListener
     {
         readonly TaskCompletionSource firstResult = new();
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 
 namespace Hamster.Tests;
@@ -149,7 +150,7 @@ public sealed class SubscriptionsTests : IDisposable
         var items = Subscriptions.JiraItems(json, Site, new Dictionary<string, string> { ["10012"] = "Under Test in DEV" });
 
         // Assert
-        Assert.Equal([new FeedItem("Jira", "Under Test in DEV", "ACS-1", "Test af login", "https://firma.atlassian.net/browse/ACS-1")], items);
+        Assert.Equal([("Jira", "Under Test in DEV", "ACS-1", "Test af login", "https://firma.atlassian.net/browse/ACS-1")], items.Select(item => (item.Source, item.Group, item.Id, item.Title, item.Url)));
     }
 
     [Fact]
@@ -179,13 +180,13 @@ public sealed class SubscriptionsTests : IDisposable
     }
 
     [Fact]
-    public void SearchUrl_WhenGivenJql_ThenAsksJiraForMyIssuesWithTheirSummary()
+    public void SearchUrl_WhenGivenJql_ThenAsksJiraForMyIssuesWithTheirDetails()
     {
         // Act
-        var url = Subscriptions.SearchUrl(Site, "status in (\"Test\")");
+        var url = Subscriptions.SearchUrl(Site, "status in (\"Test\")", ["customfield_10020"]);
 
         // Assert
-        Assert.Equal("https://firma.atlassian.net/rest/api/3/search/jql?jql=status%20in%20%28%22Test%22%29&fields=summary,status,updated,issuetype,parent&maxResults=100", url);
+        Assert.Equal("https://firma.atlassian.net/rest/api/3/search/jql?jql=status%20in%20%28%22Test%22%29&fields=summary,status,updated,issuetype,parent,priority,labels,components,created,description,duedate,timetracking,customfield_10020&maxResults=100", url);
     }
 
     [Fact]
@@ -614,7 +615,7 @@ public sealed class SubscriptionsTests : IDisposable
     public void SearchUrl_WhenAskedForTheNextPage_ThenPassesTheToken()
     {
         // Act
-        var url = Subscriptions.SearchUrl(Site, "assignee = currentUser()", "abc=");
+        var url = Subscriptions.SearchUrl(Site, "assignee = currentUser()", ["customfield_10020"], "abc=");
 
         // Assert
         Assert.EndsWith("&maxResults=100&nextPageToken=abc%3D", url);
@@ -646,7 +647,7 @@ public sealed class SubscriptionsTests : IDisposable
         }
 
         // Act
-        var pages = await Subscriptions.PagesAsync(Get, Site, "assignee = currentUser()");
+        var pages = await Subscriptions.PagesAsync(Get, Site, "assignee = currentUser()", ["customfield_10020"]);
 
         // Assert
         Assert.Equal((2, 2), (pages.Count, asked.Count));
@@ -719,6 +720,363 @@ public sealed class SubscriptionsTests : IDisposable
     }
 
     [Fact]
+    public void JiraItems_WhenTheIssueHasDetails_ThenShowsTheActiveSprintItsTagsAndDescription()
+    {
+        // Arrange
+        const string json = """
+            {"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{
+              "summary":"Test","status":{"name":"In Progress"},"priority":{"name":"High"},"assignee":{"displayName":"Jacob Skov"},"created":"2026-08-27T13:55:24.050+0200",
+              "labels":["azure","bi"],"components":[{"name":"Cloud"}],"description":"Vi skal **teste**\n\n* det hele",
+              "customfield_10026":3.0,"customfield_10066":{"displayName":"Anna Reviewer"},"customfield_10061":{"displayName":"Bo Tester"},"customfield_10068":{"value":"Idealcombi"},
+              "timetracking":{"originalEstimate":"2d","remainingEstimate":"1d 4h","timeSpent":"4h"},
+              "customfield_10020":[{"name":"Sprint 2","state":"active","boardId":8,"endDate":"2026-10-01T10:00:00.000Z"},{"name":"Sprint 1","state":"closed","boardId":8}]}}]}
+            """;
+        var fields = new Dictionary<string, string> { ["Sprint"] = "customfield_10020", ["Story Points"] = "customfield_10026", ["Reviewer"] = "customfield_10066", ["Tester"] = "customfield_10061", ["Kundenavn"] = "customfield_10068" };
+
+        // Act
+        var details = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>(), fields)).Details!;
+
+        // Assert
+        Assert.Equal($"Sprint 2 · slutter {new DateTimeOffset(2026, 10, 1, 10, 0, 0, TimeSpan.Zero).ToLocalTime().ToString("d. MMM", CultureInfo.CurrentCulture)}", details.Sprint);
+        Assert.Equal(["Status In Progress", "Prioritet High", "Story Points 3", "Reviewer Anna Reviewer", "Tester Bo Tester", "Kundenavn Idealcombi",
+            "Time tracking 2d estimeret · 1d 4h tilbage · 4h brugt", "Labels azure, bi", "Komponent Cloud",
+            $"Oprettet {new DateTimeOffset(2026, 8, 27, 13, 55, 24, TimeSpan.FromHours(2)).ToLocalTime().ToString("d. MMM", CultureInfo.CurrentCulture)}"],
+            details.Tags.Select(tag => $"{tag.Key} {tag.Value}"));
+        Assert.Equal("Vi skal **teste**\n\n* det hele", details.Description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenTheDescriptionIsLong_ThenCutsItAtASpace()
+    {
+        // Arrange
+        var words = string.Join(' ', Enumerable.Repeat("ord", 600));
+        var json = """{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":"WORDS"}}]}""".Replace("WORDS", words);
+
+        // Act
+        var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
+
+        // Assert
+        Assert.Equal($"{string.Join(' ', Enumerable.Repeat("ord", 375))} …", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenTheDescriptionIsAJiraDocument_ThenTurnsItIntoMarkdown()
+    {
+        // Arrange
+        const string json = """
+            {"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":{"type":"doc","content":[
+              {"type":"heading","attrs":{"level":2},"content":[{"type":"text","text":"Baggrund"}]},
+              {"type":"paragraph","content":[{"type":"text","text":"Ring til "},{"type":"mention","attrs":{"text":"@Jacob"}},{"type":"text","text":" om "},
+                {"type":"text","text":"API","marks":[{"type":"strong"}]},{"type":"text","text":"-kaldet, se "},{"type":"inlineCard","attrs":{"url":"https://x.atlassian.net/browse/ACS-2"}},
+                {"type":"text","text":" og "},{"type":"text","text":"Foo()","marks":[{"type":"code"}]},{"type":"text","text":"."}]},
+              {"type":"bulletList","content":[{"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"punkt 1"}]}]},
+                {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"punkt 2"}]}]}]}]}}}]}
+            """;
+
+        // Act
+        var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
+
+        // Assert
+        Assert.Equal("## Baggrund\n\nRing til @Jacob om **API**\\-kaldet\\, se https://x.atlassian.net/browse/ACS-2 og `Foo()`\\.\n\n- punkt 1\n- punkt 2", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenTextHasMarkdownCharacters_ThenShowsThemAsWritten()
+    {
+        // Arrange
+        const string content = """{"type":"paragraph","content":[{"type":"text","text":"__init__ og 2*3*4"}]}""";
+
+        // Act
+        var description = Described(content);
+
+        // Assert
+        Assert.Equal(@"\_\_init\_\_ og 2\*3\*4", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenInlineCodeHasBackticks_ThenWrapsItInMoreBackticks()
+    {
+        // Arrange
+        const string content = """{"type":"paragraph","content":[{"type":"text","text":"`x`","marks":[{"type":"code"}]}]}""";
+
+        // Act
+        var description = Described(content);
+
+        // Assert
+        Assert.Equal("`` `x` ``", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenACodeBlockHasAFence_ThenUsesALongerFence()
+    {
+        // Arrange
+        const string content = """{"type":"codeBlock","content":[{"type":"text","text":"```\nx\n```"}]}""";
+
+        // Act
+        var description = Described(content);
+
+        // Assert
+        Assert.Equal("````\n```\nx\n```\n````", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenACodeBlockHasMarkdownCharacters_ThenKeepsThemAsWritten()
+    {
+        // Arrange
+        const string content = """{"type":"codeBlock","content":[{"type":"text","text":"a*b_c"}]}""";
+
+        // Act
+        var description = Described(content);
+
+        // Assert
+        Assert.Equal("```\na*b_c\n```", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenTheJiraDocumentHasALineBreak_ThenKeepsItAsAHardBreak()
+    {
+        // Arrange
+        const string json = """
+            {"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":{"type":"doc","content":[
+              {"type":"paragraph","content":[{"type":"text","text":"linje 1"},{"type":"hardBreak"},{"type":"text","text":"linje 2"}]}]}}}]}
+            """;
+
+        // Act
+        var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
+
+        // Assert
+        Assert.Equal("linje 1  \nlinje 2", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenMarkedTextHasSpacesAtItsEdges_ThenKeepsThemOutsideTheMarks()
+    {
+        // Arrange
+        const string json = """
+            {"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":{"type":"doc","content":[
+              {"type":"paragraph","content":[{"type":"text","text":"Ring om"},{"type":"text","text":" API ","marks":[{"type":"strong"}]},{"type":"text","text":"kaldet"}]}]}}}]}
+            """;
+
+        // Act
+        var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
+
+        // Assert
+        Assert.Equal("Ring om **API** kaldet", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenTheDescriptionHasImages_ThenLeavesThemOutOfTheTextAndItsLength()
+    {
+        // Arrange
+        var json = """{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":"Følgende:\n\n![](blob:https://media/?id=LONG)Problem i dag ![](blob:https://media/?id=LONG)"}}]}"""
+            .Replace("LONG", new string('x', 1000));
+
+        // Act
+        var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
+
+        // Assert
+        Assert.Equal("Følgende:\n\nProblem i dag", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenAListItemHoldsAList_ThenNestsIt()
+    {
+        // Arrange
+        const string content = """{"type":"bulletList","content":[{"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"Krav"}]},{"type":"bulletList","content":[{"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"a"}]}]}]}]}]}""";
+
+        // Act
+        var description = Described(content);
+
+        // Assert
+        Assert.Equal("- Krav\n  \n  - a", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenAListItemHoldsCode_ThenKeepsTheWholeCodeInTheItem()
+    {
+        // Arrange
+        const string content = """{"type":"bulletList","content":[{"type":"listItem","content":[{"type":"codeBlock","content":[{"type":"text","text":"var x = 1;\n\nvar y = 2;"}]}]}]}""";
+
+        // Act
+        var description = Described(content);
+
+        // Assert
+        Assert.Equal("- ```\n  var x = 1;\n  \n  var y = 2;\n  ```", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenAQuoteHasTwoParagraphs_ThenQuotesBoth()
+    {
+        // Arrange
+        const string content = """{"type":"blockquote","content":[{"type":"paragraph","content":[{"type":"text","text":"a"}]},{"type":"paragraph","content":[{"type":"text","text":"b"}]}]}""";
+
+        // Act
+        var description = Described(content);
+
+        // Assert
+        Assert.Equal("> a\n> \n> b", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenCodeIsLinked_ThenTheLinkWrapsTheCode()
+    {
+        // Arrange
+        const string content = """{"type":"paragraph","content":[{"type":"text","text":"Foo()","marks":[{"type":"link","attrs":{"href":"https://x.dk"}},{"type":"code"}]}]}""";
+
+        // Act
+        var description = Described(content);
+
+        // Assert
+        Assert.Equal("[`Foo()`](https://x.dk)", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenACardIsFollowedByText_ThenKeepsThemApart()
+    {
+        // Arrange
+        const string content = """{"type":"blockCard","attrs":{"url":"https://x.atlassian.net/browse/ACS-2"}},{"type":"paragraph","content":[{"type":"text","text":"Se den"}]}""";
+
+        // Act
+        var description = Described(content);
+
+        // Assert
+        Assert.Equal("https://x.atlassian.net/browse/ACS-2\n\nSe den", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenTheDocumentHasATaskList_ThenListsTheTasks()
+    {
+        // Arrange
+        const string content = """{"type":"taskList","content":[{"type":"taskItem","content":[{"type":"text","text":"a"}]},{"type":"taskItem","content":[{"type":"text","text":"b"}]}]}""";
+
+        // Act
+        var description = Described(content);
+
+        // Assert
+        Assert.Equal("- a\n- b", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenTheDocumentHasADate_ThenShowsTheDayJiraShows()
+    {
+        // Arrange
+        const string content = """{"type":"paragraph","content":[{"type":"text","text":"Senest "},{"type":"date","attrs":{"timestamp":"1790208000000"}}]}""";
+
+        // Act
+        var description = Described(content);
+
+        // Assert
+        Assert.Equal($"Senest {new DateTime(2026, 9, 24).ToString("d. MMM", CultureInfo.CurrentCulture)}", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenAnOrderedItemHoldsAList_ThenIndentsItByTheMarkerWidth()
+    {
+        // Arrange
+        const string content = """{"type":"orderedList","content":[{"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"Krav"}]},{"type":"bulletList","content":[{"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"a"}]}]}]}]}]}""";
+
+        // Act
+        var description = Described(content);
+
+        // Assert
+        Assert.Equal("1. Krav\n   \n   - a", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenAnOrderedListContinues_ThenStartsAtItsNumber()
+    {
+        // Arrange
+        const string content = """{"type":"orderedList","attrs":{"order":3},"content":[{"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"c"}]}]},{"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"d"}]}]}]}""";
+
+        // Act
+        var description = Described(content);
+
+        // Assert
+        Assert.Equal("3. c\n4. d", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenATaskListHoldsATaskList_ThenKeepsTheTasksApart()
+    {
+        // Arrange
+        const string content = """{"type":"taskList","content":[{"type":"taskItem","content":[{"type":"text","text":"a"}]},{"type":"taskList","content":[{"type":"taskItem","content":[{"type":"text","text":"b"}]},{"type":"taskItem","content":[{"type":"text","text":"c"}]}]}]}""";
+
+        // Act
+        var description = Described(content);
+
+        // Assert
+        Assert.Equal("- a\n  - b\n  - c", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenTheDateIsOutOfRange_ThenLeavesItOut()
+    {
+        // Arrange
+        const string content = """{"type":"paragraph","content":[{"type":"text","text":"Senest"},{"type":"date","attrs":{"timestamp":"99999999999999999"}}]}""";
+
+        // Act
+        var description = Described(content);
+
+        // Assert
+        Assert.Equal("Senest", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenAnImageIsInsideALink_ThenRemovesTheImage()
+    {
+        // Arrange
+        const string json = """{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":"Før [![x](a)](b) efter"}}]}""";
+
+        // Act
+        var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
+
+        // Assert
+        Assert.Equal("Før [](b) efter", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenAnImageHoldsAnImage_ThenRemovesOnlyTheImage()
+    {
+        // Arrange
+        const string json = """{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":"Før ![a ![b](x)](y) efter"}}]}""";
+
+        // Act
+        var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
+
+        // Assert
+        Assert.Equal("Før  efter", description);
+    }
+
+    [Fact]
+    public void JiraSearch_WhenBuilt_ThenAsksForAllDetailsAsMarkdownAHundredAtATime()
+    {
+        // Act
+        var call = Subscriptions.JiraSearch(Site, "assignee = currentUser()", ["customfield_10020", "customfield_10026"]);
+
+        // Assert
+        Assert.Equal(("markdown", 100, "customfield_10026"), ((string?)call.Arguments["responseContentFormat"], (int?)call.Arguments["maxResults"], (string?)call.Arguments["fields"]!.AsArray()[^1]));
+        Assert.Contains("description", call.Arguments["fields"]!.AsArray().Select(field => (string?)field));
+    }
+
+    [Fact]
+    public void JiraFieldsOf_WhenJiraListsItsFields_ThenFindsSprintAndTheChosenFields()
+    {
+        // Arrange
+        const string json = """
+            [{"id":"summary","name":"Summary","schema":{"system":"summary"}},
+             {"id":"customfield_10020","name":"Sprint","schema":{"custom":"com.pyxis.greenhopper.jira:gh-sprint"}},
+             {"id":"customfield_10026","name":"Story Points"},{"id":"customfield_10066","name":"Reviewer"},{"id":"customfield_10061","name":"Tester"},{"id":"customfield_10068","name":"Kundenavn"}]
+            """;
+
+        // Act
+        var fields = Subscriptions.JiraFieldsOf(json);
+
+        // Assert
+        Assert.Equal(["Sprint=customfield_10020", "Story Points=customfield_10026", "Reviewer=customfield_10066", "Tester=customfield_10061", "Kundenavn=customfield_10068"],
+            fields.Select(field => $"{field.Key}={field.Value}"));
+    }
+
+    [Fact]
     public void Slots_WhenColumnsAndGitHubFeedsAreChosen_ThenListsThemInBoardAndFeedOrder()
     {
         // Arrange
@@ -745,6 +1103,10 @@ public sealed class SubscriptionsTests : IDisposable
         await feed.RefreshAsync();
         return feed;
     }
+
+    static string Described(string content) =>
+        Assert.Single(Subscriptions.JiraItems("""{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":{"type":"doc","content":[CONTENT]}}}]}""".Replace("CONTENT", content),
+            Site, new Dictionary<string, string>())).Details!.Description;
 
     static string Url(string key) => $"{Site}/browse/{key}";
 

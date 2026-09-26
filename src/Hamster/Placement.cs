@@ -11,4 +11,7 @@ public sealed record Placement(double Right, double Bottom, double Width, double
 {
     public Placement ClampedTo(Rect corners) =>
         this with { Right = Math.Clamp(Right, corners.Left, corners.Right), Bottom = Math.Clamp(Bottom, corners.Top, corners.Bottom) };
+
+    public Placement CenteredIn(Rect screen, Size pet) =>
+        this with { Right = screen.Left + (screen.Width + pet.Width) / 2, Bottom = screen.Top + (screen.Height + pet.Height) / 2 };
 }

@@ -2,10 +2,24 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
-        Width="520" Height="720" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Width="520" Height="720" MinWidth="360" MinHeight="300" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        WindowStyle="None" ResizeMode="CanResize" Background="{DynamicResource Surface}"
         FontFamily="{StaticResource UiFont}" Loaded="Window_Loaded">
-    <DockPanel>
-        <TextBlock x:Name="Hint" DockPanel.Dock="Top" Padding="12,8" TextWrapping="Wrap" Background="{DynamicResource Surface}" Foreground="{DynamicResource Text}" />
-        <wv2:WebView2 x:Name="Web" NavigationCompleted="Web_NavigationCompleted" />
-    </DockPanel>
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="40" GlassFrameThickness="0" ResizeBorderThickness="6" UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+
+    <Border BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+        <DockPanel>
+            <DockPanel DockPanel.Dock="Top" Height="40" Margin="14,0,8,0">
+                <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="Luk" Click="Close_Click" Style="{StaticResource SmallIconButton}" FontSize="12"
+                        VerticalAlignment="Center" WindowChrome.IsHitTestVisibleInChrome="True" />
+                <TextBlock Text="{Binding Title, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{DynamicResource Text}" FontSize="13" FontWeight="SemiBold"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </DockPanel>
+            <TextBlock x:Name="Hint" DockPanel.Dock="Top" Padding="14,0,14,10" TextWrapping="Wrap" Foreground="{DynamicResource Muted}" />
+            <wv2:WebView2 x:Name="Web" NavigationCompleted="Web_NavigationCompleted" />
+        </DockPanel>
+    </Border>
 </Window>
