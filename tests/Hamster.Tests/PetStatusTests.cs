@@ -9,7 +9,8 @@ public class PetStatusTests
         var tired = curious with { Tired = true };
         var music = tired with { Music = true };
         var dance = music with { BackgroundWork = true };
-        var news = dance with { HasNews = true };
+        var tasks = dance with { HasTaskNews = true };
+        var news = tasks with { HasNews = true };
         var listen = news with { Typing = true };
         var sad = listen with { Failed = true };
         var happy = sad with { Celebrating = true };
@@ -30,6 +31,7 @@ public class PetStatusTests
             { new PetStatus(Music: true), Mood.Dance },
             { music, Mood.Dance },
             { dance, Mood.Dance },
+            { tasks, Mood.Glow },
             { news, Mood.News },
             { listen, Mood.Listen },
             { sad, Mood.Sad },

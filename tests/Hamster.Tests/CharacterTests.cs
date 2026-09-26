@@ -53,6 +53,32 @@ public sealed class CharacterTests : IDisposable
     }
 
     [Fact]
+    public void FromFolder_WhenThePaletteLacksAColor_ThenBorrowsTheHamsters()
+    {
+        // Arrange
+        File.WriteAllText(Path.Combine(folder, "palette.txt"), "a 112233\n");
+
+        // Act
+        var character = Character.FromFolder(folder);
+
+        // Assert
+        Assert.Equal((0xFF112233u, Character.Hamster.Palette['K']), (character.Palette['a'], character.Palette['K']));
+    }
+
+    [Fact]
+    public void FromFolder_WhenAColorHasEightDigits_ThenKeepsItsTransparency()
+    {
+        // Arrange
+        File.WriteAllText(Path.Combine(folder, "palette.txt"), "a 80F5C542\n");
+
+        // Act
+        var character = Character.FromFolder(folder);
+
+        // Assert
+        Assert.Equal(0x80F5C542u, character.Palette['a']);
+    }
+
+    [Fact]
     public void FromFolder_WhenFramesAreBig_ThenLoadsThemInTheirOwnSize()
     {
         // Arrange

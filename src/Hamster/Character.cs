@@ -36,7 +36,7 @@ public sealed record Character(string Name, IReadOnlyDictionary<char, uint> Pale
 
     static Character Read(string name, Func<string, string?> read, Character? fallback) => new(
         name,
-        read(PaletteFile) is { } palette ? ParsePalette(palette) : fallback?.Palette ?? throw Missing(name, PaletteFile),
+        read(PaletteFile) is { } palette ? WithFallback(ParsePalette(palette), fallback) : fallback?.Palette ?? throw Missing(name, PaletteFile),
         Enum.GetValues<Mood>().ToDictionary(mood => mood, mood =>
             read(FileOf(mood)) is { } text ? ParseFrames(text, FileOf(mood)) : fallback?.Animations[mood] ?? throw Missing(name, FileOf(mood))));
 
@@ -45,13 +45,18 @@ public sealed record Character(string Name, IReadOnlyDictionary<char, uint> Pale
         try
         {
             return text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .ToDictionary(line => line[0], line => 0xFF000000 | uint.Parse(line[1..].Trim(), NumberStyles.HexNumber, CultureInfo.InvariantCulture));
+                .ToDictionary(line => line[0], line => ColorOf(line[1..].Trim()));
         }
         catch (Exception exception) when (exception is FormatException or OverflowException or ArgumentException)
         {
             throw new InvalidDataException(Strings.Format("Character.BadPalette", PaletteFile), exception);
         }
     }
+
+    static IReadOnlyDictionary<char, uint> WithFallback(IReadOnlyDictionary<char, uint> palette, Character? fallback) =>
+        fallback is null ? palette : palette.Concat(fallback.Palette.Where(color => !palette.ContainsKey(color.Key))).ToDictionary();
+
+    static uint ColorOf(string hex) => (hex.Length == 8 ? 0u : 0xFF000000) | uint.Parse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
     static Frame[] ParseFrames(string text, string file)
     {
