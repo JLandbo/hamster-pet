@@ -23,6 +23,7 @@ public readonly record struct PetStatus(
     bool Typing = false,
     bool HasNews = false,
     bool BackgroundWork = false,
+    bool Music = false,
     bool Tired = false,
     bool Hovered = false,
     bool Awake = false)
@@ -40,6 +41,7 @@ public readonly record struct PetStatus(
         { Typing: true } => Mood.Listen,
         { HasNews: true } => Mood.News,
         { BackgroundWork: true } => Mood.Dance,
+        { Music: true } => Mood.Dance,
         { Tired: true, Hovered: true } or { Tired: true, Awake: true } => Mood.Tired,
         { Hovered: true } => Mood.Curious,
         { Awake: true } => Mood.Awake,

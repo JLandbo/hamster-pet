@@ -3,6 +3,21 @@ namespace Hamster.Tests;
 public class ChatItemTests
 {
     [Fact]
+    public void Shown_WhenSetToTheSameValue_ThenDoesNotNotify()
+    {
+        // Arrange
+        var chat = new ChatItem("hej");
+        var notified = false;
+        chat.PropertyChanged += (_, _) => notified = true;
+
+        // Act
+        chat.Shown = true;
+
+        // Assert
+        Assert.False(notified);
+    }
+
+    [Fact]
     public void DisplayAnswer_WhenDone_ThenShowsTheAnswer()
     {
         // Arrange
@@ -71,5 +86,21 @@ public class ChatItemTests
 
         // Assert
         Assert.Contains(nameof(ChatItem.DisplayAnswer), changed);
+    }
+
+    [Fact]
+    public void From_WhenTheSavedChatUsedTools_ThenItsCommandsAndSourcesComeBack()
+    {
+        // Arrange
+        var chat = new ChatItem("hej");
+        chat.Commands.Lines.Add("Bash: dotnet test");
+        chat.Sources.Lines.Add("WebFetch: https://example.com");
+
+        // Act
+        var restored = ChatItem.From(chat.ToRecord());
+
+        // Assert
+        Assert.Equal(["Bash: dotnet test"], restored.Commands.Lines);
+        Assert.Equal(["WebFetch: https://example.com"], restored.Sources.Lines);
     }
 }

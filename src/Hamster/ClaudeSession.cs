@@ -115,9 +115,9 @@ public sealed class ClaudeSession(TextReader output, TextWriter input, IClaudeLi
     {
         try
         {
-            var allowed = await listener.AskPermissionAsync(request, cancellationToken);
+            var answer = await listener.AskPermissionAsync(request, cancellationToken);
             if (questions.TryRemove(request.RequestId, out _))
-                Send(allowed ? ClaudeProtocol.Allow(request) : ClaudeProtocol.Deny(request));
+                Send(answer == PermissionAnswer.Deny ? ClaudeProtocol.Deny(request) : ClaudeProtocol.Allow(request, answer == PermissionAnswer.AllowAlways));
         }
         catch (Exception exception) when (exception is OperationCanceledException or IOException or ObjectDisposedException)
         {

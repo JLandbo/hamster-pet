@@ -1,14 +1,20 @@
 namespace Hamster;
 
-public sealed class UserRequest(string title, string details)
+public enum PermissionAnswer { Deny, Allow, AllowAlways }
+
+public sealed class UserRequest(string title, string details, string? alwaysScope = null)
 {
-    readonly TaskCompletionSource<bool> answer = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    readonly TaskCompletionSource<PermissionAnswer> answer = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public string Title { get; } = title;
     public string Details { get; } = details;
-    public Task<bool> Answer => answer.Task;
+    public string? AlwaysScope { get; } = alwaysScope;
+    public bool CanAllowAlways => AlwaysScope is not null;
+    public Task<PermissionAnswer> Answer => answer.Task;
 
-    public void Respond(bool allowed) => answer.TrySetResult(allowed);
+    public void Respond(bool allowed) => answer.TrySetResult(allowed ? PermissionAnswer.Allow : PermissionAnswer.Deny);
+
+    public void RespondAlways() => answer.TrySetResult(PermissionAnswer.AllowAlways);
 
     public void Cancel() => answer.TrySetCanceled();
 }

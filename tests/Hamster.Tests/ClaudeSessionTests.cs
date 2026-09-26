@@ -86,25 +86,40 @@ public sealed class ClaudeSessionTests
     }
 
     [Theory]
-    [InlineData(true, "allow")]
-    [InlineData(false, "deny")]
-    public async Task ReadAsync_WhenPermissionRequested_ThenSendsUsersAnswer(bool allowed, string behavior)
+    [InlineData(PermissionAnswer.Allow, "allow")]
+    [InlineData(PermissionAnswer.Deny, "deny")]
+    public async Task ReadAsync_WhenPermissionRequested_ThenSendsUsersAnswer(PermissionAnswer answer, string behavior)
     {
         // Arrange
         var input = new StringWriter();
 
         // Act
-        await new ClaudeSession(Output(Permission, Result), input, new FakeListener(allowed)).ReadAsync();
+        await new ClaudeSession(Output(Permission, Result), input, new FakeListener(answer)).ReadAsync();
 
         // Assert
         Assert.Equal(behavior, (string?)JsonNode.Parse(Lines(input)[0])!["response"]!["response"]!["behavior"]);
     }
 
     [Fact]
+    public async Task ReadAsync_WhenUserAllowsAlways_ThenGrantsClaudesSuggestionsForThisSessionOnly()
+    {
+        // Arrange
+        const string permission = """{"type":"control_request","request_id":"req-2","request":{"subtype":"can_use_tool","tool_name":"Write","input":{"file_path":"a.txt"},"permission_suggestions":[{"type":"addRules","rules":[{"toolName":"Write"}],"behavior":"allow","destination":"localSettings"}]}}""";
+        var input = new StringWriter();
+
+        // Act
+        await new ClaudeSession(Output(permission, Result), input, new FakeListener(PermissionAnswer.AllowAlways)).ReadAsync();
+
+        // Assert
+        var granted = JsonNode.Parse(Lines(input)[0])!["response"]!["response"]!["updatedPermissions"]!;
+        Assert.Equal("""[{"type":"addRules","rules":[{"toolName":"Write"}],"behavior":"allow","destination":"session"}]""", granted.ToJsonString());
+    }
+
+    [Fact]
     public async Task ReadAsync_WhenPermissionWithdrawn_ThenCancelsTheQuestionRightAwayAndAnswersNothing()
     {
         // Arrange
-        var listener = new FakeListener(allow: null);
+        var listener = new FakeListener(answer: null);
         var input = new StringWriter();
 
         // Act
@@ -119,7 +134,7 @@ public sealed class ClaudeSessionTests
     public async Task ReadAsync_WhenResultArrivesWhileAsking_ThenKeepsAsking()
     {
         // Arrange
-        var listener = new FakeListener(allow: null);
+        var listener = new FakeListener(answer: null);
         var output = new LineReader();
         var reading = new ClaudeSession(output, new StringWriter(), listener).ReadAsync();
 
@@ -138,7 +153,7 @@ public sealed class ClaudeSessionTests
     public async Task ReadAsync_WhenOutputEnds_ThenCancelsOpenQuestions()
     {
         // Arrange
-        var listener = new FakeListener(allow: null);
+        var listener = new FakeListener(answer: null);
 
         // Act
         await new ClaudeSession(Output(Permission), new StringWriter(), listener).ReadAsync();
@@ -157,8 +172,8 @@ public sealed class ClaudeSessionTests
         await new ClaudeSession(Output(WebSearch, SearchDone), new StringWriter(), listener).ReadAsync();
 
         // Assert
-        Assert.Equal([new ToolUse("toolu_1", "WebSearch")], listener.Started);
-        Assert.Equal([new ToolResult("toolu_1")], listener.Finished);
+        Assert.Equal([new ToolUse("toolu_1", "WebSearch", Input: "{}")], listener.Started);
+        Assert.Equal([new ToolResult("toolu_1", "...")], listener.Finished);
     }
 
     [Fact]
@@ -304,7 +319,7 @@ public sealed class ClaudeSessionTests
         public ValueTask<string> NextAsync() => lines.Reader.ReadAsync(Token);
     }
 
-    sealed class FakeListener(bool? allow = true) : IClaudeListener
+    sealed class FakeListener(PermissionAnswer? answer = PermissionAnswer.Allow) : IClaudeListener
     {
         readonly TaskCompletionSource firstResult = new();
 
@@ -345,12 +360,12 @@ public sealed class ClaudeSessionTests
         {
         }
 
-        public async Task<bool> AskPermissionAsync(PermissionRequest request, CancellationToken cancellationToken)
+        public async Task<PermissionAnswer> AskPermissionAsync(PermissionRequest request, CancellationToken cancellationToken)
         {
             Question = cancellationToken;
-            if (allow is { } answer)
-                return answer;
-            var never = new TaskCompletionSource<bool>();
+            if (answer is { } given)
+                return given;
+            var never = new TaskCompletionSource<PermissionAnswer>();
             using var registration = cancellationToken.Register(() => never.TrySetCanceled(cancellationToken));
             return await never.Task;
         }

@@ -1,0 +1,11 @@
+<Window x:Class="Hamster.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Width="520" Height="720" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        FontFamily="{StaticResource UiFont}" Loaded="Window_Loaded">
+    <DockPanel>
+        <TextBlock x:Name="Hint" DockPanel.Dock="Top" Padding="12,8" TextWrapping="Wrap" Background="#262626" Foreground="#F2F2F2" />
+        <wv2:WebView2 x:Name="Web" NavigationCompleted="Web_NavigationCompleted" />
+    </DockPanel>
+</Window>

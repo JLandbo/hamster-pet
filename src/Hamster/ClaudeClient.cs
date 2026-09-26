@@ -11,7 +11,7 @@ public interface IClaudeListener
     void TurnStarted(string? messageId);
     void ToolStarted(ToolUse tool);
     void ToolFinished(ToolResult result);
-    Task<bool> AskPermissionAsync(PermissionRequest request, CancellationToken cancellationToken);
+    Task<PermissionAnswer> AskPermissionAsync(PermissionRequest request, CancellationToken cancellationToken);
     void UsageReported(Usage usage);
     void ModeChanged(string mode);
     void BackgroundTasksChanged(int count);

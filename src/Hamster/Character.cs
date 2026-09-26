@@ -63,7 +63,7 @@ public sealed record Character(string Name, IReadOnlyDictionary<char, uint> Pale
 
     static Frame ParseFrame(string[] lines, string file) =>
         int.TryParse(lines[0], CultureInfo.InvariantCulture, out var milliseconds) && milliseconds > 0
-            && lines.Length > 1 && lines[1].Length > 0 && lines.Skip(1).All(row => row.Length == lines[1].Length)
+            && lines.Length > 1 && lines.Skip(1).All(row => row.Length == lines[1].Length)
             ? new Frame(lines[1..], milliseconds)
             : throw new InvalidDataException($"{file}: hver frame skal have en varighed i millisekunder og derefter linjer, der alle er lige lange.");
 

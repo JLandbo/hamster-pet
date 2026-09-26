@@ -16,6 +16,22 @@ public sealed class ChatItem : INotifyPropertyChanged
 
     public string Prompt { get; }
 
+    public string? Title { get; init; }
+
+    public string DisplayPrompt => Title ?? Prompt;
+
+    public bool Shown
+    {
+        get;
+        set
+        {
+            if (field == value)
+                return;
+            field = value;
+            Changed();
+        }
+    } = true;
+
     public DateTime StartedAt { get; } = DateTime.UtcNow;
 
     public string Answer
@@ -71,9 +87,17 @@ public sealed class ChatItem : INotifyPropertyChanged
             Changed(nameof(DisplayAnswer));
     }
 
-    public ChatRecord ToRecord() => new(Prompt, Answer, Status);
+    public ChatRecord ToRecord() => new(Prompt, Answer, Status, Title, [.. Commands.Lines], [.. Sources.Lines]);
 
-    public static ChatItem From(ChatRecord record) => new(record.Prompt) { Answer = record.Answer, Status = record.Status };
+    public static ChatItem From(ChatRecord record)
+    {
+        var chat = new ChatItem(record.Prompt) { Title = record.Title, Answer = record.Answer, Status = record.Status };
+        foreach (var line in record.Commands ?? [])
+            chat.Commands.Lines.Add(line);
+        foreach (var line in record.Sources ?? [])
+            chat.Sources.Lines.Add(line);
+        return chat;
+    }
 
     void Changed([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }

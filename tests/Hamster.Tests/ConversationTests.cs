@@ -32,6 +32,44 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
+    public async Task SendAsync_WhenATitleIsGiven_ThenTheChatShowsItButClaudeGetsThePrompt()
+    {
+        // Act
+        await conversation.SendAsync("Giv mig et overblik over mine sager.", title: "Dagens overblik");
+
+        // Assert
+        var chat = conversation.Chats.Single();
+        Assert.Equal(("Dagens overblik", "Giv mig et overblik over mine sager.", "Giv mig et overblik over mine sager."), (chat.DisplayPrompt, chat.Prompt, claude.Prompts.Single()));
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenCancelledWhileClaudeStarts_ThenSendsNothing()
+    {
+        // Arrange
+        claude.Starting = conversation.Cancel;
+
+        // Act
+        await conversation.SendAsync("hej");
+
+        // Assert
+        Assert.Equal((0, "Afbrudt."), (claude.Ids.Count, conversation.Chats.Single().Answer));
+    }
+
+    [Fact]
+    public async Task Cancel_WhenNoTurnHasStarted_ThenWithdrawsTheMessage()
+    {
+        // Arrange
+        claude.Reply = Silent;
+        await conversation.SendAsync("hej");
+
+        // Act
+        conversation.Cancel();
+
+        // Assert
+        Assert.Equal((claude.Ids[0], "Afbrudt.", false), (claude.Withdrawn.Single(), conversation.Chats.Single().Answer, conversation.IsBusy));
+    }
+
+    [Fact]
     public async Task SendAsync_WhenCalledTwice_ThenBothGoToTheSameClaude()
     {
         // Act
@@ -68,6 +106,94 @@ public sealed class ConversationTests : IDisposable
 
         // Assert
         Assert.Equal([null, "session-1"], claude.Starts);
+    }
+
+    [Fact]
+    public async Task Switch_WhenTheTargetWasUsedBefore_ThenShowsItsChatsAndResumesItsSession()
+    {
+        // Arrange
+        await conversation.SendAsync("hej");
+        var folder = new JsonFile<SavedChats>(Path.Combine(directory, "folder.json"), SavedChats.Empty);
+        folder.Save(new SavedChats("session-folder", [new ChatRecord("mappe", "svar", ChatStatus.Done)]));
+
+        // Act
+        conversation.Switch(folder);
+
+        // Assert
+        Assert.Equal(("mappe", "session-folder"), (Assert.Single(conversation.Chats).Prompt, claude.Starts[^1]));
+    }
+
+    [Fact]
+    public async Task Switch_WhenSwitchingBack_ThenTheFirstChatsAndSessionComeBack()
+    {
+        // Arrange
+        await conversation.SendAsync("hej");
+        conversation.Switch(new JsonFile<SavedChats>(Path.Combine(directory, "folder.json"), SavedChats.Empty));
+
+        // Act
+        conversation.Switch(Store());
+
+        // Assert
+        Assert.Equal(("hej", "session-1"), (Assert.Single(conversation.Chats).Prompt, claude.Starts[^1]));
+    }
+
+    [Fact]
+    public async Task Switch_WhenTheChatChangedAfterItsTurn_ThenTheChangeIsKept()
+    {
+        // Arrange
+        await conversation.SendAsync("hej");
+        conversation.ToolStarted(new ToolUse("toolu_late", "Bash", "dotnet test"));
+        conversation.Switch(new JsonFile<SavedChats>(Path.Combine(directory, "folder.json"), SavedChats.Empty));
+
+        // Act
+        conversation.Switch(Store());
+
+        // Assert
+        Assert.Equal(["Bash: dotnet test"], Assert.Single(conversation.Chats).Commands.Lines);
+    }
+
+    [Fact]
+    public void Switch_WhenTheTargetHasOldUsage_ThenKeepsTheCurrentUsage()
+    {
+        // Arrange
+        conversation.UsageReported(new Usage(0.5, 0.2));
+        var folder = new JsonFile<SavedChats>(Path.Combine(directory, "folder.json"), SavedChats.Empty);
+        folder.Save(SavedChats.Empty with { Usage = new Usage(0.1, 0.1) });
+
+        // Act
+        conversation.Switch(folder);
+
+        // Assert
+        Assert.Equal(new Usage(0.5, 0.2), conversation.Usage);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenClaudeStarts_ThenSaysSo()
+    {
+        // Arrange
+        var started = 0;
+        conversation.Started += () => started++;
+
+        // Act
+        await conversation.StartAsync();
+
+        // Assert
+        Assert.Equal(1, started);
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenClaudeMustStart_ThenSaysSoOnce()
+    {
+        // Arrange
+        var started = 0;
+        conversation.Started += () => started++;
+
+        // Act
+        await conversation.SendAsync("hej");
+        await conversation.SendAsync("igen");
+
+        // Assert
+        Assert.Equal(1, started);
     }
 
     [Fact]
@@ -183,7 +309,35 @@ public sealed class ConversationTests : IDisposable
         conversation.Chats[0].Requests[0].Respond(allowed);
 
         // Assert
-        Assert.Equal(allowed, await asking.WaitAsync(Token));
+        Assert.Equal(allowed ? PermissionAnswer.Allow : PermissionAnswer.Deny, await asking.WaitAsync(Token));
+    }
+
+    [Fact(Timeout = 5_000)]
+    public async Task AskPermissionAsync_WhenUserAllowsAlways_ThenClaudeIsToldSo()
+    {
+        // Arrange
+        var asking = await Asking();
+
+        // Act
+        conversation.Chats[0].Requests[0].RespondAlways();
+
+        // Assert
+        Assert.Equal(PermissionAnswer.AllowAlways, await asking.WaitAsync(Token));
+    }
+
+    [Theory]
+    [InlineData("[]", false)]
+    [InlineData("""[{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"git push:*"}],"behavior":"allow","destination":"localSettings"}]""", true)]
+    public void AskPermissionAsync_WhenClaudeSuggestsRules_ThenOffersAllowAlwaysOnlyIfThereAreAny(string suggestions, bool expected)
+    {
+        // Arrange
+        var request = Request() with { Suggestions = JsonNode.Parse(suggestions)!.AsArray() };
+
+        // Act
+        _ = conversation.AskPermissionAsync(request, CancellationToken.None);
+
+        // Assert
+        Assert.Equal(expected, conversation.Chats.Single().Requests.Single().CanAllowAlways);
     }
 
     [Fact(Timeout = 5_000)]
@@ -205,7 +359,7 @@ public sealed class ConversationTests : IDisposable
     {
         // Arrange
         using var withdrawal = new CancellationTokenSource();
-        Task<bool>? asking = null;
+        Task<PermissionAnswer>? asking = null;
         claude.Reply = (listener, id) =>
         {
             listener.TurnStarted(id);
@@ -231,7 +385,7 @@ public sealed class ConversationTests : IDisposable
         conversation.Delete(conversation.Chats[0]);
 
         // Assert
-        Assert.False(await asking.WaitAsync(Token));
+        Assert.Equal(PermissionAnswer.Deny, await asking.WaitAsync(Token));
     }
 
     [Fact]
@@ -1049,9 +1203,9 @@ public sealed class ConversationTests : IDisposable
         Assert.Equal([image], claude.Images);
     }
 
-    async Task<Task<bool>> Asking()
+    async Task<Task<PermissionAnswer>> Asking()
     {
-        Task<bool>? asking = null;
+        Task<PermissionAnswer>? asking = null;
         claude.Reply = (listener, id) =>
         {
             listener.TurnStarted(id);
@@ -1202,23 +1356,27 @@ public sealed class ConversationTests : IDisposable
         public Action<IClaudeListener, string> Reply { get; set; } = Answer;
         public List<string?> Starts { get; } = [];
         public List<string> Ids { get; } = [];
+        public List<string> Prompts { get; } = [];
         public List<ImageAttachment> Images { get; } = [];
         public List<string> Withdrawn { get; } = [];
         public int Interrupts { get; private set; }
         public bool IsRunning { get; set; }
         public IClaudeListener Listener { get; private set; } = null!;
+        public Action? Starting { get; set; }
         public ClaudeSettings Settings { get; set; } = ClaudeSettings.Default;
 
         public Task StartAsync(string? sessionId, IClaudeListener listener)
         {
             Starts.Add(sessionId);
             (Listener, IsRunning) = (listener, true);
+            Starting?.Invoke();
             return Task.CompletedTask;
         }
 
         public Task SendAsync(string id, string prompt, IReadOnlyList<ImageAttachment> images)
         {
             Ids.Add(id);
+            Prompts.Add(prompt);
             Images.AddRange(images);
             Reply(Listener, id);
             return Task.CompletedTask;

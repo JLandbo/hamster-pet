@@ -12,7 +12,7 @@ public sealed class Conversation : IClaudeListener
     public static readonly TimeSpan AnswerShownTime = TimeSpan.FromSeconds(30);
 
     readonly IClaudeClient claude;
-    readonly JsonFile<SavedChats> store;
+    JsonFile<SavedChats> store;
     readonly HashSet<string> webTools = [];
     readonly Dictionary<string, ChatItem> waiting = [];
     readonly Dictionary<string, ChatItem> toolChats = [];
@@ -23,13 +23,12 @@ public sealed class Conversation : IClaudeListener
     public Conversation(IClaudeClient claude, JsonFile<SavedChats> store)
     {
         (this.claude, this.store) = (claude, store);
-        var saved = store.Load();
-        (sessionId, Cost, Usage) = (saved.SessionId, saved.Cost, saved.Usage);
-        foreach (var chat in saved.Chats)
-            Chats.Add(ChatItem.From(chat));
+        Usage = Show(store.Load()).Usage;
     }
 
     public event Action? Changed;
+
+    public event Action? Started;
 
     public event Action<string>? PermissionModeChanged;
 
@@ -66,14 +65,20 @@ public sealed class Conversation : IClaudeListener
     {
         try
         {
-            await claude.StartAsync(sessionId, this);
+            await StartClaudeAsync();
         }
         catch (Exception exception) when (exception is Win32Exception or IOException or InvalidOperationException)
         {
         }
     }
 
-    public async Task SendAsync(string prompt, IReadOnlyList<ImageAttachment>? images = null)
+    async Task StartClaudeAsync()
+    {
+        await claude.StartAsync(sessionId, this);
+        Started?.Invoke();
+    }
+
+    public async Task SendAsync(string prompt, IReadOnlyList<ImageAttachment>? images = null, string? title = null)
     {
         if (prompt == "/clear")
         {
@@ -83,12 +88,14 @@ public sealed class Conversation : IClaudeListener
         var restart = restartWhenIdle && !IsBusy && BackgroundTasks == 0;
         restartWhenIdle &= !restart;
         var id = Guid.NewGuid().ToString();
-        var chat = waiting[id] = Add(new ChatItem(prompt));
+        var chat = waiting[id] = Add(new ChatItem(prompt) { Title = title });
         Changed?.Invoke();
         try
         {
             if (restart || !claude.IsRunning)
-                await claude.StartAsync(sessionId, this);
+                await StartClaudeAsync();
+            if (!waiting.ContainsKey(id))
+                return;
             await claude.SendAsync(id, prompt, images ?? []);
         }
         catch (Exception exception) when (exception is Win32Exception or IOException or InvalidOperationException)
@@ -102,14 +109,32 @@ public sealed class Conversation : IClaudeListener
         }
     }
 
-    public void Reset()
+    public void Reset() => Reset(SavedChats.Empty);
+
+    public void Switch(JsonFile<SavedChats> target)
+    {
+        Save();
+        store = target;
+        Reset(target.Load());
+    }
+
+    void Reset(SavedChats saved)
     {
         Chats.Clear();
         waiting.Clear();
         toolChats.Clear();
-        (lastAnswered, sessionId, Cost, BackgroundTasks, AnsweredAt, restartWhenIdle) = (null, null, 0, 0, default, false);
+        (lastAnswered, BackgroundTasks, AnsweredAt, restartWhenIdle) = (null, 0, default, false);
+        Show(saved);
         EndTurn();
         _ = StartAsync();
+    }
+
+    SavedChats Show(SavedChats saved)
+    {
+        (sessionId, Cost) = (saved.SessionId, saved.Cost);
+        foreach (var chat in saved.Chats)
+            Chats.Add(ChatItem.From(chat));
+        return saved;
     }
 
     public void Restart()
@@ -137,10 +162,20 @@ public sealed class Conversation : IClaudeListener
 
     public void Cancel()
     {
-        if (!turnRunning)
+        if (turnRunning)
+        {
+            stopping = true;
+            claude.Interrupt();
             return;
-        stopping = true;
-        claude.Interrupt();
+        }
+        foreach (var (id, chat) in waiting)
+        {
+            claude.Withdraw(id);
+            Finish(chat, new ClaudeResult(null, "", IsError: true), stopped: true);
+        }
+        waiting.Clear();
+        Save();
+        Changed?.Invoke();
     }
 
     public void TurnStarted(string? messageId)
@@ -170,19 +205,19 @@ public sealed class Conversation : IClaudeListener
             Changed?.Invoke();
     }
 
-    public async Task<bool> AskPermissionAsync(PermissionRequest request, CancellationToken cancellationToken)
+    public async Task<PermissionAnswer> AskPermissionAsync(PermissionRequest request, CancellationToken cancellationToken)
     {
         var chat = ChatFor(request.ToolUseId) ?? Add(new ChatItem(BackgroundPrompt) { Status = ChatStatus.Done });
-        var question = new UserRequest(request.ToolName, request.Details);
+        var question = new UserRequest(request.ToolName, request.Details, request.AlwaysScope);
         chat.Requests.Add(question);
         Changed?.Invoke();
         try
         {
             using var registration = cancellationToken.Register(question.Cancel);
-            var allowed = await question.Answer;
-            if (!allowed)
+            var answer = await question.Answer;
+            if (answer == PermissionAnswer.Deny)
                 chat.Commands.Lines.Add($"Afvist: {request.ToolName}");
-            return allowed;
+            return answer;
         }
         finally
         {
@@ -279,6 +314,9 @@ public sealed class Conversation : IClaudeListener
     {
         foreach (var request in chat.Requests.ToArray())
             request.Respond(false);
+        foreach (var (id, owner) in toolChats)
+            if (owner == chat)
+                toolChats.Remove(id);
         Chats.Remove(chat);
     }
 
@@ -289,5 +327,5 @@ public sealed class Conversation : IClaudeListener
         chat.Status = result.IsError ? ChatStatus.Error : ChatStatus.Done;
     }
 
-    void Save() => store.Save(new SavedChats(sessionId, [.. Chats.Where(chat => chat.Status != ChatStatus.Busy).Select(chat => chat.ToRecord())], Cost, Usage));
+    public void Save() => store.Save(new SavedChats(sessionId, [.. Chats.Where(chat => chat.Status != ChatStatus.Busy).Select(chat => chat.ToRecord())], Cost, Usage));
 }

@@ -109,6 +109,19 @@ public class MarkdownConverterTests
     }
 
     [Theory]
+    [InlineData("Se [<https://example.com>](https://example.com)")]
+    [InlineData("[**<https://a.example.com>**](https://example.com)")]
+    [InlineData("[![[a](https://a.example.com)](https://example.com/i.png)](https://example.com)")]
+    public void Render_WhenALinkIsInsideALink_ThenOnlyTheOuterIsAHyperlink(string markdown)
+    {
+        // Act
+        var document = MarkdownConverter.Render(markdown);
+
+        // Assert
+        Assert.Equal(new Uri("https://example.com"), Assert.Single(Hyperlinks(document)).NavigateUri);
+    }
+
+    [Theory]
     [InlineData("<https://example.com>")]
     [InlineData("Se https://example.com her")]
     public void Render_WhenUrlInText_ThenHyperlinkToIt(string markdown)
@@ -135,4 +148,7 @@ public class MarkdownConverterTests
     }
 
     static string Text(TextElement element) => new TextRange(element.ContentStart, element.ContentEnd).Text;
+
+    static IEnumerable<Hyperlink> Hyperlinks(DependencyObject element) =>
+        LogicalTreeHelper.GetChildren(element).OfType<DependencyObject>().SelectMany(child => child is Hyperlink link ? Hyperlinks(child).Prepend(link) : Hyperlinks(child));
 }

@@ -5,18 +5,27 @@ namespace Hamster;
 
 public abstract record ClaudeEvent;
 
-public sealed record ToolUse(string Id, string Name, string Detail = "", string? ParentId = null) : ClaudeEvent
+public sealed record ToolUse(string Id, string Name, string Detail = "", string? ParentId = null, string? Input = null) : ClaudeEvent
 {
     public bool IsWeb => Name is "WebSearch" or "WebFetch";
 
     public string Description => Detail.Length > 0 ? $"{Name}: {Detail.ReplaceLineEndings(" ")}" : Name;
 }
 
-public sealed record ToolResult(string ToolUseId) : ClaudeEvent;
+public sealed record ToolResult(string ToolUseId, string Text = "", bool IsError = false) : ClaudeEvent;
 
-public sealed record PermissionRequest(string RequestId, string ToolName, JsonObject Input, string? ToolUseId = null) : ClaudeEvent
+public sealed record PermissionRequest(string RequestId, string ToolName, JsonObject Input, string? ToolUseId = null, JsonArray? Suggestions = null) : ClaudeEvent
 {
     public string Details => string.Join(Environment.NewLine, Input.Select(property => $"{property.Key}: {property.Value}"));
+
+    public string? AlwaysScope => Suggestions is { Count: > 0 } suggestions ? string.Join(", ", suggestions.OfType<JsonObject>().SelectMany(Scope)) : null;
+
+    static IEnumerable<string> Scope(JsonObject suggestion) =>
+        suggestion["rules"] is JsonArray rules
+            ? rules.OfType<JsonObject>().Select(rule => (string?)rule["ruleContent"] is { } content ? $"{(string?)rule["toolName"]}({content})" : (string?)rule["toolName"] ?? "")
+            : suggestion["directories"] is JsonArray directories
+                ? directories.Select(directory => $"mappen {(string?)directory}")
+                : [];
 }
 
 public sealed record CancelRequest(string RequestId) : ClaudeEvent;
@@ -29,7 +38,7 @@ public sealed record BackgroundTasksChanged(int Count) : ClaudeEvent;
 
 public sealed record ControlReply(string RequestId, JsonObject? Response, string? Error) : ClaudeEvent;
 
-public sealed record McpServer(string Name, string Status, string? Url, string? Error, bool HasToken = false, bool FromClaudeAi = false)
+public sealed record McpServer(string Name, string Status, string? Url, string? Error, bool FromClaudeAi = false)
 {
     public bool IsUsable => Status is "connected" or "pending" or "disabled";
 }
@@ -61,7 +70,7 @@ public static class ClaudeProtocol
     {
         ["permissions"] = new JsonObject { ["ask"] = new JsonArray("Skill", "CronCreate") },
         ["allowedMcpServers"] = Connectors.AllowedServers(),
-        ["deniedMcpServers"] = Connectors.DeniedServers(settings.ClaudeAiConnectors ?? []),
+        ["deniedMcpServers"] = Connectors.DeniedServers(settings),
     }.ToJsonString();
 
     static readonly string[] DetailFields = ["file_path", "notebook_path", "command", "url", "query", "pattern", "skill", "description"];
@@ -83,8 +92,8 @@ public static class ClaudeProtocol
         return (string?)message["type"] switch
         {
             "assistant" => ContentBlocks(message, "tool_use").Select(block =>
-                new ToolUse((string)block["id"]!, (string)block["name"]!, Detail(block["input"]), (string?)message["parent_tool_use_id"])),
-            "user" => ContentBlocks(message, "tool_result").Select(block => new ToolResult((string)block["tool_use_id"]!)),
+                new ToolUse((string)block["id"]!, (string)block["name"]!, Detail(block["input"]), (string?)message["parent_tool_use_id"], block["input"]?.ToJsonString())),
+            "user" => ContentBlocks(message, "tool_result").Select(block => new ToolResult((string)block["tool_use_id"]!, ContentText(block["content"]), (bool?)block["is_error"] == true)),
             "command_lifecycle" when (string?)message["state"] == "started" => [new TurnStarted((string?)message["command_uuid"])],
             "system" when (string?)message["subtype"] == "init" => [new TurnStarted(null)],
             "system" when (string?)message["subtype"] == "status" && (string?)message["permissionMode"] is { } mode => [new ModeChanged(mode)],
@@ -143,7 +152,6 @@ public static class ClaudeProtocol
                 (string?)server["status"] ?? "",
                 (string?)server["config"]?["url"],
                 (string?)server["error"],
-                server["config"]?["headers"]?["Authorization"] is not null,
                 (string?)server["source"] == "claudeai"))]
             : [];
 
@@ -157,8 +165,20 @@ public static class ClaudeProtocol
             yield return Control(new JsonObject { ["subtype"] = "set_permission_mode", ["mode"] = value.PermissionMode });
     }
 
-    public static string Allow(PermissionRequest request) =>
-        Response(request.RequestId, new JsonObject { ["behavior"] = "allow", ["updatedInput"] = request.Input.DeepClone() });
+    public static string Allow(PermissionRequest request, bool always = false)
+    {
+        var body = new JsonObject { ["behavior"] = "allow", ["updatedInput"] = request.Input.DeepClone() };
+        if (always && request.Suggestions is { } suggestions)
+            body["updatedPermissions"] = new JsonArray([.. suggestions.OfType<JsonObject>().Select(ForThisSession)]);
+        return Response(request.RequestId, body);
+    }
+
+    static JsonNode ForThisSession(JsonObject suggestion)
+    {
+        var copy = suggestion.DeepClone().AsObject();
+        copy["destination"] = "session";
+        return copy;
+    }
 
     public static string Deny(PermissionRequest request) =>
         Response(request.RequestId, new JsonObject { ["behavior"] = "deny", ["message"] = "Brugeren afviste." });
@@ -187,6 +207,13 @@ public static class ClaudeProtocol
         DetailFields.Select(field => input is JsonObject fields && fields[field] is JsonValue value && value.TryGetValue(out string? text) ? text : null)
             .FirstOrDefault(text => text is not null) ?? "";
 
+    static string ContentText(JsonNode? content) => content switch
+    {
+        JsonValue value when value.TryGetValue(out string? text) => text,
+        JsonArray blocks => string.Concat(blocks.Select(block => (string?)block?["text"])),
+        _ => "",
+    };
+
     static string ResultText(JsonNode message) =>
         (string?)message["result"]
         ?? (message["errors"] is JsonArray { Count: > 0 } errors ? string.Join('\n', errors.Select(error => (string?)error)) : null)
@@ -210,6 +237,9 @@ public static class ClaudeProtocol
             (string)message["request_id"]!,
             (string?)request["display_name"] ?? (string)request["tool_name"]!,
             request["input"]?.DeepClone() as JsonObject ?? new JsonObject(),
-            (string?)request["tool_use_id"]);
+            (string?)request["tool_use_id"],
+            request["permission_suggestions"] is JsonArray suggestions
+                ? new JsonArray([.. suggestions.OfType<JsonObject>().Where(suggestion => (string?)suggestion["type"] != "setMode").Select(suggestion => suggestion.DeepClone())])
+                : null);
     }
 }

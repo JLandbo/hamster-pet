@@ -52,6 +52,12 @@
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
+
+        <DataTemplate x:Key="ChoiceTemplate" DataType="{x:Type local:Choice}">
+            <CheckBox Content="{Binding Title}" IsChecked="{Binding Chosen, Mode=OneWay}" Click="Choice_Click"
+                      IsEnabled="{Binding DataContext.Idle, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                      FontSize="11" Margin="0,6,0,0" />
+        </DataTemplate>
     </Window.Resources>
 
     <Border Margin="12" Padding="20,16,20,20" CornerRadius="16" Background="{StaticResource Surface}"
@@ -101,19 +107,28 @@
                         <Border Margin="0,0,0,8" Padding="12,10" CornerRadius="10" Background="#14FFFFFF">
                             <StackPanel>
                                 <DockPanel>
-                                    <ToggleButton x:Name="Switch" DockPanel.Dock="Right" VerticalAlignment="Center" Visibility="Collapsed" Style="{StaticResource Switch}"
-                                                  IsChecked="{Binding On, Mode=OneWay}" IsEnabled="{Binding Idle}" Click="Toggle_Click" />
-                                    <Button x:Name="EditButton" DockPanel.Dock="Right" VerticalAlignment="Center" Visibility="Collapsed" Margin="0,0,8,0"
-                                            Content="Rediger…" Click="Edit_Click" Style="{StaticResource TextButton}" />
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding Connector.Title}" Foreground="{StaticResource Text}" FontWeight="SemiBold" />
-                                        <TextBlock Text="{Binding State}" ToolTip="{Binding State}" Foreground="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock x:Name="TokenText" Text="Token: ••••••••" Foreground="{StaticResource Muted}" FontSize="11" Visibility="Collapsed" />
-                                    </StackPanel>
+                                    <Border DockPanel.Dock="Right" VerticalAlignment="Center" Padding="2" CornerRadius="8" Background="#1E1E1E">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ToggleButton Content="Fra" Tag="{x:Static local:ConnectorSource.Off}" IsChecked="{Binding IsOff, Mode=OneWay}"
+                                                          IsEnabled="{Binding Idle}" Click="Source_Click" Style="{StaticResource Segment}" />
+                                            <ToggleButton x:Name="HamsterSource" Content="Hamster" Tag="{x:Static local:ConnectorSource.Hamster}" IsChecked="{Binding IsHamster, Mode=OneWay}"
+                                                          IsEnabled="{Binding Idle}" Click="Source_Click" Style="{StaticResource Segment}" />
+                                            <ToggleButton Content="Claude AI" Tag="{x:Static local:ConnectorSource.ClaudeAi}" IsChecked="{Binding IsClaudeAi, Mode=OneWay}"
+                                                          IsEnabled="{Binding Idle}" Click="Source_Click" Style="{StaticResource Segment}" />
+                                            <ToggleButton x:Name="LoginSource" Content="Login" Tag="{x:Static local:ConnectorSource.Login}" IsChecked="{Binding IsLogin, Mode=OneWay}"
+                                                          IsEnabled="{Binding Idle}" Click="Source_Click" Style="{StaticResource Segment}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <TextBlock Text="{Binding Connector.Title}" Foreground="{StaticResource Text}" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 </DockPanel>
-                                <DockPanel Margin="0,8,0,0">
-                                    <ToggleButton DockPanel.Dock="Right" IsChecked="{Binding UsesClaudeAi, Mode=OneWay}" Click="ClaudeAi_Click" Style="{StaticResource Switch}" />
-                                    <TextBlock Text="Brug Claude AI connector" Foreground="{StaticResource Text}" FontSize="11" VerticalAlignment="Center" />
+                                <DockPanel Margin="0,2,0,0">
+                                    <Button x:Name="LoginButton" DockPanel.Dock="Right" Content="{Binding LoginLabel}" Click="Login_Click" IsEnabled="{Binding Idle}"
+                                            Style="{StaticResource TextButton}" Padding="6,2" Visibility="Collapsed" />
+                                    <Button x:Name="EditButton" DockPanel.Dock="Right" Content="Rediger token…" Click="Edit_Click"
+                                            Style="{StaticResource TextButton}" Padding="6,2" Visibility="Collapsed" />
+                                    <TextBlock DockPanel.Dock="Left" Text="{Binding State}" ToolTip="{Binding State}" Foreground="{StaticResource Muted}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    <TextBox x:Name="SiteBox" Text="{Binding SiteInput, UpdateSourceTrigger=PropertyChanged}" Margin="8,0,8,0" FontSize="11" VerticalAlignment="Center"
+                                             CaretBrush="{StaticResource Text}" Style="{StaticResource Field}" Visibility="Hidden" />
                                 </DockPanel>
                                 <StackPanel x:Name="Form" Margin="0,10,0,0" Visibility="Collapsed">
                                     <ItemsControl ItemsSource="{Binding Inputs}" />
@@ -122,30 +137,77 @@
                                         <TextBlock Text="Tillad skrivning" Foreground="{StaticResource Text}" FontSize="11" VerticalAlignment="Center" />
                                     </DockPanel>
                                     <DockPanel>
-                                        <Button DockPanel.Dock="Right" Content="Installér" Click="Install_Click" IsEnabled="{Binding Idle}" Style="{StaticResource PrimaryButton}" />
+                                        <Button DockPanel.Dock="Right" Content="Gem" Click="Install_Click" IsEnabled="{Binding Idle}" Style="{StaticResource PrimaryButton}" />
                                         <TextBlock VerticalAlignment="Center" FontSize="11">
                                             <Hyperlink NavigateUri="{Binding Connector.TokenPage}" RequestNavigate="TokenPage_RequestNavigate" Foreground="#6FA8FF">Opret token</Hyperlink>
                                         </TextBlock>
                                     </DockPanel>
                                 </StackPanel>
+                                <StackPanel x:Name="Subscribe" Margin="0,8,0,0" Visibility="Collapsed">
+                                    <DockPanel>
+                                        <Button x:Name="FetchChoices" DockPanel.Dock="Right" Content="Hent boards" Click="FetchStatuses_Click" IsEnabled="{Binding Idle}"
+                                                Style="{StaticResource TextButton}" Padding="6,2" Visibility="Collapsed" />
+                                        <TextBlock Text="Abonnér på" Foreground="{StaticResource Muted}" FontSize="11" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                    <TextBlock x:Name="ChoicesText" Text="{Binding ChoicesText}" Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition />
+                                            <ColumnDefinition />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel x:Name="Boards" Margin="0,0,12,0">
+                                            <TextBlock Text="Boards" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,6,0,0" />
+                                            <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                                                <ItemsControl ItemsSource="{Binding BoardChoices}" ItemTemplate="{StaticResource ChoiceTemplate}" />
+                                            </ScrollViewer>
+                                        </StackPanel>
+                                        <StackPanel x:Name="ChoicesPanel" Grid.Column="1">
+                                            <TextBlock x:Name="ColumnsLabel" Text="Kolonner i din bane" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,6,0,0" />
+                                            <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                                                <ItemsControl ItemsSource="{Binding Choices}" ItemTemplate="{StaticResource ChoiceTemplate}" />
+                                            </ScrollViewer>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
                                 <TextBlock x:Name="ProblemText" Text="{Binding Problem}" Foreground="{StaticResource Attention}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0" />
                             </StackPanel>
                         </Border>
                         <DataTemplate.Triggers>
-                            <DataTrigger Binding="{Binding CanToggle}" Value="True">
-                                <Setter TargetName="Switch" Property="Visibility" Value="Visible" />
+                            <DataTrigger Binding="{Binding Connector.Installable}" Value="False">
+                                <Setter TargetName="HamsterSource" Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Connector.Login}" Value="{x:Null}">
+                                <Setter TargetName="LoginSource" Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsLogin}" Value="True">
+                                <Setter TargetName="LoginButton" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding NeedsSite}" Value="True">
+                                <Setter TargetName="SiteBox" Property="Visibility" Value="Visible" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding CanEdit}" Value="True">
                                 <Setter TargetName="EditButton" Property="Visibility" Value="Visible" />
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding HasToken}" Value="True">
-                                <Setter TargetName="TokenText" Property="Visibility" Value="Visible" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding ShowForm}" Value="True">
                                 <Setter TargetName="Form" Property="Visibility" Value="Visible" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding Connector.CanBeReadOnly}" Value="True">
                                 <Setter TargetName="Write" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding HasChoices}" Value="True">
+                                <Setter TargetName="Subscribe" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding CanFetchChoices}" Value="True">
+                                <Setter TargetName="FetchChoices" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding BoardChoices.Count}" Value="0">
+                                <Setter TargetName="Boards" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="ColumnsLabel" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="ChoicesPanel" Property="Grid.Column" Value="0" />
+                                <Setter TargetName="ChoicesPanel" Property="Grid.ColumnSpan" Value="2" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding ChoicesText}" Value="{x:Null}">
+                                <Setter TargetName="ChoicesText" Property="Visibility" Value="Collapsed" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding Problem}" Value="{x:Null}">
                                 <Setter TargetName="ProblemText" Property="Visibility" Value="Collapsed" />

@@ -43,7 +43,7 @@ public class ClaudeProtocolTests
         var events = ClaudeProtocol.Parse(line);
 
         // Assert
-        Assert.Equal([new ToolUse("toolu_1", "WebSearch")], events);
+        Assert.Equal([new ToolUse("toolu_1", "WebSearch", Input: "{}")], events);
     }
 
     [Theory]
@@ -89,17 +89,19 @@ public class ClaudeProtocolTests
         Assert.Equal(expected, isWeb);
     }
 
-    [Fact]
-    public void Parse_WhenToolResult_ThenReturnsToolResult()
+    [Theory]
+    [InlineData("\"Example Domain\"")]
+    [InlineData("""[{"type":"text","text":"Example "},{"type":"image"},{"type":"text","text":"Domain"}]""")]
+    public void Parse_WhenToolResult_ThenReturnsToolResultWithItsText(string content)
     {
         // Arrange
-        const string line = """{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"Example Domain"}]}}""";
+        var line = $$$"""{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":{{{content}}}}]}}""";
 
         // Act
         var events = ClaudeProtocol.Parse(line);
 
         // Assert
-        Assert.Equal([new ToolResult("toolu_1")], events);
+        Assert.Equal([new ToolResult("toolu_1", "Example Domain")], events);
     }
 
     [Fact]
@@ -230,6 +232,45 @@ public class ClaudeProtocolTests
     }
 
     [Fact]
+    public void Allow_WhenNotAlways_ThenGrantsNoRules()
+    {
+        // Arrange
+        var request = Permission with { Suggestions = JsonNode.Parse("""[{"type":"addRules","rules":[{"toolName":"WebFetch"}],"behavior":"allow","destination":"session"}]""")!.AsArray() };
+
+        // Act
+        var line = ClaudeProtocol.Allow(request);
+
+        // Assert
+        Assert.Null(JsonNode.Parse(line)!["response"]!["response"]!["updatedPermissions"]);
+    }
+
+    [Fact]
+    public void Parse_WhenClaudeSuggestsAModeChange_ThenLeavesItOut()
+    {
+        // Arrange
+        const string line = """{"type":"control_request","request_id":"req-1","request":{"subtype":"can_use_tool","tool_name":"Write","input":{},"permission_suggestions":[{"type":"setMode","mode":"acceptEdits","destination":"session"},{"type":"addDirectories","directories":["C:\\data"],"destination":"session"}]}}""";
+
+        // Act
+        var request = (PermissionRequest)ClaudeProtocol.Parse(line).Single();
+
+        // Assert
+        Assert.Equal(["addDirectories"], request.Suggestions!.Select(suggestion => (string?)suggestion!["type"]));
+    }
+
+    [Fact]
+    public void AlwaysScope_WhenClaudeSuggestsRulesAndFolders_ThenNamesThem()
+    {
+        // Arrange
+        var request = Permission with { Suggestions = JsonNode.Parse("""[{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"git push:*"},{"toolName":"Read"}],"behavior":"allow","destination":"session"},{"type":"addDirectories","directories":["C:\\data"],"destination":"session"}]""")!.AsArray() };
+
+        // Act
+        var scope = request.AlwaysScope;
+
+        // Assert
+        Assert.Equal(@"Bash(git push:*), Read, mappen C:\data", scope);
+    }
+
+    [Fact]
     public void Deny_WhenCalled_ThenReturnsDenyBehavior()
     {
         // Act
@@ -338,6 +379,19 @@ public class ClaudeProtocolTests
     }
 
     [Fact]
+    public void Parse_WhenAToolFailed_ThenTheResultSaysSo()
+    {
+        // Arrange
+        const string line = """{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"Filteret findes ikke.","is_error":true}]}}""";
+
+        // Act
+        var events = ClaudeProtocol.Parse(line);
+
+        // Assert
+        Assert.Equal([new ToolResult("toolu_1", "Filteret findes ikke.", IsError: true)], events);
+    }
+
+    [Fact]
     public void Parse_WhenSubagentUsesTool_ThenToolKnowsItsParent()
     {
         // Arrange
@@ -347,7 +401,7 @@ public class ClaudeProtocolTests
         var events = ClaudeProtocol.Parse(line);
 
         // Assert
-        Assert.Equal([new ToolUse("toolu_2", "Read", "a.cs", "toolu_agent")], events);
+        Assert.Equal([new ToolUse("toolu_2", "Read", "a.cs", "toolu_agent", """{"file_path":"a.cs"}""")], events);
     }
 
     [Fact]
@@ -531,18 +585,8 @@ public class ClaudeProtocolTests
 
         // Assert
         Assert.Equal(
-            [new McpServer("plugin:atlassian:atlassian", "needs-auth", "https://mcp.atlassian.com/v2/mcp", null), new McpServer("hamster-github", "failed", "https://api.githubcopilot.com/mcp/", "401", HasToken: true), new McpServer("claude.ai Linear", "needs-auth", "https://mcp.linear.app/mcp", null, FromClaudeAi: true)],
+            [new McpServer("plugin:atlassian:atlassian", "needs-auth", "https://mcp.atlassian.com/v2/mcp", null), new McpServer("hamster-github", "failed", "https://api.githubcopilot.com/mcp/", "401"), new McpServer("claude.ai Linear", "needs-auth", "https://mcp.linear.app/mcp", null, FromClaudeAi: true)],
             servers);
-    }
-
-    [Fact]
-    public void McpToggle_WhenCalled_ThenNamesTheServerAndTheState()
-    {
-        // Act
-        var request = ClaudeProtocol.McpToggle("hamster-github", enabled: false);
-
-        // Assert
-        Assert.Equal("""{"subtype":"mcp_toggle","serverName":"hamster-github","enabled":false}""", request.ToJsonString());
     }
 
     static string Summary(string line)

@@ -133,14 +133,16 @@ public sealed class MarkdownConverter : IValueConverter
         EmphasisInline emphasis => Span(emphasis, new Italic()),
         LineBreakInline { IsHard: true } => new LineBreak(),
         LineBreakInline => new Run(" "),
-        AutolinkInline link when WebUri(link.Url) is { } uri => new Hyperlink(new Run(link.Url)) { NavigateUri = uri, ToolTip = uri.AbsoluteUri },
+        AutolinkInline link when WebUri(link.Url) is { } uri && !InsideLink(link) => new Hyperlink(new Run(link.Url)) { NavigateUri = uri, ToolTip = uri.AbsoluteUri },
         AutolinkInline link => new Run(link.Url),
         HtmlEntityInline entity => new Run(entity.Transcoded.ToString()),
         HtmlInline html => new Run(html.Tag),
-        LinkInline { IsImage: false } link when WebUri(link.Url) is { } uri => Span(link, new Hyperlink { NavigateUri = uri, ToolTip = uri.AbsoluteUri }),
+        LinkInline { IsImage: false } link when WebUri(link.Url) is { } uri && !InsideLink(link) => Span(link, new Hyperlink { NavigateUri = uri, ToolTip = uri.AbsoluteUri }),
         ContainerInline container => Span(container, new Span()),
         _ => new Run(inline.ToString()),
     };
+
+    static bool InsideLink(Markdig.Syntax.Inlines.Inline inline) => inline.Parent?.ContainsParentOfType<LinkInline>() == true;
 
     static Uri? WebUri(string? url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? uri : null;
 

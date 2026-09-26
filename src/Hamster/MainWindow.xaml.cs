@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
@@ -30,24 +31,38 @@ public partial class MainWindow : Window
     static readonly TimeSpan ClickTime = TimeSpan.FromMilliseconds(300);
     static readonly TimeSpan ChatsIdleTime = TimeSpan.FromSeconds(60);
     static readonly TimeSpan ToolbarIdleTime = TimeSpan.FromSeconds(2);
+    static readonly Brush FeedBackground = new SolidColorBrush(Color.FromArgb(0x24, 0xF5, 0xC5, 0x42));
     const string CollapseIcon = "\uE70D";
+    const string SwitchWhenIdle = "Stop Claude, eller vent til den er færdig, for at skifte";
     const string ExpandIcon = "\uE70E";
+    const string PlayIcon = "\uE768";
+    const string PauseIcon = "\uE769";
 
     readonly ClaudeClient claude;
     readonly Conversation conversation;
     readonly JsonFile<Placement> placementFile;
     readonly string instructionsFile;
+    readonly string data;
     readonly List<string> attachedFiles = [];
     readonly List<ImageAttachment> attachedImages = [];
     readonly CharacterLibrary characters;
+    readonly PromptLibrary prompts;
     readonly JsonFile<PetSettings> petFile;
     readonly Connectors connectors;
+    readonly Subscriptions subscriptions;
+    readonly Feed feed;
     readonly DispatcherTimer timer = new();
     readonly DispatcherTimer clock = new() { Interval = TimeSpan.FromSeconds(1) };
+    readonly DispatcherTimer feedTimer = new() { Interval = Subscriptions.Interval };
+    readonly HashSet<string> dismissedProblems = [];
 
+    IReadOnlyList<string> problems = [];
+    DateTime feedNewsAt;
+    MusicPlayer? music;
     Character character = Character.Hamster;
     Dictionary<Mood, BitmapSource[]> images = [];
     SettingsWindow? settings;
+    FeedWindow? feedWindow;
     Mood mood;
     int frame;
     bool pressed, dragging, chatsExpanded = true, chatsShown = true, toolbarShown = true;
@@ -63,23 +78,43 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         (Width, Height) = (SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
-        var data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Hamster");
+        data = DataFolder.Current;
         instructionsFile = Path.Combine(data, "instructions.txt");
         claude = new ClaudeClient(Path.Combine(data, "workspace"), instructionsFile,
             new JsonFile<ClaudeSettings>(Path.Combine(data, "settings.json"), ClaudeSettings.Default));
-        conversation = new Conversation(claude, new JsonFile<SavedChats>(Path.Combine(data, "chats.json"), SavedChats.Empty));
+        SavedChats.Migrate(data, claude.Settings.WorkingDirectory);
+        conversation = new Conversation(claude, new JsonFile<SavedChats>(SavedChats.FileFor(data, claude.Settings.WorkingDirectory), SavedChats.Empty));
         placementFile = new JsonFile<Placement>(Path.Combine(data, "placement.json"), DefaultPlacement);
         placement = placementFile.Load();
         characters = new CharacterLibrary(Path.Combine(data, "Characters"));
+        prompts = new PromptLibrary(Path.Combine(data, "Prompts"));
         petFile = new JsonFile<PetSettings>(Path.Combine(data, "pet.json"), PetSettings.Default);
         connectors = new Connectors(claude, conversation.Restart, () => conversation.RestartPending);
+        subscriptions = new Subscriptions(connectors, new ClaudeFetcher(Path.Combine(data, "workspace")), new WebSession(Path.Combine(data, "WebLogin")),
+            new JsonFile<SubscriptionSettings>(Path.Combine(data, "subscriptions.json"), SubscriptionSettings.Empty));
+        feed = new Feed([(Subscriptions.JiraSource, subscriptions.FetchJiraAsync), (Subscriptions.GitHubSource, subscriptions.FetchGitHubAsync)]);
+        feed.Changed += news =>
+        {
+            if (news)
+                feedNewsAt = DateTime.UtcNow;
+            ShowFeed();
+        };
+        subscriptions.Changed += () => _ = feed.RefreshAsync(subscriptionsChanged: true);
+        feedTimer.Tick += (_, _) => _ = feed.RefreshAsync();
         if (!ModeButton.ContextMenu.Items.OfType<MenuItem>().Any(item => (string)item.Tag == claude.Settings.PermissionMode))
             claude.Settings = claude.Settings with { PermissionMode = ClaudeSettings.Default.PermissionMode };
         Choose(ModelButton, claude.Settings.Model);
         Choose(EffortButton, claude.Settings.Effort);
         Choose(ModeButton, claude.Settings.PermissionMode);
         ToggleChats.Content = CollapseIcon;
+        ShowFolder();
+        ChatList.ItemsSource = conversation.Chats;
         conversation.Changed += Conversation_Changed;
+        conversation.Started += () =>
+        {
+            _ = CheckConnectorsAsync();
+            _ = feed.RefreshAsync();
+        };
         conversation.PermissionModeChanged += mode => claude.Remember(claude.Settings with { PermissionMode = Choose(ModeButton, mode) });
         timer.Tick += (_, _) =>
         {
@@ -107,8 +142,9 @@ public partial class MainWindow : Window
         Celebrating: conversation.AnsweredWithin(HappyTime, DateTime.UtcNow),
         Failed: conversation.FailedWithin(SadTime, DateTime.UtcNow),
         Typing: Input.IsKeyboardFocused && Input.Text.Length > 0,
-        HasNews: conversation.AnsweredAt > newsSeenAt,
+        HasNews: conversation.AnsweredAt > newsSeenAt || feedNewsAt > newsSeenAt,
         BackgroundWork: conversation.BackgroundTasks > 0,
+        Music: music?.Track?.Playing == true,
         Tired: conversation.Usage?.FiveHour >= TiredUsage,
         Hovered: Pet.IsMouseOver,
         Awake: Input.IsKeyboardFocused || DateTime.UtcNow - lastActivity < AwakeTime);
@@ -146,16 +182,100 @@ public partial class MainWindow : Window
         Animate();
     }
 
-    void Settings_Click(object sender, RoutedEventArgs e)
+    void Settings_Click(object sender, RoutedEventArgs e) => ShowSettings();
+
+    void ShowSettings()
     {
         if (settings is { IsVisible: true })
         {
             settings.Activate();
             return;
         }
-        settings = new SettingsWindow(characters, character.Name, ChooseCharacter, connectors) { Owner = this };
+        settings = new SettingsWindow(characters, character.Name, ChooseCharacter, connectors, subscriptions) { Owner = this };
+        settings.Closed += (_, _) => _ = CheckConnectorsAsync();
         settings.Show();
     }
+
+    async Task CheckConnectorsAsync()
+    {
+        try
+        {
+            problems = await connectors.ProblemsAsync(Connectors.StatusInterval);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or OperationCanceledException or IOException or ObjectDisposedException)
+        {
+            return;
+        }
+        ShowProblems();
+    }
+
+    void ShowProblems()
+    {
+        dismissedProblems.IntersectWith(problems);
+        ProblemList.ItemsSource = problems.Except(dismissedProblems).ToArray();
+    }
+
+    void Problem_Click(object sender, MouseButtonEventArgs e) => ShowSettings();
+
+    void DismissProblem_Click(object sender, RoutedEventArgs e)
+    {
+        dismissedProblems.Add((string)((FrameworkElement)sender).DataContext);
+        ShowProblems();
+    }
+
+    void ShowFeed()
+    {
+        var any = feed.Items.Count > 0;
+        FeedCount.Text = feed.Items.Count.ToString(CultureInfo.CurrentCulture);
+        FeedBadge.Background = (Brush)FindResource(any ? "Attention" : "Muted");
+        FeedButton.Foreground = (Brush)FindResource(any ? "Attention" : "Muted");
+        FeedButton.Background = any ? FeedBackground : Brushes.Transparent;
+        feedWindow?.ShowFeed();
+        if (Status.Mood != mood)
+            Animate();
+    }
+
+    void Feed_Click(object sender, RoutedEventArgs e)
+    {
+        if (feedWindow is { IsVisible: true })
+        {
+            feedWindow.Activate();
+            return;
+        }
+        feedWindow = new FeedWindow(feed, subscriptions) { Owner = this };
+        feedWindow.Closed += (_, _) => feedWindow = null;
+        feedWindow.Show();
+    }
+
+    async Task StartMusicAsync()
+    {
+        try
+        {
+            music = await MusicPlayer.StartAsync();
+        }
+        catch (COMException)
+        {
+            return;
+        }
+        music.Changed += ShowMusic;
+        ShowMusic();
+    }
+
+    void ShowMusic()
+    {
+        var track = music?.Track;
+        MusicBubble.Visibility = track is null ? Visibility.Collapsed : Visibility.Visible;
+        (TrackText.Text, MusicBubble.ToolTip) = (track?.Text, track?.Text);
+        (PlayPauseButton.Content, PlayPauseButton.ToolTip) = track?.Playing == true ? (PauseIcon, "Pause") : (PlayIcon, "Afspil");
+        if (Status.Mood != mood)
+            Animate();
+    }
+
+    async void PlayPause_Click(object sender, RoutedEventArgs e) => await (music?.PlayPauseAsync() ?? Task.CompletedTask);
+
+    async void NextTrack_Click(object sender, RoutedEventArgs e) => await (music?.NextAsync() ?? Task.CompletedTask);
+
+    async void PreviousTrack_Click(object sender, RoutedEventArgs e) => await (music?.PreviousAsync() ?? Task.CompletedTask);
 
     void ChooseCharacter(Character chosen)
     {
@@ -169,7 +289,7 @@ public partial class MainWindow : Window
         FadeWhenIdle();
     }
 
-    bool MenuOpen => new[] { ModelButton, EffortButton, ModeButton, MoreButton }.Any(button => button.ContextMenu.IsOpen);
+    bool MenuOpen => new[] { ModelButton, EffortButton, ModeButton, MoreButton, PromptsButton }.Any(button => button.ContextMenu.IsOpen);
 
     void FadeWhenIdle()
     {
@@ -183,7 +303,7 @@ public partial class MainWindow : Window
         if ((typing || Input.Text.Length > 0 || IsMouseOver || MenuOpen || now - lastTouch < ToolbarIdleTime) != toolbarShown)
         {
             toolbarShown = !toolbarShown;
-            Fade(Toolbar, toolbarShown);
+            Fade(ToolbarArea, toolbarShown);
         }
     }
 
@@ -199,14 +319,16 @@ public partial class MainWindow : Window
         UpdateChatList();
         ScrollToNewest();
         _ = conversation.StartAsync();
+        _ = StartMusicAsync();
+        feedTimer.Start();
     }
 
     Placement OnScreen(Placement saved)
     {
-        var pet = Pet.TranslatePoint(new Point(), this);
+        var pet = PetArea.TranslatePoint(new Point(), this);
         var (petLeftToRight, petTopToBottom) = (ActualWidth - pet.X, ActualHeight - pet.Y);
         var corners = new Rect(SystemParameters.VirtualScreenLeft + petLeftToRight, SystemParameters.VirtualScreenTop + petTopToBottom,
-            SystemParameters.VirtualScreenWidth - Pet.ActualWidth, SystemParameters.VirtualScreenHeight - petTopToBottom);
+            SystemParameters.VirtualScreenWidth - PetArea.ActualWidth, SystemParameters.VirtualScreenHeight - petTopToBottom);
         return saved.ClampedTo(corners);
     }
 
@@ -247,7 +369,11 @@ public partial class MainWindow : Window
         ChatScroll.Height = Math.Clamp(Math.Min(placement.Bottom - ScreenArea.Of(Pet).Top, Height) - (Root.ActualHeight - ChatScroll.ActualHeight),
             0, placement.ChatHeight);
 
-    void Window_Closed(object sender, EventArgs e) => claude.End();
+    void Window_Closed(object sender, EventArgs e)
+    {
+        conversation.Save();
+        claude.End();
+    }
 
     void Window_MouseMove(object sender, MouseEventArgs e)
     {
@@ -276,7 +402,9 @@ public partial class MainWindow : Window
         StopButton.Visibility = conversation.IsBusy ? Visibility.Visible : Visibility.Collapsed;
         TasksText.Text = $"{conversation.BackgroundTasks} kører";
         TasksText.Visibility = conversation.BackgroundTasks > 0 && !conversation.IsBusy ? Visibility.Visible : Visibility.Collapsed;
+        PromptsButton.Visibility = StopButton.Visibility == Visibility.Collapsed && TasksText.Visibility == Visibility.Collapsed ? Visibility.Visible : Visibility.Collapsed;
         clock.IsEnabled = conversation.IsBusy;
+        ShowFolder();
     }
 
     void UpdateNews()
@@ -287,15 +415,14 @@ public partial class MainWindow : Window
 
     void UpdateChatList()
     {
-        if (chatsExpanded)
-            ChatList.ItemsSource = conversation.Chats;
-        else
+        var now = DateTime.UtcNow;
+        var any = false;
+        foreach (var chat in conversation.Chats)
         {
-            var current = conversation.Chats.Where(chat => conversation.IsCurrent(chat, DateTime.UtcNow)).ToArray();
-            if (ChatList.ItemsSource is not ChatItem[] shown || !shown.SequenceEqual(current))
-                ChatList.ItemsSource = current;
+            chat.Shown = chatsExpanded || conversation.IsCurrent(chat, now);
+            any |= chat.Shown;
         }
-        ChatArea.Visibility = ChatList.HasItems ? Visibility.Visible : Visibility.Collapsed;
+        ChatArea.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
     }
 
     bool IsAtBottom => ChatScroll.VerticalOffset >= ChatScroll.ScrollableHeight - 1;
@@ -360,15 +487,46 @@ public partial class MainWindow : Window
     {
         beforeFullScreen = null;
         resizeStart = (Mouse.GetPosition(this), Root.ActualWidth, ChatScroll.Height);
+        FreezeHiddenChats();
     }
 
     void ResizeGrip_DragDelta(object sender, DragDeltaEventArgs e)
     {
         var moved = resizeStart.Mouse - Mouse.GetPosition(this);
         Apply(placement with { Width = resizeStart.Width + moved.X, ChatHeight = resizeStart.ChatHeight + moved.Y });
+        FreezeHiddenChats();
     }
 
-    void ResizeGrip_DragCompleted(object sender, DragCompletedEventArgs e) => placementFile.Save(placement);
+    void ResizeGrip_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        foreach (var chat in ChatContainers)
+            chat.ClearValue(WidthProperty);
+        placementFile.Save(placement);
+    }
+
+    IEnumerable<FrameworkElement> ChatContainers =>
+        Enumerable.Range(0, ChatList.Items.Count).Select(ChatList.ItemContainerGenerator.ContainerFromIndex).OfType<FrameworkElement>();
+
+    void FreezeHiddenChats()
+    {
+        bool thawed;
+        do
+        {
+            ChatList.UpdateLayout();
+            thawed = false;
+            foreach (var chat in ChatContainers.Where(chat => !double.IsNaN(chat.Width) && IsInView(chat)))
+            {
+                chat.ClearValue(WidthProperty);
+                thawed = true;
+            }
+        }
+        while (thawed);
+        foreach (var chat in ChatContainers.Where(chat => double.IsNaN(chat.Width) && !IsInView(chat)))
+            chat.Width = chat.ActualWidth;
+    }
+
+    bool IsInView(FrameworkElement chat) =>
+        chat.TranslatePoint(new Point(), ChatScroll).Y is var top && top < ChatScroll.ActualHeight && top + chat.ActualHeight > 0;
 
     void FullScreen_Click(object sender, RoutedEventArgs e)
     {
@@ -418,12 +576,9 @@ public partial class MainWindow : Window
             e.Handled = true;
             if (Input.Text.Trim().Length == 0 && attachedFiles.Count + attachedImages.Count == 0)
                 return;
-            var prompt = Conversation.WithAttachments(Input.Text.Trim(), attachedFiles, attachedImages);
-            ImageAttachment[] images = [.. attachedImages];
+            var text = Input.Text.Trim();
             Input.Clear();
-            ClearAttachments();
-            ScrollToNewest();
-            await conversation.SendAsync(prompt, images);
+            await SendAsync(text);
         }
         else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && ClipboardImage() is { } image)
         {
@@ -544,11 +699,6 @@ public partial class MainWindow : Window
 
     void MoreMenu_Opened(object sender, RoutedEventArgs e)
     {
-        var folder = claude.Settings.WorkingDirectory;
-        FolderItem.Header = folder is null ? "Vælg mappe…" : $"Mappe: {new DirectoryInfo(folder).Name}";
-        FolderItem.ToolTip = folder;
-        FolderItem.IsChecked = folder is not null;
-        NoFolderItem.IsChecked = folder is null;
         FullScreenItem.IsChecked = beforeFullScreen is not null;
         SaveChatItem.IsEnabled = conversation.Chats.Count > 0;
         UsageItem.Header = conversation.Usage is { } usage
@@ -558,19 +708,32 @@ public partial class MainWindow : Window
 
     void Folder_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFolderDialog { InitialDirectory = claude.Settings.WorkingDirectory ?? "" };
+        var dialog = new OpenFolderDialog { InitialDirectory = (claude.Settings.WorkingDirectory ?? claude.Settings.LastFolder) is { } last && Directory.Exists(last) ? last : "" };
         if (dialog.ShowDialog(this) == true)
             UseFolder(dialog.FolderName);
+        ShowFolder();
     }
 
-    void NoFolder_Click(object sender, RoutedEventArgs e) => UseFolder(null);
+    void Chat_Click(object sender, RoutedEventArgs e)
+    {
+        UseFolder(null);
+        ShowFolder();
+    }
 
     void UseFolder(string? folder)
     {
         if (folder == claude.Settings.WorkingDirectory)
             return;
-        claude.Settings = claude.Settings with { WorkingDirectory = folder };
-        conversation.Reset();
+        claude.Settings = claude.Settings with { WorkingDirectory = folder, LastFolder = folder ?? claude.Settings.WorkingDirectory };
+        conversation.Switch(new JsonFile<SavedChats>(SavedChats.FileFor(data, folder), SavedChats.Empty));
+    }
+
+    void ShowFolder()
+    {
+        var folder = claude.Settings.WorkingDirectory;
+        var idle = !conversation.IsBusy && conversation.BackgroundTasks == 0;
+        (ChatButton.IsChecked, FolderButton.IsChecked, ChatButton.IsEnabled, FolderButton.IsEnabled) = (folder is null, folder is not null, idle, idle);
+        (ChatButton.ToolTip, FolderButton.ToolTip) = idle ? ("Chat uden mappe", folder ?? "Vælg en mappe, Claude skal arbejde i") : (SwitchWhenIdle, SwitchWhenIdle);
     }
 
     void Instructions_Click(object sender, RoutedEventArgs e)
@@ -597,6 +760,42 @@ public partial class MainWindow : Window
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             MessageBox.Show(this, $"Kunne ikke gemme chatten: {exception.Message}", "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    void PromptsMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        var menu = (ContextMenu)sender;
+        menu.Items.Clear();
+        try
+        {
+            prompts.EnsureFolder();
+            foreach (var prompt in prompts.Prompts)
+                menu.Items.Add(new MenuItem { Header = prompt.Name, Tag = prompt });
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+        }
+        menu.Items.Add(new MenuItem { Header = "+ Tilføj prompt…" });
+    }
+
+    async void Prompt_Click(object sender, RoutedEventArgs e)
+    {
+        if (((MenuItem)e.OriginalSource).Tag is not Prompt prompt)
+        {
+            Open(new ProcessStartInfo(prompts.Folder) { UseShellExecute = true }, "Kunne ikke åbne mappen med prompts.");
+            return;
+        }
+        try
+        {
+            var text = (await File.ReadAllTextAsync(prompt.File)).Trim();
+            if (text.Length == 0)
+                return;
+            await SendAsync(text, prompt.Name);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"Kunne ikke læse prompten: {exception.Message}", "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -673,12 +872,23 @@ public partial class MainWindow : Window
 
     void Allow_Click(object sender, RoutedEventArgs e) => ((UserRequest)((FrameworkElement)sender).DataContext).Respond(true);
 
+    void AllowAlways_Click(object sender, RoutedEventArgs e) => ((UserRequest)((FrameworkElement)sender).DataContext).RespondAlways();
+
     void Deny_Click(object sender, RoutedEventArgs e) => ((UserRequest)((FrameworkElement)sender).DataContext).Respond(false);
 
     void Answer_RequestBringIntoView(object sender, RequestBringIntoViewEventArgs e)
     {
         if (e.TargetObject == sender)
             e.Handled = true;
+    }
+
+    async Task SendAsync(string text, string? title = null)
+    {
+        var prompt = Conversation.WithAttachments(text, attachedFiles, attachedImages);
+        ImageAttachment[] images = [.. attachedImages];
+        ClearAttachments();
+        ScrollToNewest();
+        await conversation.SendAsync(prompt, images, title);
     }
 
     void ScrollToNewest() => ChatScroll.ScrollToEnd();

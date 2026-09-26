@@ -4,17 +4,50 @@ using System.Text.Json.Nodes;
 
 namespace Hamster;
 
+public enum ConnectorSource { Off, Hamster, ClaudeAi, Login }
+
 public sealed record ConnectorField(string Label, bool Secret);
 
-public sealed record Connector(string Title, string Name, string Url, Uri? TokenPage, IReadOnlyList<ConnectorField> Fields, Func<IReadOnlyList<string>, string>? Authorization, bool CanBeReadOnly = false, string? ClaudeAiName = null)
+public sealed record WebLogin(string SiteSuffix, string CheckPath)
 {
+    public string? SiteOf(Uri page) =>
+        page.Scheme == Uri.UriSchemeHttps && page.Host.EndsWith(SiteSuffix, StringComparison.OrdinalIgnoreCase) ? page.GetLeftPart(UriPartial.Authority) : null;
+
+    public string? SiteFrom(string input) =>
+        Uri.TryCreate(input.Trim().Contains("://") ? input.Trim() : $"https://{input.Trim()}", UriKind.Absolute, out var url) && url.Host.Length > 0
+            ? SiteOf(new Uri($"https://{(url.Host.Contains('.') ? url.Host : url.Host + SiteSuffix)}"))
+            : null;
+}
+
+public sealed record Connector(string Title, string Name, string Url, Uri? TokenPage, IReadOnlyList<ConnectorField> Fields, Func<IReadOnlyList<string>, string>? Authorization, bool CanBeReadOnly = false, string? ClaudeAiName = null, WebLogin? Login = null)
+{
+    public const string MissingOnClaudeAi = "Ikke fundet på claude.ai";
+
     public bool Installable => Authorization is not null;
 
+    public static string StateOf(McpServer server) => server.Status switch
+    {
+        "connected" => "Forbundet",
+        "pending" => "Forbinder…",
+        "disabled" => "Slået fra",
+        "needs-auth" => "Mangler login",
+        "failed" => $"Fejl: {server.Error}",
+        var status => status,
+    };
+
+    public string? ProblemIn(IEnumerable<McpServer> servers, bool claudeAi) =>
+        FindIn(servers, claudeAi) switch
+        {
+            null => claudeAi ? MissingOnClaudeAi : null,
+            { Status: "needs-auth" or "failed" } server => StateOf(server),
+            _ => null,
+        };
+
     public McpServer? FindIn(IEnumerable<McpServer> servers, bool claudeAi = false) =>
-        servers.Where(server => (!claudeAi || server.FromClaudeAi) && Uri.TryCreate(server.Url, UriKind.Absolute, out var url) && url.Host == new Uri(Url).Host)
-            .OrderByDescending(server => server.IsUsable)
-            .ThenByDescending(server => server.Name == Name)
-            .FirstOrDefault();
+        claudeAi
+            ? servers.Where(server => server.FromClaudeAi && Uri.TryCreate(server.Url, UriKind.Absolute, out var url) && url.Host == new Uri(Url).Host)
+                .OrderByDescending(server => server.IsUsable).FirstOrDefault()
+            : servers.FirstOrDefault(server => !server.FromClaudeAi && server.Name == Name);
 
     public IReadOnlyList<string> AddArguments(IReadOnlyList<string> values, bool allowWrite) =>
     [
@@ -26,13 +59,16 @@ public sealed record Connector(string Title, string Name, string Url, Uri? Token
 public sealed class Connectors(IClaudeClient claude, Action restart, Func<bool> restartPending)
 {
     public const string ReadOnlyHeader = "X-MCP-Readonly";
+    public const int ClaudeAiChecks = 5;
+    public static readonly TimeSpan StatusInterval = TimeSpan.FromSeconds(2);
 
     public static readonly IReadOnlyList<Connector> All =
     [
         new("Atlassian Rovo", "hamster-atlassian-rovo", "https://mcp.atlassian.com/v2/mcp", new("https://id.atlassian.com/manage-profile/security/api-tokens"),
             [new("E-mail", Secret: false), new("API-token", Secret: true)],
             values => $"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes($"{values[0]}:{values[1]}"))}",
-            ClaudeAiName: "claude.ai Atlassian Rovo"),
+            ClaudeAiName: "claude.ai Atlassian Rovo",
+            Login: new(".atlassian.net", "/rest/api/3/myself")),
         new("GitHub", "hamster-github", "https://api.githubcopilot.com/mcp/", new("https://github.com/settings/personal-access-tokens"),
             [new("Token", Secret: true)],
             values => $"Bearer {values[0]}",
@@ -43,24 +79,66 @@ public sealed class Connectors(IClaudeClient claude, Action restart, Func<bool> 
 
     public static JsonArray AllowedServers() => [.. All.Select(connector => new JsonObject { ["serverUrl"] = $"https://{new Uri(connector.Url).Host}/*" })];
 
-    public static JsonArray DeniedServers(IReadOnlyCollection<string> claudeAi) =>
-        [.. All.Select(connector => !claudeAi.Contains(connector.Name) ? connector.ClaudeAiName : connector.Installable ? connector.Name : null)
+    public static JsonArray DeniedServers(ClaudeSettings settings) =>
+        [.. All.SelectMany(connector => SourceOf(connector, settings) switch
+            {
+                ConnectorSource.Hamster => new[] { connector.ClaudeAiName },
+                ConnectorSource.ClaudeAi or ConnectorSource.Login => [connector.Installable ? connector.Name : null],
+                _ => [connector.ClaudeAiName, connector.Installable ? connector.Name : null],
+            })
             .OfType<string>().Select(name => new JsonObject { ["serverName"] = name })];
+
+    public static ConnectorSource SourceOf(Connector connector, ClaudeSettings settings) =>
+        settings.ClaudeAiConnectors?.Contains(connector.Name) == true ? ConnectorSource.ClaudeAi
+        : settings.LoginConnectors?.Contains(connector.Name) == true && connector.Login is not null ? ConnectorSource.Login
+        : settings.OffConnectors?.Contains(connector.Name) == true || !connector.Installable ? ConnectorSource.Off
+        : ConnectorSource.Hamster;
 
     public bool RestartPending => restartPending();
 
-    public bool UsesClaudeAi(Connector connector) => claude.Settings.ClaudeAiConnectors?.Contains(connector.Name) == true;
+    public ConnectorSource SourceOf(Connector connector) => SourceOf(connector, claude.Settings);
 
-    public void UseClaudeAi(Connector connector, bool use)
+    public bool UsesClaudeAi(Connector connector) => SourceOf(connector) is ConnectorSource.ClaudeAi or ConnectorSource.Login;
+
+    public void SetSource(Connector connector, ConnectorSource source)
     {
-        var others = (claude.Settings.ClaudeAiConnectors ?? []).Where(name => name != connector.Name);
-        claude.Settings = claude.Settings with { ClaudeAiConnectors = use ? [.. others, connector.Name] : [.. others] };
-        restart();
+        string[] Others(IReadOnlyList<string>? names) => [.. (names ?? []).Where(name => name != connector.Name)];
+        var denied = DeniedServers(claude.Settings);
+        claude.Settings = claude.Settings with
+        {
+            ClaudeAiConnectors = [.. Others(claude.Settings.ClaudeAiConnectors), .. source == ConnectorSource.ClaudeAi ? [connector.Name] : Array.Empty<string>()],
+            OffConnectors = [.. Others(claude.Settings.OffConnectors), .. source == ConnectorSource.Off && connector.Installable ? [connector.Name] : Array.Empty<string>()],
+            LoginConnectors = [.. Others(claude.Settings.LoginConnectors), .. source == ConnectorSource.Login ? [connector.Name] : Array.Empty<string>()],
+        };
+        if (!JsonNode.DeepEquals(denied, DeniedServers(claude.Settings)))
+            restart();
     }
 
     public async Task<IReadOnlyList<McpServer>> ServersAsync() => ClaudeProtocol.McpServers(await claude.RequestAsync(ClaudeProtocol.McpStatus()));
 
-    public Task ToggleAsync(McpServer server, bool enabled) => claude.RequestAsync(ClaudeProtocol.McpToggle(server.Name, enabled));
+    public async Task<IReadOnlyList<string>> ProblemsAsync(TimeSpan interval)
+    {
+        if (RestartPending)
+            return [];
+        for (var check = 1; ; check++)
+        {
+            var servers = await ServersAsync();
+            await EnableAsync(servers);
+            var problems = All.Where(connector => SourceOf(connector) != ConnectorSource.Off)
+                .Select(connector => (connector.Title, Problem: connector.ProblemIn(servers, UsesClaudeAi(connector))))
+                .Where(found => found.Problem is not null).ToArray();
+            if (check == ClaudeAiChecks || !servers.Any(server => server.Status == "pending") && !problems.Any(found => found.Problem == Connector.MissingOnClaudeAi))
+                return [.. problems.Select(found => $"{found.Title}: {found.Problem}")];
+            await Task.Delay(interval);
+        }
+    }
+
+    public async Task EnableAsync(IReadOnlyList<McpServer> servers)
+    {
+        foreach (var server in All.Where(connector => SourceOf(connector) != ConnectorSource.Off)
+            .Select(connector => connector.FindIn(servers, UsesClaudeAi(connector))).OfType<McpServer>().Where(server => server.Status == "disabled"))
+            await claude.RequestAsync(ClaudeProtocol.McpToggle(server.Name, true));
+    }
 
     public async Task InstallAsync(Connector connector, IReadOnlyList<string> values, bool allowWrite)
     {
@@ -82,10 +160,8 @@ public sealed class FieldInput(ConnectorField field)
     public string Value { get; set; } = "";
 }
 
-public sealed class ConnectorRow(Connector connector, bool usesClaudeAi = false) : INotifyPropertyChanged
+public sealed class ConnectorRow(Connector connector, ConnectorSource source = ConnectorSource.Hamster) : INotifyPropertyChanged
 {
-    const int ClaudeAiChecks = 5;
-
     int claudeAiMisses;
     bool restartPending;
 
@@ -99,44 +175,70 @@ public sealed class ConnectorRow(Connector connector, bool usesClaudeAi = false)
     public bool Editing { get; private set; }
     public bool Restarting { get; private set; }
     public bool AllowWrite { get; set; }
-    public bool UsesClaudeAi { get; private set; } = usesClaudeAi;
+    public ConnectorSource Source { get; private set; } = source;
     public string? Problem { get; private set; }
+    public IReadOnlyList<Choice> Choices { get; private set; } = [];
+    public IReadOnlyList<Choice> BoardChoices { get; private set; } = [];
+    public bool CanFetchChoices { get; private set; }
+    public string? ChoicesText { get; private set; }
+    public string? LoginSite { get; private set; }
+    public bool? LoginConfirmed { get; private set; }
+    public string SiteInput { get; set; } = "";
+    public bool IsOff => Source == ConnectorSource.Off;
+    public bool IsHamster => Source == ConnectorSource.Hamster;
+    public bool IsClaudeAi => Source == ConnectorSource.ClaudeAi;
+    public bool IsLogin => Source == ConnectorSource.Login;
+    public bool NeedsSite => IsLogin && LoginSite is null;
+    public string LoginLabel => LoginSite is null ? "Log ind…" : "Log ud";
     public bool Installed => Server?.IsUsable == true;
-    public bool CanInstall => Known && !Installed && !Restarting && !UsesClaudeAi && Connector.Installable;
-    public bool CanToggle => Installed && Connector.Installable;
+    public bool CanInstall => Known && IsHamster && Connector.Installable && !Installed && !Restarting && !restartPending;
     public bool ShowForm => CanInstall || Editing;
-    public bool CanEdit => Installed && Server?.Name == Connector.Name && !UsesClaudeAi;
-    public bool HasToken => Installed && Server?.HasToken == true;
-    public bool On => Server?.Status != "disabled";
-    public bool ClaudeAiMissing => claudeAiMisses >= ClaudeAiChecks;
+    public bool CanEdit => IsHamster && Connector.Installable && Installed && Server?.Name == Connector.Name;
+    public bool HasChoices => !IsOff && (Choices.Count > 0 || CanFetchChoices);
+    public bool ClaudeAiMissing => claudeAiMisses >= Connectors.ClaudeAiChecks;
 
-    public string State => !Known ? "Henter…"
-        : Restarting && !Installed ? "Installeret – bliver aktiv, når Claude er genstartet"
-        : UsesClaudeAi && Server is null && restartPending ? "Skifter til claude.ai, når Claude er genstartet"
-        : UsesClaudeAi && Server is null ? "Ikke fundet på claude.ai"
-        : !UsesClaudeAi && !Connector.Installable ? "Slået fra"
-        : Server?.Status switch
+    public string State => IsOff ? "Slået fra"
+        : IsLogin ? LoginSite is null ? "Site:" : LoginConfirmed switch
         {
-            null => "Ikke installeret",
-            "connected" => "Forbundet",
-            "pending" => "Forbinder…",
-            "disabled" => "Slået fra",
-            "needs-auth" => "Mangler login",
-            "failed" => $"Fejl: {Server.Error}",
-            var status => status,
+            true => $"Logget ind på {new Uri(LoginSite).Host}",
+            null => $"Tjekker login på {new Uri(LoginSite).Host}…",
+            false => $"Kunne ikke tjekke login på {new Uri(LoginSite).Host}",
+        }
+        : !Known ? "Henter…"
+        : Server is null && restartPending ? "Skifter, når Claude er genstartet"
+        : Restarting && !Installed ? "Gemt – aktiveres, når Claude er genstartet"
+        : Server is null ? IsClaudeAi ? Connector.MissingOnClaudeAi : "Ikke installeret – udfyld felterne"
+        : Server.Status switch
+        {
+            "connected" => IsClaudeAi ? "Forbundet via claude.ai" : "Forbundet med dit token",
+            "needs-auth" => IsClaudeAi ? "Log ind på claude.ai" : "Tokenet blev afvist",
+            _ => Connector.StateOf(Server),
         };
 
     public void Show(IReadOnlyList<McpServer> servers, bool restartPending = false)
     {
-        (Server, Known, this.restartPending) = (Connector.FindIn(servers, UsesClaudeAi), true, restartPending);
+        (Server, Known, this.restartPending) = (IsOff ? null : Connector.FindIn(servers, IsClaudeAi), true, restartPending);
         Restarting &= !Installed && Server?.Name != Connector.Name;
-        claudeAiMisses = UsesClaudeAi && Server is null && !restartPending ? claudeAiMisses + 1 : 0;
+        claudeAiMisses = IsClaudeAi && Server is null && !restartPending ? claudeAiMisses + 1 : 0;
         Changed();
     }
 
-    public void UseClaudeAi(bool use)
+    public void SetSource(ConnectorSource source)
     {
-        (UsesClaudeAi, Editing, claudeAiMisses, Problem) = (use, false, 0, null);
+        if (source != Source)
+            (Source, Editing, claudeAiMisses, Problem, Known, Server) = (source, false, 0, null, false, null);
+        Changed();
+    }
+
+    public void ShowChoices(IReadOnlyList<Choice> choices, IReadOnlyList<Choice> boardChoices, bool canFetch, string? text)
+    {
+        (Choices, BoardChoices, CanFetchChoices, ChoicesText) = (choices, boardChoices, canFetch, text);
+        Changed();
+    }
+
+    public void ShowLogin(string? site, bool? confirmed = true)
+    {
+        (LoginSite, LoginConfirmed) = (site, confirmed);
         Changed();
     }
 

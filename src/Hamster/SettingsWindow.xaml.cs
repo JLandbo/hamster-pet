@@ -30,31 +30,142 @@ public sealed class CharacterChoice(string name, Character? character, ImageSour
 
 public partial class SettingsWindow : Window
 {
-    static readonly TimeSpan StatusInterval = TimeSpan.FromSeconds(2);
-
     readonly CharacterLibrary characters;
     readonly Action<Character> choose;
     readonly Connectors connectors;
+    readonly Subscriptions subscriptions;
     readonly ObservableCollection<CharacterChoice> tiles = [];
     readonly ConnectorRow[] rows;
     string chosen;
 
-    public SettingsWindow(CharacterLibrary characters, string chosen, Action<Character> choose, Connectors connectors)
+    public SettingsWindow(CharacterLibrary characters, string chosen, Action<Character> choose, Connectors connectors, Subscriptions subscriptions)
     {
         InitializeComponent();
-        (this.characters, this.chosen, this.choose, this.connectors) = (characters, chosen, choose, connectors);
-        rows = [.. Connectors.All.Select(connector => new ConnectorRow(connector, connectors.UsesClaudeAi(connector)))];
+        (this.characters, this.chosen, this.choose, this.connectors, this.subscriptions) = (characters, chosen, choose, connectors, subscriptions);
+        rows = [.. Connectors.All.Select(connector => new ConnectorRow(connector, connectors.SourceOf(connector)))];
         CharacterList.ItemsSource = tiles;
         ConnectorList.ItemsSource = rows;
+        foreach (var row in rows)
+        {
+            ShowChoices(row);
+            row.ShowLogin(subscriptions.LoginSiteOf(row.Connector), confirmed: null);
+            row.SiteInput = subscriptions.KnownSiteOf(row.Connector) is { } site ? new Uri(site).Host : "";
+        }
+    }
+
+    async void Login_Click(object sender, RoutedEventArgs e)
+    {
+        var row = (ConnectorRow)((FrameworkElement)sender).DataContext;
+        if (row.LoginSite is null)
+        {
+            if (row.Connector.Login!.SiteFrom(row.SiteInput) is not { } site)
+            {
+                row.Finish("Skriv jeres site, fx firma.atlassian.net.");
+                return;
+            }
+            row.Finish(null);
+            subscriptions.Login(this, row.Connector, site);
+            row.ShowLogin(subscriptions.LoginSiteOf(row.Connector));
+            if (row.LoginSite is not null && row.CanFetchChoices)
+                await FetchChoicesAsync(row);
+            return;
+        }
+        try
+        {
+            await subscriptions.LogoutAsync();
+        }
+        catch (Exception exception) when (Subscriptions.IsFetchError(exception))
+        {
+            row.Finish(exception.Message);
+        }
+        foreach (var other in rows)
+            other.ShowLogin(subscriptions.LoginSiteOf(other.Connector));
+    }
+
+    void ShowChoices(ConnectorRow row, string? text = null)
+    {
+        var choices = subscriptions.ChoicesFor(row.Connector);
+        var canFetch = row.Connector == Subscriptions.Jira;
+        row.ShowChoices(choices, subscriptions.BoardChoicesFor(row.Connector), canFetch, text);
+    }
+
+    async void Choice_Click(object sender, RoutedEventArgs e)
+    {
+        var box = (CheckBox)sender;
+        var choice = (Choice)box.DataContext;
+        var row = rows.First(row => row.Choices.Contains(choice) || row.BoardChoices.Contains(choice));
+        row.Start();
+        try
+        {
+            await subscriptions.ChooseAsync(choice, box.IsChecked == true);
+            ShowChoices(row);
+            row.Finish(null);
+        }
+        catch (Exception exception) when (Subscriptions.IsFetchError(exception))
+        {
+            ShowChoices(row);
+            row.Finish(exception.Message);
+        }
+    }
+
+    async void FetchStatuses_Click(object sender, RoutedEventArgs e) => await FetchChoicesAsync((ConnectorRow)((FrameworkElement)sender).DataContext);
+
+    async Task FetchChoicesAsync(ConnectorRow row)
+    {
+        row.Start();
+        ShowChoices(row, "Henter…");
+        try
+        {
+            await subscriptions.FetchJiraBoardsAsync();
+            ShowChoices(row);
+        }
+        catch (Exception exception) when (Subscriptions.IsFetchError(exception))
+        {
+            ShowChoices(row, exception.Message);
+        }
+        finally
+        {
+            row.Finish(null);
+        }
     }
 
     async void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        subscriptions.Changed += ShowLoggedOut;
+        Closed += (_, _) => subscriptions.Changed -= ShowLoggedOut;
+        _ = CheckLoginsAsync();
         while (IsVisible)
         {
             await ShowConnectorsAsync();
-            await Task.Delay(StatusInterval);
+            await Task.Delay(Connectors.StatusInterval);
         }
+    }
+
+    async Task CheckLoginsAsync()
+    {
+        foreach (var row in rows.Where(row => row.IsLogin && row.LoginSite is not null))
+            await CheckLoginAsync(row);
+    }
+
+    async Task CheckLoginAsync(ConnectorRow row)
+    {
+        row.Start();
+        try
+        {
+            row.ShowLogin(await subscriptions.CheckLoginAsync(row.Connector));
+            row.Finish(null);
+        }
+        catch (Exception exception) when (Subscriptions.IsFetchError(exception))
+        {
+            row.ShowLogin(row.LoginSite, confirmed: false);
+            row.Finish(exception.Message);
+        }
+    }
+
+    void ShowLoggedOut()
+    {
+        foreach (var row in rows.Where(row => row.LoginSite is not null && subscriptions.LoginSiteOf(row.Connector) is null))
+            row.ShowLogin(null);
     }
 
     async void Window_Activated(object sender, EventArgs e) => await ShowCharactersAsync();
@@ -115,13 +226,14 @@ public partial class SettingsWindow : Window
         try
         {
             var servers = await connectors.ServersAsync();
+            await connectors.EnableAsync(servers);
             foreach (var row in rows)
             {
                 row.Show(servers, connectors.RestartPending);
                 if (!row.ClaudeAiMissing)
                     continue;
-                UseClaudeAi(row, false);
-                row.Finish("Ikke fundet på claude.ai.");
+                SetSource(row, ConnectorSource.Off);
+                row.Finish($"{Connector.MissingOnClaudeAi}.");
             }
             ConnectorProblem.Visibility = Visibility.Collapsed;
         }
@@ -134,24 +246,19 @@ public partial class SettingsWindow : Window
         }
     }
 
-    async void Toggle_Click(object sender, RoutedEventArgs e)
+    void Source_Click(object sender, RoutedEventArgs e)
     {
-        var toggle = (ToggleButton)sender;
-        var (row, enabled) = ((ConnectorRow)toggle.DataContext, toggle.IsChecked == true);
-        await RunAsync(row, () => connectors.ToggleAsync(row.Server!, enabled));
-        await ShowConnectorsAsync();
+        var button = (FrameworkElement)sender;
+        SetSource((ConnectorRow)button.DataContext, (ConnectorSource)button.Tag);
     }
 
-    void ClaudeAi_Click(object sender, RoutedEventArgs e)
+    void SetSource(ConnectorRow row, ConnectorSource source)
     {
-        var toggle = (ToggleButton)sender;
-        UseClaudeAi((ConnectorRow)toggle.DataContext, toggle.IsChecked == true);
-    }
-
-    void UseClaudeAi(ConnectorRow row, bool use)
-    {
-        connectors.UseClaudeAi(row.Connector, use);
-        row.UseClaudeAi(use);
+        if (source != row.Source)
+            connectors.SetSource(row.Connector, source);
+        row.SetSource(source);
+        if (row.IsLogin && row.LoginSite is not null)
+            _ = CheckLoginAsync(row);
     }
 
     void Edit_Click(object sender, RoutedEventArgs e) => ((ConnectorRow)((FrameworkElement)sender).DataContext).Edit();
@@ -165,8 +272,9 @@ public partial class SettingsWindow : Window
             row.Finish("Udfyld alle felter.");
             return;
         }
-        if (await RunAsync(row, () => connectors.InstallAsync(row.Connector, values, row.AllowWrite)))
-            row.AwaitRestart();
+        if (!await RunAsync(row, () => connectors.InstallAsync(row.Connector, values, row.AllowWrite)))
+            return;
+        row.AwaitRestart();
     }
 
     static async Task<bool> RunAsync(ConnectorRow row, Func<Task> action)
