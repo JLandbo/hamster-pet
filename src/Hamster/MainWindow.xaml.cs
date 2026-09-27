@@ -91,7 +91,6 @@ public partial class MainWindow : Window
         InitializeComponent();
         PetArea.Children.Remove(Pet);
         petWindow.Content = Pet;
-        petWindow.MouseMove += Window_MouseMove;
         petWindow.DragOver += Window_DragOver;
         petWindow.Drop += Window_Drop;
         petWindow.Closed += (_, _) => Dispatcher.BeginInvoke(Close);
@@ -388,7 +387,7 @@ public partial class MainWindow : Window
             chatsShown = !chatsShown;
             Fade(ChatArea, chatsShown);
         }
-        if ((shown || Input.Text.Length > 0 || IsMouseOver || Pet.IsMouseOver || MenuOpen || now - lastTouch < ToolbarIdleTime) != toolbarShown)
+        if ((shown || Input.Text.Length > 0 || IsMouseOver || toolbarShown && Pet.IsMouseOver || MenuOpen || now - lastTouch < ToolbarIdleTime) != toolbarShown)
         {
             toolbarShown = !toolbarShown;
             Fade(ToolbarArea, toolbarShown);
@@ -503,7 +502,7 @@ public partial class MainWindow : Window
 
     void UpdateNews()
     {
-        if (IsMouseOver || Pet.IsMouseOver || Input.IsKeyboardFocused)
+        if (IsMouseOver || Input.IsKeyboardFocused)
             newsSeenAt = DateTime.UtcNow;
     }
 
@@ -521,13 +520,7 @@ public partial class MainWindow : Window
 
     bool IsAtBottom => ChatScroll.VerticalOffset >= ChatScroll.ScrollableHeight - 1;
 
-    void Pet_MouseEnterOrLeave(object sender, MouseEventArgs e)
-    {
-        if (e.RoutedEvent == MouseEnterEvent)
-            WindowOrder.BringToFront(this);
-        Touch();
-        Animate();
-    }
+    void Pet_MouseEnterOrLeave(object sender, MouseEventArgs e) => Animate();
 
     void Pet_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -562,6 +555,7 @@ public partial class MainWindow : Window
     void Pet_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         var clicked = pressed && !dragging && DateTime.UtcNow - pressedAt < ClickTime;
+        newsSeenAt = DateTime.UtcNow;
         Pet.ReleaseMouseCapture();
         Activate();
         if (!clicked)
