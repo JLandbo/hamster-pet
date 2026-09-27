@@ -50,6 +50,8 @@ public sealed class Conversation : IClaudeListener
 
     public bool FailedWithin(TimeSpan time, DateTime now) => lastAnswered is { Status: ChatStatus.Error } && now - AnsweredAt < time;
 
+    public bool FailedSince(DateTime seenAt) => lastAnswered is { Status: ChatStatus.Error } && AnsweredAt > seenAt;
+
     public static string WithAttachments(string text, IReadOnlyList<string> files, IReadOnlyList<ImageAttachment> images)
     {
         if (files.Count == 0 && images.Count == 0)

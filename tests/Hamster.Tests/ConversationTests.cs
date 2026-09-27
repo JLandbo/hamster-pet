@@ -1178,6 +1178,23 @@ public sealed class ConversationTests : IDisposable
         Assert.True(conversation.FailedWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow));
     }
 
+    [Theory]
+    [InlineData(true, -10, true)]
+    [InlineData(true, 10, false)]
+    [InlineData(false, -10, false)]
+    public async Task FailedSince_WhenAnswered_ThenTrueOnlyForErrorsNotSeenYet(bool isError, int seenSecondsLater, bool expected)
+    {
+        // Arrange
+        claude.Reply = Answering(new ClaudeResult("session-1", "Svar", isError));
+        await conversation.SendAsync("hej");
+
+        // Act
+        var failed = conversation.FailedSince(DateTime.UtcNow.AddSeconds(seenSecondsLater));
+
+        // Assert
+        Assert.Equal(expected, failed);
+    }
+
     [Fact]
     public async Task FailedWithin_WhenTheTimeHasPassed_ThenFalse()
     {

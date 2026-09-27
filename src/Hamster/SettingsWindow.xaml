@@ -74,7 +74,7 @@
             MouseLeftButtonDown="Border_MouseLeftButtonDown">
         <DockPanel>
             <DockPanel DockPanel.Dock="Top" Margin="0,0,0,16">
-                <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="{DynamicResource Common.Close}" Click="Close_Click" Style="{StaticResource SmallIconButton}" FontSize="12" VerticalAlignment="Center" />
+                <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="{DynamicResource Common.Close}" Click="Close_Click" IsCancel="True" Style="{StaticResource SmallIconButton}" FontSize="12" VerticalAlignment="Center" />
                 <TextBlock Text="{DynamicResource Settings.Title}" Foreground="{DynamicResource Text}" FontSize="18" FontWeight="SemiBold" />
             </DockPanel>
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">

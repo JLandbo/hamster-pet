@@ -60,6 +60,7 @@ public partial class MainWindow : Window
     readonly HashSet<ConnectorProblem> dismissedProblems = [];
 
     IReadOnlyList<ConnectorProblem> problems = [];
+    string lastPrompt = "";
     DateTime feedNewsAt;
     MusicPlayer? music;
     Character character = Character.Hamster;
@@ -168,7 +169,7 @@ public partial class MainWindow : Window
         BrowsingWeb: conversation.IsBrowsingWeb,
         Busy: conversation.IsBusy,
         Celebrating: conversation.AnsweredWithin(HappyTime, DateTime.UtcNow),
-        Failed: conversation.FailedWithin(SadTime, DateTime.UtcNow),
+        Failed: conversation.FailedWithin(SadTime, DateTime.UtcNow) || conversation.FailedSince(newsSeenAt),
         Typing: Input.IsKeyboardFocused && Input.Text.Length > 0,
         HasNews: conversation.AnsweredAt > newsSeenAt,
         HasTaskNews: feedNewsAt > newsSeenAt,
@@ -653,11 +654,34 @@ public partial class MainWindow : Window
             Input.Clear();
             await SendAsync(text);
         }
+        else if (e.Key == Key.Up && Input.Text.Length == 0 && lastPrompt.Length > 0)
+        {
+            e.Handled = true;
+            Input.Text = lastPrompt;
+            Input.CaretIndex = lastPrompt.Length;
+        }
+        else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && ClipboardFiles() is { } files)
+        {
+            e.Handled = true;
+            Attach(files);
+        }
         else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && ClipboardImage() is { } image)
         {
             e.Handled = true;
             attachedImages.Add(new ImageAttachment("screenshot.png", "image/png", EncodePng(image)));
             UpdateAttachments();
+        }
+    }
+
+    static IEnumerable<string>? ClipboardFiles()
+    {
+        try
+        {
+            return Clipboard.ContainsFileDropList() ? Clipboard.GetFileDropList().Cast<string>() : null;
+        }
+        catch (ExternalException)
+        {
+            return null;
         }
     }
 
@@ -979,6 +1003,7 @@ public partial class MainWindow : Window
 
     async Task SendAsync(string text, string? title = null)
     {
+        lastPrompt = text;
         var prompt = Conversation.WithAttachments(text, attachedFiles, attachedImages);
         ImageAttachment[] images = [.. attachedImages];
         ClearAttachments();

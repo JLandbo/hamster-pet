@@ -163,7 +163,7 @@
             MouseLeftButtonDown="Border_MouseLeftButtonDown">
         <DockPanel>
             <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
-                <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="{DynamicResource Common.Close}" Click="Close_Click" Style="{StaticResource SmallIconButton}" FontSize="12" VerticalAlignment="Center" />
+                <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="{DynamicResource Common.Close}" Click="Close_Click" IsCancel="True" Style="{StaticResource SmallIconButton}" FontSize="12" VerticalAlignment="Center" />
                 <Button x:Name="RefreshButton" DockPanel.Dock="Right" Content="&#xE72C;" ToolTip="{DynamicResource Tasks.Refresh}" Click="Refresh_Click"
                         Style="{StaticResource SmallIconButton}" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
                 <TextBlock Text="{DynamicResource Common.Tasks}" Foreground="{DynamicResource Text}" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center" />
