@@ -623,7 +623,7 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
-    public async Task IsCurrent_WhenChatAsksPermission_ThenTrueLongAfterItsAnswer()
+    public async Task IsCurrent_WhenChatAsksPermission_ThenTrueAfterTheChatsWereHidden()
     {
         // Arrange
         await conversation.SendAsync("hej");
@@ -637,15 +637,15 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Theory]
-    [InlineData(29, true)]
-    [InlineData(31, false)]
-    public async Task IsCurrent_WhenAnswered_ThenShownFor30Seconds(int secondsLater, bool expected)
+    [InlineData(-1, true)]
+    [InlineData(1, false)]
+    public async Task IsCurrent_WhenAnswered_ThenTrueUntilTheChatsAreHidden(int hiddenSecondsLater, bool expected)
     {
         // Arrange
         await conversation.SendAsync("hej");
 
         // Act
-        var current = conversation.IsCurrent(conversation.Chats[0], DateTime.UtcNow.AddSeconds(secondsLater));
+        var current = conversation.IsCurrent(conversation.Chats[0], DateTime.UtcNow.AddSeconds(hiddenSecondsLater));
 
         // Assert
         Assert.Equal(expected, current);
@@ -659,7 +659,7 @@ public sealed class ConversationTests : IDisposable
         await conversation.SendAsync("anden");
 
         // Act
-        var current = conversation.IsCurrent(conversation.Chats[0], DateTime.UtcNow);
+        var current = conversation.IsCurrent(conversation.Chats[0], DateTime.MinValue);
 
         // Assert
         Assert.False(current);
@@ -1148,7 +1148,7 @@ public sealed class ConversationTests : IDisposable
         claude.Listener.Exited("claude stoppede uventet");
 
         // Assert
-        Assert.Equal((true, false), (conversation.IsCurrent(conversation.Chats[0], DateTime.UtcNow), conversation.IsCurrent(conversation.Chats[1], DateTime.UtcNow)));
+        Assert.Equal((true, false), (conversation.IsCurrent(conversation.Chats[0], DateTime.MinValue), conversation.IsCurrent(conversation.Chats[1], DateTime.MinValue)));
     }
 
     [Fact]

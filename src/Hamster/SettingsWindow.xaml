@@ -4,7 +4,7 @@
         xmlns:local="clr-namespace:Hamster"
         Title="{DynamicResource Settings.Title}" Width="560" Height="660" MinWidth="480" MinHeight="200"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="CanResize"
-        ShowInTaskbar="False" WindowStartupLocation="CenterOwner" UseLayoutRounding="True"
+        ShowInTaskbar="False" WindowStartupLocation="CenterScreen" UseLayoutRounding="True"
         FontFamily="{StaticResource UiFont}" FontSize="13" Activated="Window_Activated" Loaded="Window_Loaded">
 
     <WindowChrome.WindowChrome>
@@ -88,6 +88,12 @@
                             </StackPanel>
                         </Border>
                         <TextBlock Text="{DynamicResource Settings.Language}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <DockPanel Margin="0,0,0,16">
+                        <TextBlock x:Name="HideSecondsText" DockPanel.Dock="Right" Width="44" TextAlignment="Right" Foreground="{DynamicResource Text}" VerticalAlignment="Center" />
+                        <TextBlock DockPanel.Dock="Left" Text="{DynamicResource Settings.HideAfter}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                        <Slider x:Name="HideSecondsSlider" Minimum="1" Maximum="240" TickFrequency="1" IsSnapToTickEnabled="True" Focusable="False" VerticalAlignment="Center"
+                                LostMouseCapture="HideSecondsSlider_LostMouseCapture" />
                     </DockPanel>
                     <DockPanel Margin="0,0,0,8">
                         <Button DockPanel.Dock="Right" Content="&#xE838;" ToolTip="{DynamicResource Settings.OpenThemes}" Click="OpenThemes_Click"

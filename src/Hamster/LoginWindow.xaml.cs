@@ -1,4 +1,6 @@
+using System.IO;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Windows;
 using Microsoft.Web.WebView2.Core;
 
@@ -22,8 +24,16 @@ public partial class LoginWindow : Window
 
     async void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        await Web.EnsureCoreWebView2Async(await session.EnvironmentAsync());
-        Web.Source = new Uri(start);
+        try
+        {
+            await Web.EnsureCoreWebView2Async(await session.EnvironmentAsync());
+            Web.Source = new Uri(start);
+        }
+        catch (Exception exception) when (exception is WebView2RuntimeNotFoundException or COMException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, Strings.Format("Login.CouldNotOpen", exception.Message), "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Close();
+        }
     }
 
     async void Web_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)

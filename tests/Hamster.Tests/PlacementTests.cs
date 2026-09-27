@@ -20,6 +20,29 @@ public class PlacementTests
     }
 
     [Fact]
+    public void DraggedTo_WhenDraggedWiderThanTheNarrowest_ThenTakesTheDraggedWidth()
+    {
+        // Act
+        var placement = new Placement(1920, 1080, 450, 900).DraggedTo(700, 631);
+
+        // Assert
+        Assert.Equal(700, placement.Width);
+    }
+
+    [Theory]
+    [InlineData(631, 631, 450)]
+    [InlineData(600, 631, 450)]
+    [InlineData(250, 300, 250)]
+    public void DraggedTo_WhenNotDraggedWiderThanTheNarrowest_ThenTakesTheSmallerOfTheDraggedAndTheChosenWidth(double width, double narrowest, double expected)
+    {
+        // Act
+        var placement = new Placement(1920, 1080, 450, 900).DraggedTo(width, narrowest);
+
+        // Assert
+        Assert.Equal(expected, placement.Width);
+    }
+
+    [Fact]
     public void CenteredIn_WhenTheScreenIsGiven_ThenPutsThePetInTheMiddleWithItsSize()
     {
         // Act

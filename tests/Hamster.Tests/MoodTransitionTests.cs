@@ -27,7 +27,8 @@ public class MoodTransitionTests
     [Theory]
     [InlineData(Mood.Dangle)]
     [InlineData(Mood.Run)]
-    public void Next_WhenGrabbedMidSpin_ThenReactsRightAway(Mood wanted)
+    [InlineData(Mood.Giggle)]
+    public void Next_WhenTouchedMidSpin_ThenReactsRightAway(Mood wanted)
     {
         // Act
         var mood = MoodTransition.Next(Mood.Spin, framesShown: 5, wanted, SpinLength);

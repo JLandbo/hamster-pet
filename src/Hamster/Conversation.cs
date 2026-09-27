@@ -9,7 +9,6 @@ public sealed class Conversation : IClaudeListener
     public const int MaxChats = 100;
     public static string BackgroundPrompt => Strings.Of("Chat.FromClaude");
     public static string AnsweredAbove => Strings.Of("Chat.AnsweredAbove");
-    public static readonly TimeSpan AnswerShownTime = TimeSpan.FromSeconds(30);
 
     readonly IClaudeClient claude;
     JsonFile<SavedChats>? store;
@@ -43,8 +42,8 @@ public sealed class Conversation : IClaudeListener
     public bool IsBrowsingWeb => webTools.Count > 0;
     public bool IsWaitingForUser => Chats.Any(chat => chat.NeedsAction);
 
-    public bool IsCurrent(ChatItem chat, DateTime now) =>
-        chat.Status == ChatStatus.Busy || chat.NeedsAction || (chat == lastAnswered && now - AnsweredAt < AnswerShownTime);
+    public bool IsCurrent(ChatItem chat, DateTime hiddenAt) =>
+        chat.Status == ChatStatus.Busy || chat.NeedsAction || (chat == lastAnswered && AnsweredAt > hiddenAt);
 
     public bool AnsweredWithin(TimeSpan time, DateTime now) => lastAnswered is { Status: ChatStatus.Done } && now - AnsweredAt < time;
 
@@ -56,11 +55,11 @@ public sealed class Conversation : IClaudeListener
     {
         if (files.Count == 0 && images.Count == 0)
             return text;
-        var prompt = text.Length > 0 ? text : "Se på de vedhæftede filer.";
+        var prompt = text.Length > 0 ? text : Strings.Of("Chat.LookAtAttachments");
         if (files.Count > 0)
-            prompt += $"\n\nVedhæftede filer:\n{string.Join('\n', files)}";
+            prompt += $"\n\n{Strings.Of("Chat.AttachedFiles")}\n{string.Join('\n', files)}";
         if (images.Count > 0)
-            prompt += $"\n\nVedhæftede billeder:\n{string.Join('\n', images.Select(image => image.Name))}";
+            prompt += $"\n\n{Strings.Of("Chat.AttachedImages")}\n{string.Join('\n', images.Select(image => image.Name))}";
         return prompt;
     }
 

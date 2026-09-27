@@ -144,6 +144,19 @@ public class ClaudeProtocolTests
     }
 
     [Fact]
+    public void Parse_WhenRateLimitEventHasResetTimes_ThenReturnsThem()
+    {
+        // Arrange
+        const string line = """{"type":"rate_limit_event","rate_limit_info":{"unifiedWindows":{"five_hour":{"utilization":0.06,"resetsAt":1790398200},"seven_day":{"utilization":0.02,"resetsAt":1790967600}}}}""";
+
+        // Act
+        var events = ClaudeProtocol.Parse(line);
+
+        // Assert
+        Assert.Equal([new Usage(0.06, 0.02, DateTimeOffset.FromUnixTimeSeconds(1790398200), DateTimeOffset.FromUnixTimeSeconds(1790967600))], events);
+    }
+
+    [Fact]
     public void Parse_WhenRateLimitEventHasNoWindows_ThenReturnsNothing()
     {
         // Arrange

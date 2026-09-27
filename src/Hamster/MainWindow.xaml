@@ -164,7 +164,7 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </ScrollViewer>
-            <Thumb Style="{StaticResource ResizeGrip}" HorizontalAlignment="Left" VerticalAlignment="Top" ToolTip="{DynamicResource Main.ResizeHint}"
+            <Thumb Style="{StaticResource ResizeGrip}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4,4,0,0" ToolTip="{DynamicResource Main.ResizeHint}"
                    DragStarted="ResizeGrip_DragStarted" DragDelta="ResizeGrip_DragDelta" DragCompleted="ResizeGrip_DragCompleted" />
         </Grid>
 
@@ -342,7 +342,7 @@
                             </Grid>
                         </StackPanel>
                     </Border>
-                    <Thumb x:Name="WidthGrip" Style="{StaticResource ResizeGrip}" Cursor="SizeWE" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,-10,0,0"
+                    <Thumb x:Name="WidthGrip" Style="{StaticResource ResizeGrip}" Cursor="SizeWE" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4,-6,0,0"
                            ToolTip="{DynamicResource Main.ResizeWidthHint}" DragStarted="ResizeGrip_DragStarted" DragDelta="ResizeGrip_DragDelta" DragCompleted="ResizeGrip_DragCompleted" />
                 </Grid>
             </StackPanel>
@@ -363,7 +363,8 @@
                                             <TextBlock x:Name="SizeText" DockPanel.Dock="Right" />
                                             <TextBlock Text="{DynamicResource Main.Size}" />
                                         </DockPanel>
-                                        <Slider x:Name="SizeSlider" Margin="0,4,0,0" Minimum="50" Maximum="250" TickFrequency="10" IsSnapToTickEnabled="True" />
+                                        <Slider x:Name="SizeSlider" Margin="0,4,0,0" Focusable="False" Minimum="50" Maximum="250" TickFrequency="1" IsSnapToTickEnabled="True"
+                                                LostMouseCapture="SizeSlider_LostMouseCapture" />
                                     </StackPanel>
                                 </MenuItem.Header>
                             </MenuItem>

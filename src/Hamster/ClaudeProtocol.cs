@@ -48,7 +48,14 @@ public sealed record ClaudeResult(string? SessionId, string Text, bool IsError, 
     public bool NeedsLogin => IsError && Text.Contains("/login");
 }
 
-public sealed record Usage(double FiveHour, double SevenDay) : ClaudeEvent;
+public sealed record Usage(double FiveHour, double SevenDay, DateTimeOffset? FiveHourResets = null, DateTimeOffset? SevenDayResets = null) : ClaudeEvent
+{
+    public double FiveHourAt(DateTimeOffset now) => now >= FiveHourResets ? 0 : FiveHour;
+
+    public double SevenDayAt(DateTimeOffset now) => now >= SevenDayResets ? 0 : SevenDay;
+
+    public double HighestAt(DateTimeOffset now) => Math.Max(FiveHourAt(now), SevenDayAt(now));
+}
 
 public static class ClaudeProtocol
 {
@@ -223,8 +230,10 @@ public static class ClaudeProtocol
 
     static IEnumerable<ClaudeEvent> UsageOf(JsonNode? windows) =>
         (double?)windows?["five_hour"]?["utilization"] is { } fiveHour && (double?)windows?["seven_day"]?["utilization"] is { } sevenDay
-            ? [new Usage(fiveHour, sevenDay)]
+            ? [new Usage(fiveHour, sevenDay, ResetOf(windows["five_hour"]), ResetOf(windows["seven_day"]))]
             : [];
+
+    static DateTimeOffset? ResetOf(JsonNode? window) => (long?)window?["resetsAt"] is { } seconds ? DateTimeOffset.FromUnixTimeSeconds(seconds) : null;
 
     static PermissionRequest ToPermissionRequest(JsonNode message)
     {

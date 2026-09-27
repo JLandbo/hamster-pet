@@ -41,6 +41,7 @@ public sealed record ThemeChoice(Theme Theme, ResourceDictionary Defaults, bool 
 public partial class SettingsWindow : Window
 {
     readonly Action<Translation> chooseLanguage;
+    readonly Action<int> chooseHideSeconds;
     readonly ThemeLibrary themes;
     readonly Action<Theme> chooseTheme;
     readonly CharacterLibrary characters;
@@ -52,12 +53,15 @@ public partial class SettingsWindow : Window
     string chosen;
     string? chosenTheme;
 
-    public SettingsWindow(Action<Translation> chooseLanguage, ThemeLibrary themes, string? chosenTheme, Action<Theme> chooseTheme, CharacterLibrary characters, string chosen,
+    public SettingsWindow(Action<Translation> chooseLanguage, int hideSeconds, Action<int> chooseHideSeconds, ThemeLibrary themes, string? chosenTheme, Action<Theme> chooseTheme, CharacterLibrary characters, string chosen,
         Action<Character> choose, Connectors connectors, Subscriptions subscriptions)
     {
         InitializeComponent();
-        this.chooseLanguage = chooseLanguage;
+        (this.chooseLanguage, this.chooseHideSeconds) = (chooseLanguage, chooseHideSeconds);
         ShowLanguage();
+        HideSecondsSlider.Value = hideSeconds;
+        ShowHideSeconds();
+        HideSecondsSlider.ValueChanged += (_, _) => ShowHideSeconds();
         (this.themes, this.chosenTheme, this.chooseTheme) = (themes, chosenTheme, chooseTheme);
         (this.characters, this.chosen, this.choose, this.connectors, this.subscriptions) = (characters, chosen, choose, connectors, subscriptions);
         rows = [.. Connectors.All.Select(connector => new ConnectorRow(connector, connectors.SourceOf(connector)))];
@@ -193,6 +197,10 @@ public partial class SettingsWindow : Window
     }
 
     void ShowLanguage() => (DanishButton.IsChecked, EnglishButton.IsChecked) = (Strings.Current == Translation.Danish, Strings.Current == Translation.English);
+
+    void ShowHideSeconds() => HideSecondsText.Text = $"{HideSecondsSlider.Value} s";
+
+    void HideSecondsSlider_LostMouseCapture(object sender, MouseEventArgs e) => chooseHideSeconds((int)HideSecondsSlider.Value);
 
     void Language_Click(object sender, RoutedEventArgs e)
     {

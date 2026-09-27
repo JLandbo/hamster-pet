@@ -16,7 +16,8 @@ public sealed class WebSession(string folder)
     Task<CoreWebView2Controller>? cookies;
     HwndSource? host;
 
-    public Task<CoreWebView2Environment> EnvironmentAsync() => environment ??= CoreWebView2Environment.CreateAsync(null, folder);
+    public Task<CoreWebView2Environment> EnvironmentAsync() =>
+        environment is { IsFaulted: false, IsCanceled: false } ? environment : environment = CoreWebView2Environment.CreateAsync(null, folder);
 
     public string? Login(Window owner, Connector connector, string site)
     {
@@ -71,16 +72,9 @@ public sealed class WebSession(string folder)
     async Task<CoreWebView2> CookiesAsync()
     {
         host ??= new HwndSource(new HwndSourceParameters("Hamster") { WindowStyle = HiddenPopup, Width = 1, Height = 1 });
-        cookies ??= CreateCookiesAsync(host.Handle);
-        try
-        {
-            return (await cookies).CoreWebView2;
-        }
-        catch (Exception exception) when (exception is COMException or InvalidOperationException)
-        {
-            cookies = null;
-            throw;
-        }
+        if (cookies is not { IsFaulted: false, IsCanceled: false })
+            cookies = CreateCookiesAsync(host.Handle);
+        return (await cookies).CoreWebView2;
     }
 
     async Task<CoreWebView2Controller> CreateCookiesAsync(nint parent)

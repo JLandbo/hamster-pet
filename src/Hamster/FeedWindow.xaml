@@ -4,7 +4,7 @@
         xmlns:local="clr-namespace:Hamster"
         Title="{DynamicResource Common.Tasks}" Width="1080" MinWidth="360" MinHeight="140" SizeToContent="Height" MaxHeight="660"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="CanResize"
-        ShowInTaskbar="False" WindowStartupLocation="CenterOwner" UseLayoutRounding="True"
+        ShowInTaskbar="False" WindowStartupLocation="CenterScreen" UseLayoutRounding="True"
         FontFamily="{StaticResource UiFont}" FontSize="13" ContentRendered="Window_ContentRendered">
 
     <WindowChrome.WindowChrome>
