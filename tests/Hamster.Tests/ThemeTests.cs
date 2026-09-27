@@ -105,53 +105,41 @@ public sealed class ThemeTests : IDisposable
     }
 
     [Fact]
-    public void Themes_WhenBuiltIn_ThenAllDefineTheSameColors()
-    {
-        // Act
-        var names = new ThemeLibrary(directory).Themes.Skip(1).Select(theme => string.Join(",", theme.Colors.Keys.Order())).Distinct();
-
-        // Assert
-        Assert.Single(names);
-    }
-
-    [Fact]
-    public void Themes_WhenYouHaveNoThemesOfYourOwn_ThenListsTheDefaultFirstAndThenTheBuiltInThemes()
+    public void Themes_WhenYouHaveNoThemesOfYourOwn_ThenListsOnlyTheDefault()
     {
         // Act
         var themes = new ThemeLibrary(directory).Themes;
 
         // Assert
-        Assert.Equal(["Sort og gul", "Blå", "Lys"], themes.Select(theme => theme.Name));
+        Assert.Equal(["Sort og gul"], themes.Select(theme => theme.Name));
     }
 
     [Fact]
-    public void Themes_WhenYouHaveThemesOfYourOwn_ThenListsThemByNameAmongTheBuiltInThemes()
+    public void Themes_WhenYouHaveThemesOfYourOwn_ThenListsThemByNameAfterTheDefault()
     {
         // Arrange
         Write("Mørk.json", """{"colors": {}}""");
-        Write("Grå.json", """{"colors": {}}""");
+        Write("Lys.json", """{"colors": {}}""");
         Write("Ødelagt.json", "{");
 
         // Act
         var themes = new ThemeLibrary(directory).Themes;
 
         // Assert
-        Assert.Equal(["Sort og gul", "Blå", "Grå", "Lys", "Mørk"], themes.Select(theme => theme.Name));
+        Assert.Equal(["Sort og gul", "Lys", "Mørk"], themes.Select(theme => theme.Name));
     }
 
     [Fact]
-    public void Themes_WhenYourThemeHasTheNameOfABuiltInTheme_ThenKeepsTheBuiltInTheme()
+    public void Themes_WhenYourThemeHasTheNameOfTheDefault_ThenKeepsTheDefault()
     {
         // Arrange
-        Write("lys.json", """{"colors": {"Surface": "#000000"}}""");
-        Write("Sort og gul.json", """{"colors": {"Surface": "#000000"}}""");
+        Write("sort og gul.json", """{"colors": {"Surface": "#000000"}}""");
 
         // Act
-        var themes = new ThemeLibrary(directory).Themes.ToArray();
+        var themes = new ThemeLibrary(directory).Themes;
 
         // Assert
-        Assert.Equal(["Sort og gul", "Blå", "Lys"], themes.Select(theme => theme.Name));
-        Assert.All(themes, theme => Assert.NotEqual(Colors.Black, theme.Colors.GetValueOrDefault("Surface")));
+        Assert.Same(ThemeLibrary.Default, Assert.Single(themes));
     }
 
     [Fact]

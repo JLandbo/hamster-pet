@@ -460,6 +460,8 @@ public partial class MainWindow : Window
         ChatScroll.Height = Math.Clamp(Math.Min(placement.Bottom - ScreenArea.Of(PetArea).Top, Height) - (Root.ActualHeight - ChatScroll.ActualHeight),
             0, placement.ChatHeight);
 
+    void Window_Deactivated(object sender, EventArgs e) => FocusManager.SetFocusedElement(this, null);
+
     void Window_Closed(object sender, EventArgs e)
     {
         conversation.Save();
