@@ -7,6 +7,8 @@ public sealed class CharacterLibrary(string folder)
     public IEnumerable<string> Names =>
         [Character.Hamster.Name, .. Folders.Select(Path.GetFileName).OfType<string>().Where(name => name != Character.Hamster.Name).Order()];
 
+    public string Folder => folder;
+
     IEnumerable<string> Folders => Directory.Exists(folder) ? Directory.EnumerateDirectories(folder) : [];
 
     public Character Load(string name) => name == Character.Hamster.Name ? Character.Hamster : Character.FromFolder(Path.Combine(folder, name));

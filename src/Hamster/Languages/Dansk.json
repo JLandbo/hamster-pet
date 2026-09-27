@@ -9,6 +9,8 @@
     "Settings.Character": "Karakter",
     "Settings.Connectors": "Forbindelser",
     "Settings.AddCharacter": "Tilføj karakter (en kopi af hamsteren, som du kan tegne om)",
+    "Settings.OpenCharacters": "Åbn mappen med karakterer",
+    "Settings.OpenThemes": "Åbn mappen med temaer",
     "Settings.Off": "Fra",
     "Settings.LoginSource": "Log ind",
     "Settings.EditToken": "Rediger token…",

@@ -89,7 +89,11 @@
                         </Border>
                         <TextBlock Text="{DynamicResource Settings.Language}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" />
                     </DockPanel>
-                    <TextBlock Text="{DynamicResource Settings.Theme}" Foreground="{DynamicResource Muted}" Margin="0,0,0,8" />
+                    <DockPanel Margin="0,0,0,8">
+                        <Button DockPanel.Dock="Right" Content="&#xE838;" ToolTip="{DynamicResource Settings.OpenThemes}" Click="OpenThemes_Click"
+                                Style="{StaticResource SmallIconButton}" FontSize="12" VerticalAlignment="Center" />
+                        <TextBlock Text="{DynamicResource Settings.Theme}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" />
+                    </DockPanel>
                     <ItemsControl x:Name="ThemeList">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -126,6 +130,8 @@
                     <DockPanel Margin="0,16,0,8">
                         <Button DockPanel.Dock="Right" Content="&#xE710;" ToolTip="{DynamicResource Settings.AddCharacter}" Click="AddCharacter_Click"
                                 Style="{StaticResource SmallIconButton}" FontSize="12" VerticalAlignment="Center" />
+                        <Button DockPanel.Dock="Right" Content="&#xE838;" ToolTip="{DynamicResource Settings.OpenCharacters}" Click="OpenCharacters_Click"
+                                Style="{StaticResource SmallIconButton}" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0" />
                         <TextBlock Text="{DynamicResource Settings.Character}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" />
                     </DockPanel>
                     <ItemsControl x:Name="CharacterList">

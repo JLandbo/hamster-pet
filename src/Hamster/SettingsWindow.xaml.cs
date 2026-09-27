@@ -254,6 +254,22 @@ public partial class SettingsWindow : Window
         await ShowCharactersAsync();
     }
 
+    void OpenCharacters_Click(object sender, RoutedEventArgs e) => OpenFolder(characters.Folder);
+
+    void OpenThemes_Click(object sender, RoutedEventArgs e) => OpenFolder(themes.Folder);
+
+    void OpenFolder(string folder)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(Directory.CreateDirectory(folder).FullName) { UseShellExecute = true });
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, exception.Message, "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     async void AddCharacter_Click(object sender, RoutedEventArgs e)
     {
         try

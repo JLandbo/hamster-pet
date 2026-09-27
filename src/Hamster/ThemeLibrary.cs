@@ -14,6 +14,8 @@ public sealed class ThemeLibrary(string folder)
     public IEnumerable<Theme> Themes =>
         [Default, .. BuiltIns.Concat(Own.Where(theme => !IsBuiltIn(theme.Name))).OrderBy(theme => theme.Name, StringComparer.CurrentCultureIgnoreCase)];
 
+    public string Folder => folder;
+
     IEnumerable<Theme> Own => Files.Select(Theme.Read).OfType<Theme>();
 
     static bool IsBuiltIn(string name) => BuiltIns.Prepend(Default).Any(theme => theme.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
