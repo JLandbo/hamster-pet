@@ -71,7 +71,7 @@ public partial class MainWindow : Window
     FeedWindow? feedWindow;
     Mood mood;
     int frame;
-    bool feedFetched, resizeQueued, pressed, dragging, chatsExpanded = true, shown = true;
+    bool feedFetched, resizeQueued, pressed, dragging, chatsExpanded, shown = true;
     Point dragStart;
     DateTime pressedAt, giggleUntil, lastMove, lastActivity = DateTime.UtcNow, newsSeenAt = DateTime.UtcNow;
     Placement placement;
@@ -106,6 +106,7 @@ public partial class MainWindow : Window
         ShowSize();
         SizeSlider.ValueChanged += SizeSlider_ValueChanged;
         AutoHideItem.IsChecked = pet.AutoHide;
+        chatsExpanded = pet.ChatsExpanded;
         ((App)Application.Current).Use(Translation.All.FirstOrDefault(translation => translation.Name == pet.LanguageName) ?? Translation.Danish);
         instructionsFile = Path.Combine(data, "instructions.txt");
         claude = new ClaudeClient(Path.Combine(data, "workspace"), instructionsFile,
@@ -140,10 +141,11 @@ public partial class MainWindow : Window
         Choose(ModelButton, claude.Settings.Model);
         Choose(EffortButton, claude.Settings.Effort);
         Choose(ModeButton, claude.Settings.PermissionMode);
-        ToggleChats.Content = CollapseIcon;
+        ToggleChats.Content = chatsExpanded ? CollapseIcon : ExpandIcon;
         ShowChatOnly();
         ShowFolder();
         ChatList.ItemsSource = conversation.Chats;
+        UpdateChatList();
         conversation.Changed += Conversation_Changed;
         conversation.Started += () =>
         {
@@ -411,6 +413,7 @@ public partial class MainWindow : Window
         else
             hiddenAt = now;
         Fade(ChatArea, shown);
+        Fade(TemporaryBanner, shown);
         Fade(ToolbarArea, shown);
     }
 
@@ -424,7 +427,6 @@ public partial class MainWindow : Window
         FitToScreen();
         petWindow.Show();
         UpdateToolbar();
-        UpdateChatList();
         ScrollToNewest();
         _ = conversation.StartAsync();
         _ = StartMusicAsync();
@@ -833,6 +835,7 @@ public partial class MainWindow : Window
         if (chatsExpanded)
             readingOffset = IsAtBottom ? null : ChatScroll.VerticalOffset;
         chatsExpanded = !chatsExpanded;
+        petFile.Save(petFile.Load() with { ChatsExpanded = chatsExpanded });
         ToggleChats.Content = chatsExpanded ? CollapseIcon : ExpandIcon;
         Touch();
         UpdateChatList();
