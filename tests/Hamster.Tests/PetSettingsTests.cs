@@ -46,6 +46,32 @@ public sealed class PetSettingsTests : IDisposable
     }
 
     [Fact]
+    public void Load_WhenPetSettingsWereSavedBeforeChatsExpanded_ThenChatsAreExpanded()
+    {
+        // Arrange
+        File.WriteAllText(file, """{"CharacterName": "Hamster"}""");
+
+        // Act
+        var pet = new JsonFile<PetSettings>(file, PetSettings.Default).Load();
+
+        // Assert
+        Assert.True(pet.ChatsExpanded);
+    }
+
+    [Fact]
+    public void Save_WhenChatsAreCollapsed_ThenLoadReturnsIt()
+    {
+        // Arrange
+        var store = new JsonFile<PetSettings>(file, PetSettings.Default);
+
+        // Act
+        store.Save(PetSettings.Default with { ChatsExpanded = false });
+
+        // Assert
+        Assert.False(store.Load().ChatsExpanded);
+    }
+
+    [Fact]
     public void Save_WhenSizeChanges_ThenLoadReturnsIt()
     {
         // Arrange
