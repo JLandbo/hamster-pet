@@ -4,7 +4,7 @@
         xmlns:local="clr-namespace:Hamster"
         Title="Hamster"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
-        Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize" UseLayoutRounding="True"
+        ShowInTaskbar="False" ResizeMode="NoResize" UseLayoutRounding="True"
         FontFamily="{DynamicResource UiFont}" FontSize="13"
         Loaded="Window_Loaded" Closed="Window_Closed" MouseMove="Window_MouseMove"
         AllowDrop="True" DragOver="Window_DragOver" Drop="Window_Drop">
@@ -346,7 +346,7 @@
                            ToolTip="{DynamicResource Main.ResizeWidthHint}" DragStarted="ResizeGrip_DragStarted" DragDelta="ResizeGrip_DragDelta" DragCompleted="ResizeGrip_DragCompleted" />
                 </Grid>
             </StackPanel>
-            <Grid x:Name="PetArea" Grid.Column="1" VerticalAlignment="Bottom" Width="160" Height="144" Margin="0,0,8,0">
+            <Grid x:Name="PetArea" Grid.Column="1" VerticalAlignment="Bottom" Margin="0,0,8,0">
                 <Image x:Name="Pet" VerticalAlignment="Bottom" HorizontalAlignment="Center" Cursor="Hand"
                        RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5"
                        MouseLeftButtonDown="Pet_MouseLeftButtonDown" MouseMove="Pet_MouseMove" MouseLeftButtonUp="Pet_MouseLeftButtonUp"
@@ -356,6 +356,18 @@
                     </Image.RenderTransform>
                     <Image.ContextMenu>
                         <ContextMenu Style="{StaticResource ChoiceMenu}">
+                            <MenuItem StaysOpenOnClick="True" Cursor="Arrow">
+                                <MenuItem.Header>
+                                    <StackPanel Width="160">
+                                        <DockPanel>
+                                            <TextBlock x:Name="SizeText" DockPanel.Dock="Right" />
+                                            <TextBlock Text="{DynamicResource Main.Size}" />
+                                        </DockPanel>
+                                        <Slider x:Name="SizeSlider" Margin="0,4,0,0" Minimum="50" Maximum="250" TickFrequency="10" IsSnapToTickEnabled="True" />
+                                    </StackPanel>
+                                </MenuItem.Header>
+                            </MenuItem>
+                            <MenuItem x:Name="AutoHideItem" Header="{DynamicResource Main.AutoHide}" IsCheckable="True" Click="AutoHide_Click" />
                             <MenuItem Header="{DynamicResource Main.NewChat}" Click="NewChat_Click" />
                             <MenuItem Header="{DynamicResource Main.Exit}" Click="Exit_Click" />
                         </ContextMenu>

@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
@@ -21,6 +22,8 @@ public partial class MainWindow : Window
     const double DefaultWidth = 396;
     const double DefaultChatHeight = 900;
     const double MinChatHeight = 120;
+    const double PetWidth = 160;
+    const double PetHeight = 144;
     static readonly TimeSpan GiggleTime = TimeSpan.FromSeconds(1.5);
     static readonly TimeSpan HappyTime = TimeSpan.FromSeconds(4);
     static readonly TimeSpan SadTime = TimeSpan.FromSeconds(4);
@@ -58,6 +61,11 @@ public partial class MainWindow : Window
     readonly DispatcherTimer clock = new() { Interval = TimeSpan.FromSeconds(1) };
     readonly DispatcherTimer feedTimer = new() { Interval = Subscriptions.Interval };
     readonly HashSet<ConnectorProblem> dismissedProblems = [];
+    readonly Window petWindow = new()
+    {
+        WindowStyle = WindowStyle.None, AllowsTransparency = true, Background = Brushes.Transparent, Topmost = true,
+        ShowInTaskbar = false, ShowActivated = false, ResizeMode = ResizeMode.NoResize, UseLayoutRounding = true, AllowDrop = true,
+    };
 
     IReadOnlyList<ConnectorProblem> problems = [];
     string lastPrompt = "";
@@ -81,12 +89,22 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        PetArea.Children.Remove(Pet);
+        petWindow.Content = Pet;
+        petWindow.MouseMove += Window_MouseMove;
+        petWindow.DragOver += Window_DragOver;
+        petWindow.Drop += Window_Drop;
+        petWindow.Closed += (_, _) => Dispatcher.BeginInvoke(Close);
         (Width, Height) = (SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
         data = DataFolder.Current;
         var settingsFile = Path.Combine(data, "settings.json");
         chatOnly = !settingsOwner.TryOwn(settingsFile);
         petFile = new JsonFile<PetSettings>(Path.Combine(data, "pet.json"), PetSettings.Default, chatOnly);
         var pet = petFile.Load();
+        SizeSlider.Value = pet.SizePercent;
+        ShowSize();
+        SizeSlider.ValueChanged += SizeSlider_ValueChanged;
+        AutoHideItem.IsChecked = pet.AutoHide;
         ((App)Application.Current).Use(Translation.All.FirstOrDefault(translation => translation.Name == pet.LanguageName) ?? Translation.Danish);
         instructionsFile = Path.Combine(data, "instructions.txt");
         claude = new ClaudeClient(Path.Combine(data, "workspace"), instructionsFile,
@@ -236,7 +254,7 @@ public partial class MainWindow : Window
 
     void RememberSize(Window window, JsonFile<WindowSize?> file)
     {
-        var size = (file.Load() ?? new WindowSize(window.Width, window.Height)).FitIn(ScreenArea.Of(Pet));
+        var size = (file.Load() ?? new WindowSize(window.Width, window.Height)).FitIn(ScreenArea.Of(PetArea));
         window.Width = size.Width;
         if (!double.IsNaN(size.Height))
             (window.SizeToContent, window.MaxHeight, window.Height) = (SizeToContent.Manual, double.PositiveInfinity, size.Height);
@@ -364,13 +382,13 @@ public partial class MainWindow : Window
     void FadeWhenIdle()
     {
         var now = DateTime.UtcNow;
-        var typing = Input.IsKeyboardFocused;
-        if ((typing || now - lastActivity < ChatsIdleTime) != chatsShown)
+        var shown = !AutoHideItem.IsChecked || Input.IsKeyboardFocused;
+        if ((shown || now - lastActivity < ChatsIdleTime) != chatsShown)
         {
             chatsShown = !chatsShown;
             Fade(ChatArea, chatsShown);
         }
-        if ((typing || Input.Text.Length > 0 || IsMouseOver || MenuOpen || now - lastTouch < ToolbarIdleTime) != toolbarShown)
+        if ((shown || Input.Text.Length > 0 || IsMouseOver || Pet.IsMouseOver || MenuOpen || now - lastTouch < ToolbarIdleTime) != toolbarShown)
         {
             toolbarShown = !toolbarShown;
             Fade(ToolbarArea, toolbarShown);
@@ -385,6 +403,8 @@ public partial class MainWindow : Window
     {
         Apply(OnScreen(placement));
         FitToScreen();
+        petWindow.Owner = this;
+        petWindow.Show();
         UpdateToolbar();
         UpdateChatList();
         ScrollToNewest();
@@ -425,11 +445,12 @@ public partial class MainWindow : Window
     {
         Left = placement.Right - Width;
         Top = placement.Bottom - Height;
+        (petWindow.Left, petWindow.Top) = (placement.Right - PetArea.Margin.Right - PetArea.Width, placement.Bottom - PetArea.Height);
     }
 
     void FitToScreen()
     {
-        var screen = ScreenArea.Of(Pet);
+        var screen = ScreenArea.Of(PetArea);
         (Width, Height) = (screen.Width, screen.Height);
         Apply(placement);
     }
@@ -437,7 +458,7 @@ public partial class MainWindow : Window
     void Root_SizeChanged(object sender, SizeChangedEventArgs e) => FitChatHeight();
 
     void FitChatHeight() =>
-        ChatScroll.Height = Math.Clamp(Math.Min(placement.Bottom - ScreenArea.Of(Pet).Top, Height) - (Root.ActualHeight - ChatScroll.ActualHeight),
+        ChatScroll.Height = Math.Clamp(Math.Min(placement.Bottom - ScreenArea.Of(PetArea).Top, Height) - (Root.ActualHeight - ChatScroll.ActualHeight),
             0, placement.ChatHeight);
 
     void Window_Closed(object sender, EventArgs e)
@@ -482,7 +503,7 @@ public partial class MainWindow : Window
 
     void UpdateNews()
     {
-        if (IsMouseOver || Input.IsKeyboardFocused)
+        if (IsMouseOver || Pet.IsMouseOver || Input.IsKeyboardFocused)
             newsSeenAt = DateTime.UtcNow;
     }
 
@@ -502,6 +523,8 @@ public partial class MainWindow : Window
 
     void Pet_MouseEnterOrLeave(object sender, MouseEventArgs e)
     {
+        if (e.RoutedEvent == MouseEnterEvent)
+            WindowOrder.BringToFront(this);
         Touch();
         Animate();
     }
@@ -540,6 +563,7 @@ public partial class MainWindow : Window
     {
         var clicked = pressed && !dragging && DateTime.UtcNow - pressedAt < ClickTime;
         Pet.ReleaseMouseCapture();
+        Activate();
         if (!clicked)
             return;
         giggleUntil = DateTime.UtcNow + GiggleTime;
@@ -612,7 +636,7 @@ public partial class MainWindow : Window
         else
         {
             beforeFullScreen = placement;
-            var screen = ScreenArea.Of(Pet);
+            var screen = ScreenArea.Of(PetArea);
             Apply(new Placement(screen.Right, screen.Bottom, screen.Width, screen.Height));
         }
         Touch();
@@ -988,6 +1012,28 @@ public partial class MainWindow : Window
     void DeleteChat_Click(object sender, RoutedEventArgs e) => conversation.Delete((ChatItem)((FrameworkElement)sender).DataContext);
 
     void Exit_Click(object sender, RoutedEventArgs e) => Close();
+
+    void SizeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        petFile.Save(petFile.Load() with { SizePercent = (int)SizeSlider.Value });
+        ShowSize();
+        UpdateLayout();
+        Apply(OnScreen(placement));
+    }
+
+    void AutoHide_Click(object sender, RoutedEventArgs e)
+    {
+        petFile.Save(petFile.Load() with { AutoHide = AutoHideItem.IsChecked });
+        FadeWhenIdle();
+    }
+
+    void ShowSize()
+    {
+        var scale = SizeSlider.Value / 100;
+        (PetArea.Width, PetArea.Height) = (PetWidth * scale, PetHeight * scale);
+        (petWindow.Width, petWindow.Height) = (PetArea.Width, PetArea.Height);
+        SizeText.Text = $"{SizeSlider.Value}%";
+    }
 
     void Allow_Click(object sender, RoutedEventArgs e) => ((UserRequest)((FrameworkElement)sender).DataContext).Respond(true);
 
