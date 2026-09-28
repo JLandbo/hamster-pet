@@ -28,6 +28,7 @@ public sealed class MarkdownConverter : IValueConverter
     const string Icons = "IconFont";
     const double PictureWidth = 0.9;
     const double PictureHeight = 320;
+    const double PictureMinimum = 100;
     static readonly string[] PictureFiles = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".ico", ".webp"];
 
     public static bool ShowWebImages { get; set; }
@@ -176,12 +177,30 @@ public sealed class MarkdownConverter : IValueConverter
         {
             return Span(image, new Span());
         }
-        var picture = new InlineUIContainer(new Image { Source = bitmap, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, MaxHeight = PictureHeight });
+        var shown = new Image { Source = bitmap, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, MaxHeight = PictureHeight };
+        if (bitmap.IsDownloading)
+        {
+            bitmap.DownloadCompleted += (_, _) => Fit(shown, bitmap);
+        }
+        else
+        {
+            Fit(shown, bitmap);
+        }
+        var picture = new InlineUIContainer(shown);
         var link = new Hyperlink(picture) { NavigateUri = uri, ToolTip = uri.IsFile ? uri.LocalPath : uri.AbsoluteUri, TextDecorations = null };
         return InsideLink(image) ? picture : new Figure(new Paragraph(link) { TextAlignment = TextAlignment.Center, Margin = new(0) })
         {
             Width = new(PictureWidth, FigureUnitType.Column), HorizontalAnchor = FigureHorizontalAnchor.ColumnCenter, WrapDirection = WrapDirection.None, Padding = new(0), Margin = Spacing,
         };
+    }
+
+    static void Fit(Image image, BitmapSource bitmap)
+    {
+        var smallest = PictureMinimum / Math.Max(bitmap.Width, bitmap.Height);
+        var largest = Math.Max(1, smallest);
+        (image.MinWidth, image.MinHeight) = (bitmap.Width * smallest, bitmap.Height * smallest);
+        (image.MaxWidth, image.MaxHeight) = (bitmap.Width * largest, Math.Min(PictureHeight, bitmap.Height * largest));
+        image.StretchDirection = StretchDirection.Both;
     }
 
     static Uri? WebUri(string? url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? uri : null;

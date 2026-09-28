@@ -39,6 +39,36 @@ public class MarkdownConverterTests : IDisposable
         Assert.Equal(40, Width(document));
     });
 
+    [Theory]
+    [InlineData(40, 20, 100, 50)]
+    [InlineData(20, 40, 50, 100)]
+    [InlineData(1200, 600, 349, 174.5)]
+    [InlineData(100, 400, 80, 320)]
+    public void Render_WhenTheImageIsShown_ThenItKeepsItsShapeWithinTheMinimumAndMaximum(int width, int height, double shownWidth, double shownHeight) => UiThread.Run(() =>
+    {
+        // Arrange
+        var picture = Picture(MarkdownConverter.Render($"![graf](<{ImageFile("graf.png", width, height)}>)"))!;
+
+        // Act
+        picture.Measure(new Size(349, double.PositiveInfinity));
+
+        // Assert
+        Assert.Equal(new Size(shownWidth, shownHeight), picture.DesiredSize);
+    });
+
+    [Fact]
+    public void Render_WhenThereIsLittleRoom_ThenTheLongestSideStaysAtLeastAHundred() => UiThread.Run(() =>
+    {
+        // Arrange
+        var picture = Picture(MarkdownConverter.Render($"![graf](<{ImageFile("graf.png", 640, 480)}>)"))!;
+
+        // Act
+        var smallest = (picture.MinWidth, picture.MinHeight);
+
+        // Assert
+        Assert.Equal((100, 75), smallest);
+    });
+
     [Fact]
     public void Render_WhenTheImageIsWebP_ThenShowsIt() => UiThread.Run(() =>
     {
@@ -366,7 +396,7 @@ public class MarkdownConverterTests : IDisposable
 
     static int Width(FlowDocument document) => Assert.IsType<BitmapImage>(Picture(document)!.Source).PixelWidth;
 
-    string ImageFile(string name, int width)
+    string ImageFile(string name, int width, int height = 10)
     {
         var file = Path.Combine(folder, name);
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
@@ -378,7 +408,7 @@ public class MarkdownConverterTests : IDisposable
             ".tif" or ".tiff" => new TiffBitmapEncoder(),
             _ => new PngBitmapEncoder(),
         };
-        encoder.Frames.Add(BitmapFrame.Create(BitmapSource.Create(width, 10, 96, 96, PixelFormats.Bgra32, null, new byte[width * 10 * 4], width * 4)));
+        encoder.Frames.Add(BitmapFrame.Create(BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, new byte[width * height * 4], width * 4)));
         using var image = new MemoryStream();
         encoder.Save(image);
         File.WriteAllBytes(file, Path.GetExtension(name).Equals(".ico", StringComparison.OrdinalIgnoreCase) ? Icon(image.ToArray(), width) : image.ToArray());
