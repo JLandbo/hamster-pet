@@ -9,16 +9,16 @@ namespace Hamster;
 
 public partial class App : Application
 {
-    ResourceDictionary? theme;
-    ResourceDictionary? translation;
+    ResourceDictionary? _theme;
+    ResourceDictionary? _translation;
 
     public ResourceDictionary DefaultColors => Resources.MergedDictionaries[0];
 
-    public void Use(Theme next) => Swap(ref theme, next.ToResources());
+    public void Use(Theme next) => Swap(ref _theme, next.ToResources());
 
     public void Use(Translation next)
     {
-        Swap(ref translation, ResourcesOf(next));
+        Swap(ref _translation, ResourcesOf(next));
         Strings.Use(next);
     }
 

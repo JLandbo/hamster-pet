@@ -7,7 +7,7 @@ namespace Hamster.Themes;
 
 public sealed record Theme(string Name, IReadOnlyDictionary<string, Color> Colors)
 {
-    static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web) { ReadCommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
+    static readonly JsonSerializerOptions _options = new(JsonSerializerDefaults.Web) { ReadCommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
 
     public static Theme? Read(string file)
     {
@@ -21,7 +21,7 @@ public sealed record Theme(string Name, IReadOnlyDictionary<string, Color> Color
         }
     }
 
-    public static Theme Parse(string name, string json) => new(name, ColorsOf(JsonSerializer.Deserialize<SavedTheme>(json, Options)?.Colors ?? []));
+    public static Theme Parse(string name, string json) => new(name, ColorsOf(JsonSerializer.Deserialize<SavedTheme>(json, _options)?.Colors ?? []));
 
     public ResourceDictionary ToResources()
     {

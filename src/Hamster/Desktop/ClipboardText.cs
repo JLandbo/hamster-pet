@@ -6,8 +6,8 @@ namespace Hamster.Desktop;
 public static class ClipboardText
 {
     public const string CopyIcon = "\uE8C8";
-    const string CopiedIcon = "\uE73E";
-    static readonly TimeSpan CopiedTime = TimeSpan.FromSeconds(1.5);
+    const string _copiedIcon = "\uE73E";
+    static readonly TimeSpan _copiedTime = TimeSpan.FromSeconds(1.5);
 
     public static async void Copy(string text, Action<string> showIcon)
     {
@@ -19,8 +19,8 @@ public static class ClipboardText
         {
             return;
         }
-        showIcon(CopiedIcon);
-        await Task.Delay(CopiedTime);
+        showIcon(_copiedIcon);
+        await Task.Delay(_copiedTime);
         showIcon(CopyIcon);
     }
 }

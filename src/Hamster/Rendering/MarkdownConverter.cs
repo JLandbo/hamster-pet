@@ -20,18 +20,18 @@ namespace Hamster.Rendering;
 
 public sealed class MarkdownConverter : IValueConverter
 {
-    static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UsePipeTables().UseAutoLinks().Build();
-    static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    static readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder().UsePipeTables().UseAutoLinks().Build();
+    static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
     public static readonly FontFamily CodeFont = new("Cascadia Mono, Consolas");
-    static readonly Thickness Spacing = new(0, 8, 0, 0);
-    const string Shade = "Edge";
-    const string Emphasis = "Text";
-    const string Subtle = "Muted";
-    const string Icons = "IconFont";
-    const double PictureWidth = 0.9;
-    const double PictureHeight = 320;
-    const double PictureMinimum = 100;
-    static readonly string[] PictureFiles = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".ico", ".webp"];
+    static readonly Thickness _spacing = new(0, 8, 0, 0);
+    const string _shade = "Edge";
+    const string _emphasis = "Text";
+    const string _subtle = "Muted";
+    const string _icons = "IconFont";
+    const double _pictureWidth = 0.9;
+    const double _pictureHeight = 320;
+    const double _pictureMinimum = 100;
+    static readonly string[] _pictureFiles = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".ico", ".webp"];
 
     public static bool ShowWebImages { get; set; }
 
@@ -41,7 +41,7 @@ public sealed class MarkdownConverter : IValueConverter
 
     public static FlowDocument Render(string markdown, Func<string, IEnumerable<Uri>>? mentioned = null)
     {
-        var parsed = Markdown.Parse(markdown, Pipeline);
+        var parsed = Markdown.Parse(markdown, _pipeline);
         if (mentioned is not null)
         {
             var shown = new HashSet<string>(parsed.Descendants<LinkInline>().Where(link => link.IsImage).Select(link => PictureUri(link.Url)?.LocalPath).OfType<string>(), StringComparer.OrdinalIgnoreCase);
@@ -57,14 +57,14 @@ public sealed class MarkdownConverter : IValueConverter
 
     static Block ToBlock(Markdig.Syntax.Block block) => block switch
     {
-        HeadingBlock heading => Themed(new Paragraph(Span(heading.Inline, new Bold())), TextElement.ForegroundProperty, Emphasis),
+        HeadingBlock heading => Themed(new Paragraph(Span(heading.Inline, new Bold())), TextElement.ForegroundProperty, _emphasis),
         ParagraphBlock paragraph => new Paragraph(Span(paragraph.Inline, new Span())),
         CodeBlock code => Code(code.Lines.ToString()),
         ListBlock list => List(list),
         Markdig.Extensions.Tables.Table table => Table(table),
         QuoteBlock quote => Themed(Section(quote, new Section { BorderThickness = new(3, 0, 0, 0), Padding = new(8, 0, 0, 0) }),
-            Block.BorderBrushProperty, Shade),
-        ThematicBreakBlock => Themed(new Paragraph { BorderThickness = new(0, 0, 0, 1) }, Block.BorderBrushProperty, Shade),
+            Block.BorderBrushProperty, _shade),
+        ThematicBreakBlock => Themed(new Paragraph { BorderThickness = new(0, 0, 0, 1) }, Block.BorderBrushProperty, _shade),
         LeafBlock leaf => new Paragraph(new Run(leaf.Lines.ToString())),
         ContainerBlock container => Section(container, new Section()),
         _ => new Paragraph(),
@@ -75,7 +75,7 @@ public sealed class MarkdownConverter : IValueConverter
         foreach (var parsed in source)
         {
             var block = ToBlock(parsed);
-            block.Margin = target.Count == 0 ? new(0) : Spacing;
+            block.Margin = target.Count == 0 ? new(0) : _spacing;
             target.Add(block);
             foreach (var uri in parsed.GetData(typeof(Uri)) as Uri[] ?? [])
             {
@@ -90,8 +90,8 @@ public sealed class MarkdownConverter : IValueConverter
     static Section Code(string text)
     {
         var icon = new Run(ClipboardText.CopyIcon);
-        var copy = Themed(Themed(new Hyperlink(icon) { TextDecorations = null, ToolTip = Strings.Of("Code.Copy") }, TextElement.ForegroundProperty, Subtle),
-            TextElement.FontFamilyProperty, Icons);
+        var copy = Themed(Themed(new Hyperlink(icon) { TextDecorations = null, ToolTip = Strings.Of("Code.Copy") }, TextElement.ForegroundProperty, _subtle),
+            TextElement.FontFamilyProperty, _icons);
         copy.Click += (_, _) => ClipboardText.Copy(text, glyph => icon.Text = glyph);
         return Themed(new Section
         {
@@ -101,7 +101,7 @@ public sealed class MarkdownConverter : IValueConverter
                 new Paragraph(copy) { TextAlignment = TextAlignment.Right, FontSize = 11, Margin = new(0) },
                 new Paragraph(new Run(text)) { FontFamily = CodeFont, FontSize = 12, Margin = new(0) },
             },
-        }, TextElement.BackgroundProperty, Shade);
+        }, TextElement.BackgroundProperty, _shade);
     }
 
     static Section Section(ContainerBlock blocks, Section section)
@@ -132,10 +132,10 @@ public sealed class MarkdownConverter : IValueConverter
         var rows = new TableRowGroup();
         foreach (var row in source.OfType<Markdig.Extensions.Tables.TableRow>())
         {
-            var tableRow = row.IsHeader ? Themed(new TableRow { FontWeight = FontWeights.SemiBold }, TextElement.ForegroundProperty, Emphasis) : new TableRow();
+            var tableRow = row.IsHeader ? Themed(new TableRow { FontWeight = FontWeights.SemiBold }, TextElement.ForegroundProperty, _emphasis) : new TableRow();
             foreach (var cell in row.OfType<Markdig.Extensions.Tables.TableCell>())
             {
-                var tableCell = Themed(new TableCell { Padding = new(4, 3, 4, 3), BorderThickness = new(0, 0, 0, 1) }, TableCell.BorderBrushProperty, Shade);
+                var tableCell = Themed(new TableCell { Padding = new(4, 3, 4, 3), BorderThickness = new(0, 0, 0, 1) }, TableCell.BorderBrushProperty, _shade);
                 AddBlocks(tableCell.Blocks, cell);
                 tableRow.Cells.Add(tableCell);
             }
@@ -159,7 +159,7 @@ public sealed class MarkdownConverter : IValueConverter
     static Inline ToInline(Markdig.Syntax.Inlines.Inline inline) => inline switch
     {
         LiteralInline literal => new Run(literal.Content.ToString()),
-        CodeInline code => Themed(new Run(code.Content) { FontFamily = CodeFont }, TextElement.BackgroundProperty, Shade),
+        CodeInline code => Themed(new Run(code.Content) { FontFamily = CodeFont }, TextElement.BackgroundProperty, _shade),
         EmphasisInline { DelimiterCount: >= 2 } strong => Span(strong, new Bold()),
         EmphasisInline emphasis => Span(emphasis, new Italic()),
         LineBreakInline { IsHard: true } => new LineBreak(),
@@ -178,7 +178,7 @@ public sealed class MarkdownConverter : IValueConverter
 
     static Uri? PictureUri(string? url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri is { IsFile: true, IsUnc: false }
-            ? PictureFiles.Contains(Path.GetExtension(uri.LocalPath), StringComparer.OrdinalIgnoreCase) ? uri : null
+            ? _pictureFiles.Contains(Path.GetExtension(uri.LocalPath), StringComparer.OrdinalIgnoreCase) ? uri : null
             : ShowWebImages ? WebUri(url) : null;
 
     static Inline Picture(LinkInline image, Uri uri)
@@ -194,7 +194,7 @@ public sealed class MarkdownConverter : IValueConverter
         return shown;
     }
 
-    static Image Placeholder() => new() { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, MaxHeight = PictureHeight };
+    static Image Placeholder() => new() { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, MaxHeight = _pictureHeight };
 
     static void Load(Image picture, Uri uri, Action failed) => _ = Task.Run(() => ReadAsync(picture, uri, failed));
 
@@ -202,7 +202,7 @@ public sealed class MarkdownConverter : IValueConverter
     {
         try
         {
-            var bitmap = Decoded(uri.IsFile ? File.OpenRead(uri.LocalPath) : new MemoryStream(await Http.GetByteArrayAsync(uri)));
+            var bitmap = Decoded(uri.IsFile ? File.OpenRead(uri.LocalPath) : new MemoryStream(await _http.GetByteArrayAsync(uri)));
             _ = picture.Dispatcher.BeginInvoke(() =>
             {
                 picture.Source = bitmap;
@@ -240,20 +240,20 @@ public sealed class MarkdownConverter : IValueConverter
         var link = new Hyperlink(picture) { NavigateUri = uri, ToolTip = uri.IsFile ? uri.LocalPath : uri.AbsoluteUri, TextDecorations = null };
         return new Figure(new Paragraph(link) { TextAlignment = TextAlignment.Center, Margin = new(0) })
         {
-            Width = new(PictureWidth, FigureUnitType.Column),
+            Width = new(_pictureWidth, FigureUnitType.Column),
             HorizontalAnchor = FigureHorizontalAnchor.ColumnCenter,
             WrapDirection = WrapDirection.None,
             Padding = new(0),
-            Margin = Spacing,
+            Margin = _spacing,
         };
     }
 
     static void Fit(Image image, BitmapSource bitmap)
     {
-        var smallest = PictureMinimum / Math.Max(bitmap.Width, bitmap.Height);
+        var smallest = _pictureMinimum / Math.Max(bitmap.Width, bitmap.Height);
         var largest = Math.Max(1, smallest);
         (image.MinWidth, image.MinHeight) = (bitmap.Width * smallest, bitmap.Height * smallest);
-        (image.MaxWidth, image.MaxHeight) = (bitmap.Width * largest, Math.Min(PictureHeight, bitmap.Height * largest));
+        (image.MaxWidth, image.MaxHeight) = (bitmap.Width * largest, Math.Min(_pictureHeight, bitmap.Height * largest));
         image.StretchDirection = StretchDirection.Both;
     }
 

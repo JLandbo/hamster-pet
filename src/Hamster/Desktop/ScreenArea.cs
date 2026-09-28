@@ -5,13 +5,13 @@ namespace Hamster.Desktop;
 
 public static partial class ScreenArea
 {
-    const uint NearestMonitor = 2;
+    const uint _nearestMonitor = 2;
 
     public static Rect Of(FrameworkElement element)
     {
         var center = element.PointToScreen(new Point(element.ActualWidth / 2, element.ActualHeight / 2));
         var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
-        GetMonitorInfo(MonitorFromPoint(new Pixel((int)center.X, (int)center.Y), NearestMonitor), ref info);
+        GetMonitorInfo(MonitorFromPoint(new Pixel((int)center.X, (int)center.Y), _nearestMonitor), ref info);
         var toUnits = PresentationSource.FromVisual(element)!.CompositionTarget!.TransformFromDevice;
         return new Rect(toUnits.Transform(new Point(info.Work.Left, info.Work.Top)), toUnits.Transform(new Point(info.Work.Right, info.Work.Bottom)));
     }
