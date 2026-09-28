@@ -1,3 +1,8 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Media.Imaging;
+
 namespace Hamster.Desktop;
 
 public static partial class ScreenSnip

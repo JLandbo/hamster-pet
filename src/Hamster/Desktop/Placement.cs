@@ -1,3 +1,5 @@
+using System.Windows;
+
 namespace Hamster.Desktop;
 
 public sealed record WindowSize(double Width, double Height)

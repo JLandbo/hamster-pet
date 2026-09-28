@@ -1,3 +1,7 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using Hamster.Core.Languages;
 using Hamster.Desktop;
 using Hamster.Themes;
 

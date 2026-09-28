@@ -1,3 +1,8 @@
+using System.ComponentModel;
+using System.Text;
+using System.Text.Json.Nodes;
+using System.Threading.Channels;
+
 namespace Hamster.Tests;
 
 public sealed class ClaudeSessionTests

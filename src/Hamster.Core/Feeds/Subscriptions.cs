@@ -1,3 +1,8 @@
+using System.ComponentModel;
+using System.Globalization;
+using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Hamster.Core.Claude;
 using Hamster.Core.Connections;
 using Hamster.Core.Languages;

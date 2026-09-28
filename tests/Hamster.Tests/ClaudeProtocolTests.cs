@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 namespace Hamster.Tests;
 
 public class ClaudeProtocolTests

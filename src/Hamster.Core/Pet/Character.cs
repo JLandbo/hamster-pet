@@ -1,3 +1,4 @@
+using System.Globalization;
 using Hamster.Core.Languages;
 
 namespace Hamster.Core.Pet;

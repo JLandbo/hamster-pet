@@ -1,3 +1,6 @@
+using System.Net;
+using System.Net.Http;
+
 namespace Hamster.Tests;
 
 public sealed class WebSessionTests

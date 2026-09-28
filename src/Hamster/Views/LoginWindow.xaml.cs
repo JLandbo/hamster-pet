@@ -1,3 +1,10 @@
+using System.IO;
+using System.Net.Http;
+using System.Runtime.InteropServices;
+using System.Windows;
+using Microsoft.Web.WebView2.Core;
+using Hamster.Core.Connections;
+using Hamster.Core.Languages;
 using Hamster.Desktop;
 
 namespace Hamster.Views;

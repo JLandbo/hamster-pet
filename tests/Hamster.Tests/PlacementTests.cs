@@ -1,3 +1,5 @@
+using System.Windows;
+
 namespace Hamster.Tests;
 
 public class PlacementTests

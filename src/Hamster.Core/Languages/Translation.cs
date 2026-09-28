@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text.Json;
+
 namespace Hamster.Core.Languages;
 
 public sealed record Translation(string Name, IReadOnlyDictionary<string, string> Texts)

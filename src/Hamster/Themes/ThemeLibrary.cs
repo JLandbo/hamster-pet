@@ -1,3 +1,6 @@
+using System.IO;
+using System.Windows.Media;
+
 namespace Hamster.Themes;
 
 public sealed class ThemeLibrary(string folder)

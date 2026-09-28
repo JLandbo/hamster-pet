@@ -1,3 +1,6 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using Hamster.Core.Claude;
 using Hamster.Core.Languages;
 

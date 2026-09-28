@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace Hamster.Core.Storage;
 
 public sealed class JsonFile<T>(string path, T empty, bool readOnly = false)

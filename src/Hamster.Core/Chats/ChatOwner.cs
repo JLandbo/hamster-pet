@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+
 namespace Hamster.Core.Chats;
 
 public sealed class ChatOwner : IDisposable

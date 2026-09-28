@@ -1,3 +1,6 @@
+using System.Text;
+using System.Text.Json.Nodes;
+
 namespace Hamster.Tests;
 
 public sealed class ConnectorsTests : IDisposable

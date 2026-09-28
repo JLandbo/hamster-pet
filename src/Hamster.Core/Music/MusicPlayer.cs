@@ -1,3 +1,7 @@
+using System.Runtime.InteropServices;
+using Windows.Foundation;
+using Windows.Media.Control;
+
 namespace Hamster.Core.Music;
 
 public sealed record Track(string Title, string Artist, bool Playing)

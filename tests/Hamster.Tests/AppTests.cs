@@ -1,3 +1,5 @@
+using System.Windows.Documents;
+
 namespace Hamster.Tests;
 
 public class AppTests
