@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Hamster.Core/Hamster.Core.csproj" />
     <Project Path="src/Hamster/Hamster.csproj" />
   </Folder>
   <Folder Name="/tests/">

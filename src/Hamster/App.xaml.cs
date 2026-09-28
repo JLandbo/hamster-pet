@@ -1,6 +1,9 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using Hamster.Core.Languages;
+using Hamster.Desktop;
+using Hamster.Themes;
 
 namespace Hamster;
 
@@ -15,8 +18,18 @@ public partial class App : Application
 
     public void Use(Translation next)
     {
-        Swap(ref translation, next.ToResources());
+        Swap(ref translation, ResourcesOf(next));
         Strings.Use(next);
+    }
+
+    static ResourceDictionary ResourcesOf(Translation translation)
+    {
+        var resources = new ResourceDictionary();
+        foreach (var key in Translation.Danish.Texts.Keys)
+        {
+            resources[key] = translation.Of(key);
+        }
+        return resources;
     }
 
     void Swap(ref ResourceDictionary? current, ResourceDictionary next)

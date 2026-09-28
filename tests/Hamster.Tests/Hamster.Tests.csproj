@@ -15,9 +15,23 @@
   <ItemGroup>
     <Using Include="System.IO" />
     <Using Include="Xunit" />
+    <Using Include="Hamster.Core.Chats" />
+    <Using Include="Hamster.Core.Claude" />
+    <Using Include="Hamster.Core.Connections" />
+    <Using Include="Hamster.Core.Feeds" />
+    <Using Include="Hamster.Core.Languages" />
+    <Using Include="Hamster.Core.Music" />
+    <Using Include="Hamster.Core.Pet" />
+    <Using Include="Hamster.Core.Prompts" />
+    <Using Include="Hamster.Core.Storage" />
+    <Using Include="Hamster.Desktop" />
+    <Using Include="Hamster.Rendering" />
+    <Using Include="Hamster.Themes" />
+    <Using Include="Hamster.Views" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Hamster.Core\Hamster.Core.csproj" />
     <ProjectReference Include="..\..\src\Hamster\Hamster.csproj" />
   </ItemGroup>
 

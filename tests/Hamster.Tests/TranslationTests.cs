@@ -87,7 +87,7 @@ public sealed partial class TranslationTests
             .SelectMany(file => Key().Matches(File.ReadAllText(file)).Select(match => match.Groups[1].Value))
             .Distinct();
 
-    static string SourceFolder([CallerFilePath] string test = "") => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(test)!, "..", "..", "src", "Hamster"));
+    static string SourceFolder([CallerFilePath] string test = "") => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(test)!, "..", "..", "src"));
 
     [GeneratedRegex("""(?:Strings\.(?:Of|Format)\("|DynamicResource )([A-Z][A-Za-z]*\.[A-Za-z.]+)""")]
     private static partial Regex Key();
