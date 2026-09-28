@@ -558,7 +558,8 @@ public partial class MainWindow : Window
 
     void Pet_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        (pressed, dragging, dragStart, pressedAt) = (true, false, e.GetPosition(this), DateTime.UtcNow);
+        placement = placement with { Right = petWindow.Left + PetArea.Width + PetArea.Margin.Right, Bottom = petWindow.Top + PetArea.Height };
+        (pressed, dragging, dragStart, pressedAt) = (true, false, e.GetPosition(petWindow), DateTime.UtcNow);
         Touch();
         Pet.CaptureMouse();
         Animate();
@@ -568,7 +569,7 @@ public partial class MainWindow : Window
     {
         if (!pressed)
             return;
-        var offset = e.GetPosition(this) - dragStart;
+        var offset = e.GetPosition(petWindow) - dragStart;
         if (!dragging)
         {
             if (Math.Abs(offset.X) < SystemParameters.MinimumHorizontalDragDistance && Math.Abs(offset.Y) < SystemParameters.MinimumVerticalDragDistance)
