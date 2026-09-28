@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
@@ -31,6 +32,35 @@ public sealed class ClaudeSessionTests
 
         // Assert
         Assert.Equal(ClaudeProtocol.UserMessage("hej", [], "id-1"), Lines(input)[0]);
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenAnEarlierWriteFailed_ThenStillWrites()
+    {
+        // Arrange
+        var input = new BrokenOnceWriter();
+        var session = new ClaudeSession(Output(), input, new FakeListener());
+        var failed = session.SendAsync("a");
+
+        // Act
+        await session.SendAsync("b");
+
+        // Assert
+        Assert.Equal((true, "b\n"), (failed.IsFaulted, input.ToString()));
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenClaudeCouldNotStart_ThenFailsWithTheReason()
+    {
+        // Arrange
+        var streams = new TaskCompletionSource<(TextReader, TextWriter)>();
+        var sending = new ClaudeSession(streams.Task, new FakeListener()).SendAsync("id-1", "hej", []);
+
+        // Act
+        streams.SetException(new Win32Exception("Mappenavnet er ugyldigt"));
+
+        // Assert
+        Assert.Equal("Mappenavnet er ugyldigt", (await Assert.ThrowsAsync<InvalidOperationException>(() => sending)).Message);
     }
 
     [Fact]
@@ -91,13 +121,14 @@ public sealed class ClaudeSessionTests
     public async Task ReadAsync_WhenPermissionRequested_ThenSendsUsersAnswer(PermissionAnswer answer, string behavior)
     {
         // Arrange
-        var input = new StringWriter();
+        var input = new LineWriter();
 
         // Act
         await new ClaudeSession(Output(Permission, Result), input, new FakeListener(answer)).ReadAsync();
+        var sent = await input.NextAsync();
 
         // Assert
-        Assert.Equal(behavior, (string?)JsonNode.Parse(Lines(input)[0])!["response"]!["response"]!["behavior"]);
+        Assert.Equal(behavior, (string?)JsonNode.Parse(sent)!["response"]!["response"]!["behavior"]);
     }
 
     [Fact]
@@ -105,13 +136,14 @@ public sealed class ClaudeSessionTests
     {
         // Arrange
         const string permission = """{"type":"control_request","request_id":"req-2","request":{"subtype":"can_use_tool","tool_name":"Write","input":{"file_path":"a.txt"},"permission_suggestions":[{"type":"addRules","rules":[{"toolName":"Write"}],"behavior":"allow","destination":"localSettings"}]}}""";
-        var input = new StringWriter();
+        var input = new LineWriter();
 
         // Act
         await new ClaudeSession(Output(permission, Result), input, new FakeListener(PermissionAnswer.AllowAlways)).ReadAsync();
+        var sent = await input.NextAsync();
 
         // Assert
-        var granted = JsonNode.Parse(Lines(input)[0])!["response"]!["response"]!["updatedPermissions"]!;
+        var granted = JsonNode.Parse(sent)!["response"]!["response"]!["updatedPermissions"]!;
         Assert.Equal("""[{"type":"addRules","rules":[{"toolName":"Write"}],"behavior":"allow","destination":"session"}]""", granted.ToJsonString());
     }
 
@@ -120,14 +152,16 @@ public sealed class ClaudeSessionTests
     {
         // Arrange
         var listener = new FakeListener(answer: null);
-        var input = new StringWriter();
+        var input = new LineWriter();
+        var session = new ClaudeSession(Output(Permission, Withdrawal, WebSearch), input, listener);
 
         // Act
-        await new ClaudeSession(Output(Permission, Withdrawal, WebSearch), input, listener).ReadAsync();
+        await session.ReadAsync();
+        await session.SendAsync("slut");
 
         // Assert
         Assert.True(listener.QuestionCancelledBeforeNextTool);
-        Assert.Empty(Lines(input));
+        Assert.Equal("slut", await input.NextAsync());
     }
 
     [Fact(Timeout = 5_000)]
@@ -308,15 +342,44 @@ public sealed class ClaudeSessionTests
             await lines.Reader.WaitToReadAsync() && lines.Reader.TryRead(out var line) ? line : null;
     }
 
-    sealed class LineWriter : TextWriter
+    sealed class BrokenOnceWriter : StringWriter
+    {
+        bool broken;
+
+        public override void Write(string? value)
+        {
+            if (!broken)
+            {
+                broken = true;
+                throw new IOException();
+            }
+            base.Write(value);
+        }
+    }
+
+    internal sealed class LineWriter(bool blocked = false) : TextWriter
     {
         readonly Channel<string> lines = Channel.CreateUnbounded<string>();
+        readonly ManualResetEventSlim open = new(!blocked);
 
         public override Encoding Encoding => Encoding.UTF8;
 
-        public override void Write(string? value) => lines.Writer.TryWrite(value!.TrimEnd('\n'));
+        public override void Write(string? value)
+        {
+            open.Wait();
+            lines.Writer.TryWrite(value!.TrimEnd('\n'));
+        }
 
-        public ValueTask<string> NextAsync() => lines.Reader.ReadAsync(Token);
+        public void Open() => open.Set();
+
+        public Task<string> NextAsync() => lines.Reader.ReadAsync(Token).AsTask().WaitAsync(TimeSpan.FromSeconds(5), Token);
+
+        protected override void Dispose(bool disposing)
+        {
+            open.Set();
+            lines.Writer.TryComplete();
+            base.Dispose(disposing);
+        }
     }
 
     internal sealed class FakeListener(PermissionAnswer? answer = PermissionAnswer.Allow) : IClaudeListener

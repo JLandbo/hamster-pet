@@ -1,9 +1,13 @@
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 
 namespace Hamster.Tests;
 
@@ -33,7 +37,7 @@ public class MarkdownConverterTests : IDisposable
         var file = ImageFile(name, 40);
 
         // Act
-        var document = MarkdownConverter.Render($"![graf](<{file.Replace('\\', '/')}>)");
+        var document = Rendered($"![graf](<{file.Replace('\\', '/')}>)");
 
         // Assert
         Assert.Equal(40, Width(document));
@@ -47,7 +51,7 @@ public class MarkdownConverterTests : IDisposable
     public void Render_WhenTheImageIsShown_ThenItKeepsItsShapeWithinTheMinimumAndMaximum(int width, int height, double shownWidth, double shownHeight) => UiThread.Run(() =>
     {
         // Arrange
-        var picture = Picture(MarkdownConverter.Render($"![graf](<{ImageFile("graf.png", width, height)}>)"))!;
+        var picture = Picture(Rendered($"![graf](<{ImageFile("graf.png", width, height)}>)"))!;
 
         // Act
         picture.Measure(new Size(349, double.PositiveInfinity));
@@ -60,7 +64,7 @@ public class MarkdownConverterTests : IDisposable
     public void Render_WhenThereIsLittleRoom_ThenTheLongestSideStaysAtLeastAHundred() => UiThread.Run(() =>
     {
         // Arrange
-        var picture = Picture(MarkdownConverter.Render($"![graf](<{ImageFile("graf.png", 640, 480)}>)"))!;
+        var picture = Picture(Rendered($"![graf](<{ImageFile("graf.png", 640, 480)}>)"))!;
 
         // Act
         var smallest = (picture.MinWidth, picture.MinHeight);
@@ -77,7 +81,7 @@ public class MarkdownConverterTests : IDisposable
         File.WriteAllBytes(file, Convert.FromBase64String("UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA=="));
 
         // Act
-        var document = MarkdownConverter.Render($"![graf](<{file}>)");
+        var document = Rendered($"![graf](<{file}>)");
 
         // Assert
         Assert.Equal(1, Width(document));
@@ -99,7 +103,7 @@ public class MarkdownConverterTests : IDisposable
         };
 
         // Act
-        var document = MarkdownConverter.Render(markdown);
+        var document = Rendered(markdown);
 
         // Assert
         Assert.Equal(40, Width(document));
@@ -128,10 +132,46 @@ public class MarkdownConverterTests : IDisposable
             """;
 
         // Act
-        var document = MarkdownConverter.Render(markdown);
+        var document = Rendered(markdown);
 
         // Assert
         Assert.Equal([10, 20, 10, 20], Pictures(document).Select(picture => ((BitmapImage)picture.Source).PixelWidth));
+    });
+
+    [Fact]
+    public void Render_WhenTheImageIsOnDisk_ThenItIsReadOffTheUiThread() => UiThread.Run(() =>
+    {
+        // Arrange
+        var file = ImageFile("graf.png", 40);
+        var ui = Environment.CurrentManagedThreadId;
+        using var handedOver = new ManualResetEventSlim();
+        Dispatcher.CurrentDispatcher.Hooks.OperationPosted += (_, _) =>
+        {
+            if (Environment.CurrentManagedThreadId != ui)
+            {
+                handedOver.Set();
+            }
+        };
+
+        // Act
+        var document = MarkdownConverter.Render($"![graf](<{file}>)");
+        var shownAtOnce = Picture(document)!.Source is not null;
+        var readWhileTheUiThreadWaited = handedOver.Wait(TimeSpan.FromSeconds(10));
+
+        // Assert
+        Assert.Equal((false, true), (shownAtOnce, readWhileTheUiThreadWaited));
+    });
+
+    [Fact]
+    public void Render_WhenTheFileIsMissing_ThenThePlaceholderBecomesItsText() => UiThread.Run(() =>
+    {
+        // Act
+        var document = MarkdownConverter.Render($"![graf](<{Path.Combine(folder, "missing.png")}>)");
+        var placeholderAtOnce = Picture(document) is not null;
+        UiThread.Until(() => Picture(document) is null);
+
+        // Assert
+        Assert.Equal((true, "graf"), (placeholderAtOnce, DocumentText(document)));
     });
 
     [Fact]
@@ -139,7 +179,7 @@ public class MarkdownConverterTests : IDisposable
     {
         // Arrange
         var file = ImageFile("graf.png", 40);
-        var document = MarkdownConverter.Render($"![graf](<{file}>)");
+        var document = Rendered($"![graf](<{file}>)");
         var link = Assert.Single(Hyperlinks(document));
         var clicked = false;
         link.AddHandler(Mouse.MouseDownEvent, new MouseButtonEventHandler((_, _) => clicked = true), true);
@@ -156,7 +196,7 @@ public class MarkdownConverterTests : IDisposable
     {
         // Arrange
         var file = ImageFile("graf.png", 40);
-        var picture = Picture(MarkdownConverter.Render($"![graf](<{file}>)"))!;
+        var picture = Picture(Rendered($"![graf](<{file}>)"))!;
 
         // Act
         var link = App.LinkAt(picture);
@@ -171,12 +211,11 @@ public class MarkdownConverterTests : IDisposable
         // Arrange
         var file = ImageFile("graf.png", 10);
         var markdown = $"![graf](<{file}>)";
-        var before = MarkdownConverter.Render(markdown);
+        var before = Rendered(markdown);
         ImageFile("graf.png", 20);
-        File.SetLastWriteTimeUtc(file, DateTime.UtcNow.AddMinutes(1));
 
         // Act
-        var after = MarkdownConverter.Render(markdown);
+        var after = Rendered(markdown);
 
         // Assert
         Assert.Equal((10, 20), (Width(before), Width(after)));
@@ -187,7 +226,7 @@ public class MarkdownConverterTests : IDisposable
     [InlineData("notes.txt")]
     [InlineData("broken.png")]
     [InlineData("noframes.gif")]
-    public void Render_WhenTheFileIsNoImage_ThenShowsItsText(string name)
+    public void Render_WhenTheFileIsNoImage_ThenShowsItsText(string name) => UiThread.Run(() =>
     {
         // Arrange
         File.WriteAllText(Path.Combine(folder, "notes.txt"), "noter");
@@ -195,11 +234,11 @@ public class MarkdownConverterTests : IDisposable
         File.WriteAllBytes(Path.Combine(folder, "noframes.gif"), [.. "GIF89a"u8, 1, 0, 1, 0, 0, 0, 0, 0x3B]);
 
         // Act
-        var document = MarkdownConverter.Render($"![graf](<{Path.Combine(folder, name)}>)");
+        var document = Rendered($"![graf](<{Path.Combine(folder, name)}>)");
 
         // Assert
         Assert.Equal((null, "graf"), (Picture(document), DocumentText(document)));
-    }
+    });
 
     [Theory]
     [InlineData(false)]
@@ -232,16 +271,43 @@ public class MarkdownConverterTests : IDisposable
     });
 
     [Fact]
+    public void Render_WhenAWebImageLoads_ThenShowsIt() => UiThread.Run(() =>
+    {
+        // Arrange
+        MarkdownConverter.ShowWebImages = true;
+        var address = Served(File.ReadAllBytes(ImageFile("graf.png", 40)));
+
+        // Act
+        var document = Rendered($"![graf]({address})");
+
+        // Assert
+        Assert.Equal(40, Width(document));
+    });
+
+    [Fact]
+    public void Render_WhenAWebImageCannotBeFetched_ThenShowsItsText() => UiThread.Run(() =>
+    {
+        // Arrange
+        MarkdownConverter.ShowWebImages = true;
+
+        // Act
+        var document = Rendered("![logo](http://localhost:1/logo.png)");
+
+        // Assert
+        Assert.Equal((null, "logo"), (Picture(document), DocumentText(document)));
+    });
+
+    [Fact]
     public void Render_WhenTheImageIsInsideALink_ThenTheLinkOpensTheLinkedPage() => UiThread.Run(() =>
     {
         // Arrange
         var file = ImageFile("graf.png", 40);
 
         // Act
-        var document = MarkdownConverter.Render($"[![graf](<{file}>)](https://example.com)");
+        var document = Rendered($"[![graf](<{file}>)](https://example.com)");
 
         // Assert
-        Assert.Equal((new Uri("https://example.com"), true), (Assert.Single(Hyperlinks(document)).NavigateUri, Picture(document) is not null));
+        Assert.Equal((new Uri("https://example.com"), true), (Assert.Single(Hyperlinks(document)).NavigateUri, Picture(document)?.Source is not null));
     });
     [Fact]
     public void Render_WhenPlainText_ThenOneParagraphWithTheText()
@@ -394,7 +460,30 @@ public class MarkdownConverterTests : IDisposable
     static IEnumerable<Image> Pictures(DependencyObject element) =>
         LogicalTreeHelper.GetChildren(element).OfType<DependencyObject>().SelectMany(child => child is Image image ? [image] : Pictures(child));
 
+    static FlowDocument Rendered(string markdown)
+    {
+        var document = MarkdownConverter.Render(markdown);
+        UiThread.Until(() => Pictures(document).All(picture => picture.Source is not null));
+        return document;
+    }
+
     static int Width(FlowDocument document) => Assert.IsType<BitmapImage>(Picture(document)!.Source).PixelWidth;
+
+    static Uri Served(byte[] image)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        _ = Task.Run(async () =>
+        {
+            using var client = await listener.AcceptTcpClientAsync();
+            using var stream = client.GetStream();
+            _ = await stream.ReadAsync(new byte[4096]);
+            await stream.WriteAsync(Encoding.ASCII.GetBytes($"HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {image.Length}\r\nConnection: close\r\n\r\n"));
+            await stream.WriteAsync(image);
+            listener.Stop();
+        });
+        return new Uri($"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/graf.png");
+    }
 
     string ImageFile(string name, int width, int height = 10)
     {

@@ -82,7 +82,7 @@ public static class McpClient
         request.Headers.Accept.ParseAdd("text/event-stream");
         if (session is not null)
             request.Headers.Add("Mcp-Session-Id", session);
-        using var response = await Http.SendAsync(request);
+        using var response = await Task.Run(() => Http.SendAsync(request));
         var text = await response.Content.ReadAsStringAsync();
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException($"{(int)response.StatusCode} {response.ReasonPhrase}");

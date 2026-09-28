@@ -58,7 +58,7 @@ public sealed class WebSession(string folder) : IWebSession
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.TryAddWithoutValidation("Cookie", cookies);
         request.Headers.Accept.ParseAdd("application/json");
-        return await Http.SendAsync(request);
+        return await Task.Run(() => Http.SendAsync(request));
     }
 
     async Task<CoreWebView2> CookiesAsync()

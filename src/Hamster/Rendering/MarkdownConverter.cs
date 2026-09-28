@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -20,6 +21,7 @@ namespace Hamster.Rendering;
 public sealed class MarkdownConverter : IValueConverter
 {
     static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UsePipeTables().UseAutoLinks().Build();
+    static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
     public static readonly FontFamily CodeFont = new("Cascadia Mono, Consolas");
     static readonly Thickness Spacing = new(0, 8, 0, 0);
     const string Shade = "Edge";
@@ -37,10 +39,19 @@ public sealed class MarkdownConverter : IValueConverter
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 
-    public static FlowDocument Render(string markdown)
+    public static FlowDocument Render(string markdown, Func<string, IEnumerable<Uri>>? mentioned = null)
     {
+        var parsed = Markdown.Parse(markdown, Pipeline);
+        if (mentioned is not null)
+        {
+            var shown = new HashSet<string>(parsed.Descendants<LinkInline>().Where(link => link.IsImage).Select(link => PictureUri(link.Url)?.LocalPath).OfType<string>(), StringComparer.OrdinalIgnoreCase);
+            foreach (var block in parsed.Descendants<LeafBlock>().Where(block => block is not CodeBlock && !block.Span.IsEmpty))
+            {
+                block.SetData(typeof(Uri), mentioned(markdown.Substring(block.Span.Start, block.Span.Length)).Where(uri => shown.Add(uri.LocalPath)).ToArray());
+            }
+        }
         var document = new FlowDocument();
-        AddBlocks(document.Blocks, Markdown.Parse(markdown, Pipeline));
+        AddBlocks(document.Blocks, parsed);
         return document;
     }
 
@@ -61,10 +72,18 @@ public sealed class MarkdownConverter : IValueConverter
 
     static void AddBlocks(BlockCollection target, ContainerBlock source)
     {
-        foreach (var block in source.Select(ToBlock))
+        foreach (var parsed in source)
         {
+            var block = ToBlock(parsed);
             block.Margin = target.Count == 0 ? new(0) : Spacing;
             target.Add(block);
+            foreach (var uri in parsed.GetData(typeof(Uri)) as Uri[] ?? [])
+            {
+                var picture = Placeholder();
+                var shown = new Paragraph(Figured(new InlineUIContainer(picture), uri)) { Margin = new(0) };
+                target.Add(shown);
+                Load(picture, uri, () => target.Remove(shown));
+            }
         }
     }
 
@@ -159,36 +178,67 @@ public sealed class MarkdownConverter : IValueConverter
 
     static Uri? PictureUri(string? url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri is { IsFile: true, IsUnc: false }
-            ? PictureFiles.Contains(Path.GetExtension(uri.LocalPath), StringComparer.OrdinalIgnoreCase) && File.Exists(uri.LocalPath) ? uri : null
+            ? PictureFiles.Contains(Path.GetExtension(uri.LocalPath), StringComparer.OrdinalIgnoreCase) ? uri : null
             : ShowWebImages ? WebUri(url) : null;
 
     static Inline Picture(LinkInline image, Uri uri)
     {
-        var bitmap = new BitmapImage();
+        var picture = Placeholder();
+        var container = new InlineUIContainer(picture);
+        Inline shown = InsideLink(image) ? container : Figured(container, uri);
+        Load(picture, uri, () =>
+        {
+            shown.SiblingInlines.InsertAfter(shown, Span(image, new Span()));
+            shown.SiblingInlines.Remove(shown);
+        });
+        return shown;
+    }
+
+    static Image Placeholder() => new() { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, MaxHeight = PictureHeight };
+
+    static void Load(Image picture, Uri uri, Action failed) => _ = Task.Run(() => ReadAsync(picture, uri, failed));
+
+    static async Task ReadAsync(Image picture, Uri uri, Action failed)
+    {
         try
         {
+            var bitmap = Decoded(uri.IsFile ? File.OpenRead(uri.LocalPath) : new MemoryStream(await Http.GetByteArrayAsync(uri)));
+            _ = picture.Dispatcher.BeginInvoke(() =>
+            {
+                picture.Source = bitmap;
+                Fit(picture, bitmap);
+            });
+        }
+        catch (Exception exception) when (Unreadable(exception))
+        {
+            _ = picture.Dispatcher.BeginInvoke(failed);
+        }
+    }
+
+    static BitmapImage Decoded(Stream stream)
+    {
+        using (stream)
+        {
+            var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.UriSource = uri.IsFile ? new Uri($"{uri.AbsoluteUri}?{File.GetLastWriteTimeUtc(uri.LocalPath).Ticks}") : uri;
+            bitmap.StreamSource = stream;
             bitmap.EndInit();
+            bitmap.Freeze();
+            return bitmap;
         }
-        catch (Exception exception) when (exception is IOException or FormatException or NotSupportedException or UnauthorizedAccessException
-            or ArgumentException or InvalidOperationException or OverflowException or ExternalException)
-        {
-            return Span(image, new Span());
-        }
-        var shown = new Image { Source = bitmap, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, MaxHeight = PictureHeight };
-        if (bitmap.IsDownloading)
-        {
-            bitmap.DownloadCompleted += (_, _) => Fit(shown, bitmap);
-        }
-        else
-        {
-            Fit(shown, bitmap);
-        }
-        var picture = new InlineUIContainer(shown);
+    }
+
+    static bool Unreadable(Exception exception)
+    {
+        return exception is IOException or FormatException or NotSupportedException or UnauthorizedAccessException
+            or ArgumentException or InvalidOperationException or OverflowException or ExternalException or HttpRequestException or OperationCanceledException;
+    }
+
+    static Figure Figured(InlineUIContainer picture, Uri uri)
+    {
         var link = new Hyperlink(picture) { NavigateUri = uri, ToolTip = uri.IsFile ? uri.LocalPath : uri.AbsoluteUri, TextDecorations = null };
-        return InsideLink(image) ? picture : new Figure(new Paragraph(link) { TextAlignment = TextAlignment.Center, Margin = new(0) })
+        return new Figure(new Paragraph(link) { TextAlignment = TextAlignment.Center, Margin = new(0) })
         {
             Width = new(PictureWidth, FigureUnitType.Column), HorizontalAnchor = FigureHorizontalAnchor.ColumnCenter, WrapDirection = WrapDirection.None, Padding = new(0), Margin = Spacing,
         };

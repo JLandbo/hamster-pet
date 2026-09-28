@@ -97,11 +97,10 @@ public sealed class Conversation : IClaudeListener
         Changed?.Invoke();
         try
         {
-            if (restart || !claude.IsRunning)
-                await StartClaudeAsync();
-            if (!waiting.ContainsKey(id))
-                return;
-            await claude.SendAsync(id, prompt, images ?? []);
+            var starting = restart || !claude.IsRunning ? StartClaudeAsync() : Task.CompletedTask;
+            var sending = claude.SendAsync(id, prompt, images ?? []);
+            await starting;
+            await sending;
         }
         catch (Exception exception) when (exception is Win32Exception or IOException or InvalidOperationException)
         {

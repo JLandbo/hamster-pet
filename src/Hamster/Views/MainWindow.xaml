@@ -15,6 +15,7 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="VisibleWhenTrue" />
         <rendering:MarkdownConverter x:Key="Markdown" />
+        <rendering:ChatMarkdownConverter x:Key="ChatMarkdown" />
 
         <Style x:Key="ChoiceMenu" TargetType="ContextMenu" BasedOn="{StaticResource PopupMenu}">
             <EventSetter Event="Closed" Handler="Choices_Closed" />
@@ -118,7 +119,7 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
-                                    <FlowDocumentScrollViewer Document="{Binding DisplayAnswer, Converter={StaticResource Markdown}}" Margin="16,4,0,0"
+                                    <FlowDocumentScrollViewer Document="{Binding DisplayAnswer, Converter={StaticResource ChatMarkdown}}" Margin="16,4,0,0"
                                                               VerticalScrollBarVisibility="Disabled" FocusVisualStyle="{x:Null}"
                                                               RequestBringIntoView="Answer_RequestBringIntoView" Hyperlink.RequestNavigate="Link_RequestNavigate"
                                                               Foreground="{DynamicResource Muted}" />

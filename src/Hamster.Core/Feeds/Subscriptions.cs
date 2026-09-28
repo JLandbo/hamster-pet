@@ -470,7 +470,7 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.TryAddWithoutValidation("Authorization", authorization);
         request.Headers.Accept.ParseAdd("application/json");
-        using var response = await Http.SendAsync(request);
+        using var response = await Task.Run(() => Http.SendAsync(request));
         return response.IsSuccessStatusCode
             ? await response.Content.ReadAsStringAsync()
             : throw new InvalidOperationException(Strings.Format("Settings.JiraRejectedToken", (int)response.StatusCode, response.ReasonPhrase));

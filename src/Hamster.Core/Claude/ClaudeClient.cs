@@ -39,8 +39,7 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
     static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
     static readonly TimeSpan RequestTimeout = TimeSpan.FromMinutes(1);
 
-    (Process? Process, ClaudeSession Session)? current;
-    int starts;
+    (Task<Process?> Process, ClaudeSession Session)? current;
     ClaudeSettings settings = store.Load();
 
     public ClaudeSettings Settings
@@ -57,24 +56,23 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
     {
         Settings = value;
         if (current is var (_, session))
-            TrySend(session, control);
+        {
+            _ = session.SendAsync(control);
+        }
     }
 
-    internal void Attach(ClaudeSession session) => current = (null, session);
+    internal void Attach(ClaudeSession session) => current = (Task.FromResult<Process?>(null), session);
 
     public bool IsRunning => current is not null;
 
-    public async Task StartAsync(string? sessionId, IClaudeListener listener)
+    public Task StartAsync(string? sessionId, IClaudeListener listener)
     {
         End();
-        var start = ++starts;
-        var instructions = File.Exists(instructionsFile) ? await File.ReadAllTextAsync(instructionsFile) : "";
-        if (start != starts)
-            return;
-        var process = Start(sessionId, instructions);
-        var session = new ClaudeSession(process.StandardOutput, process.StandardInput, listener);
+        var process = Task.Run<Process?>(() => Start(sessionId));
+        var session = new ClaudeSession(StreamsAsync(process), listener);
         current = (process, session);
         _ = RunAsync(process, session, listener);
+        return process;
     }
 
     public Task SendAsync(string id, string prompt, IReadOnlyList<ImageAttachment> images) =>
@@ -88,14 +86,16 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
         if (current is not var (process, session))
             return;
         var results = session.Results;
-        TrySend(session, ClaudeProtocol.Interrupt());
+        _ = session.SendAsync(ClaudeProtocol.Interrupt());
         _ = KillAfterAsync(process, () => session.Results == results);
     }
 
     public void Withdraw(string id)
     {
         if (current is var (_, session))
-            TrySend(session, ClaudeProtocol.Withdraw(id));
+        {
+            _ = session.SendAsync(ClaudeProtocol.Withdraw(id));
+        }
     }
 
     public void End()
@@ -104,19 +104,26 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
             return;
         current = null;
         session.Detach();
-        TrySend(session, ClaudeProtocol.EndSession());
-        try
-        {
-            process?.StandardInput.Close();
-        }
-        catch (IOException)
-        {
-        }
+        _ = session.SendAsync(ClaudeProtocol.EndSession());
+        _ = session.CloseAsync();
         _ = KillAfterAsync(process, () => true);
     }
 
-    async Task RunAsync(Process process, ClaudeSession session, IClaudeListener listener)
+    async Task RunAsync(Task<Process?> starting, ClaudeSession session, IClaudeListener listener)
     {
+        Process process;
+        try
+        {
+            process = (await starting)!;
+        }
+        catch (Exception)
+        {
+            if (current?.Process == starting)
+            {
+                current = null;
+            }
+            return;
+        }
         using (process)
         {
             var errors = process.StandardError.ReadToEndAsync();
@@ -130,34 +137,34 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
             }
             await process.WaitForExitAsync();
             var error = (await errors).Trim();
-            if (current?.Process != process)
+            if (current?.Process != starting)
+            {
                 return;
+            }
             current = null;
             listener.Exited(error.Length > 0 ? error : Strings.Format("Claude.StoppedWithExitCode", process.ExitCode));
         }
     }
 
-    static async Task KillAfterAsync(Process? process, Func<bool> stuck)
+    static async Task<(TextReader Output, TextWriter Input)> StreamsAsync(Task<Process?> starting)
+    {
+        var process = (await starting)!;
+        return (process.StandardOutput, process.StandardInput);
+    }
+
+    static async Task KillAfterAsync(Task<Process?> starting, Func<bool> stuck)
     {
         await Task.Delay(StopTimeout);
-        if (process is not null && stuck())
+        if (stuck() && starting is { IsCompletedSuccessfully: true, Result: { } process })
+        {
             TryKill(process);
-    }
-
-    static void TrySend(ClaudeSession session, string json)
-    {
-        try
-        {
-            session.Send(json);
-        }
-        catch (Exception exception) when (exception is IOException or ObjectDisposedException)
-        {
         }
     }
 
-    Process Start(string? sessionId, string instructions)
+    Process Start(string? sessionId)
     {
         Directory.CreateDirectory(workspace);
+        var instructions = File.Exists(instructionsFile) ? File.ReadAllText(instructionsFile) : "";
         var arguments = ClaudeProtocol.Arguments(sessionId, Settings, instructions);
         return Process.Start(new ProcessStartInfo("claude", arguments)
         {

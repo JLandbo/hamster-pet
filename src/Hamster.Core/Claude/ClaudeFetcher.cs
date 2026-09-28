@@ -42,7 +42,7 @@ public sealed partial class ClaudeFetcher(string workspace)
         try
         {
             await WaitUntilConnectedAsync(session, serverName);
-            session.Send(ClaudeProtocol.UserMessage(Prompt(calls), [], Guid.NewGuid().ToString()));
+            await session.SendAsync(Guid.NewGuid().ToString(), Prompt(calls), []);
             return await Task.WhenAny(results.Done, reading).WaitAsync(AnswerTimeout) == results.Done
                 ? [.. (await results.Done).Select(result => (result.Call, FullText(result.Text)))]
                 : throw new InvalidOperationException(await ReasonAsync(errors));

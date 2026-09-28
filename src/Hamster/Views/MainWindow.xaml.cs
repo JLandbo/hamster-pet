@@ -75,6 +75,7 @@ public partial class MainWindow : Window
 
     IReadOnlyList<ConnectorProblem> problems = [];
     string lastPrompt = "";
+    Task attaching = Task.CompletedTask;
     DateTime feedNewsAt;
     MusicPlayer? music;
     Character character = Character.Hamster;
@@ -648,6 +649,7 @@ public partial class MainWindow : Window
     {
         beforeFullScreen = null;
         resizeStart = (Mouse.GetPosition(this), Root.ActualWidth, ChatScroll.Height);
+        ScrollToNewest();
         FreezeHiddenChats();
     }
 
@@ -744,6 +746,7 @@ public partial class MainWindow : Window
         if (e.Key == Key.Enter && Keyboard.Modifiers != ModifierKeys.Shift)
         {
             e.Handled = true;
+            await attaching;
             if (Input.Text.Trim().Length == 0 && attachedFiles.Count + attachedImages.Count == 0)
                 return;
             var text = Input.Text.Trim();
@@ -759,7 +762,7 @@ public partial class MainWindow : Window
         else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && ClipboardFiles() is { } files)
         {
             e.Handled = true;
-            Attach(files);
+            await Attach(files);
         }
         else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && ClipboardImage() is { } image)
         {
@@ -829,20 +832,30 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    void Window_Drop(object sender, DragEventArgs e)
+    async void Window_Drop(object sender, DragEventArgs e)
     {
         if (e.Data.GetData(DataFormats.FileDrop) is string[] files)
-            Attach(files);
+        {
+            await Attach(files);
+        }
     }
 
-    void Attach(IEnumerable<string> files)
+    Task Attach(IEnumerable<string> files) => attaching = AttachAsync([.. files], attaching);
+
+    async Task AttachAsync(string[] files, Task previous)
     {
-        foreach (var file in files)
+        var images = await Task.Run(() => files.Select(ImageAttachment.FromFile).ToArray());
+        await previous;
+        foreach (var (file, image) in files.Zip(images))
         {
-            if (ImageAttachment.FromFile(file) is { } image)
+            if (image is not null)
+            {
                 attachedImages.Add(image);
+            }
             else
+            {
                 attachedFiles.Add(file);
+            }
         }
         UpdateAttachments();
         FocusInput();
@@ -1150,6 +1163,7 @@ public partial class MainWindow : Window
 
     async Task SendAsync(string text, string? title = null)
     {
+        await attaching;
         lastPrompt = text;
         var prompt = Conversation.WithAttachments(text, attachedFiles, attachedImages);
         ImageAttachment[] images = [.. attachedImages];

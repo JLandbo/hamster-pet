@@ -43,16 +43,38 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
-    public async Task SendAsync_WhenCancelledWhileClaudeStarts_ThenSendsNothing()
+    public async Task SendAsync_WhenClaudeIsStillStarting_ThenTheMessagesKeepTheirOrder()
     {
         // Arrange
-        claude.Starting = conversation.Cancel;
+        var started = new TaskCompletionSource();
+        claude.Launched = started.Task;
 
         // Act
-        await conversation.SendAsync("hej");
+        var first = conversation.SendAsync("første");
+        var second = conversation.SendAsync("anden");
+        started.SetResult();
+        await first;
+        await second;
 
         // Assert
-        Assert.Equal((0, "Afbrudt."), (claude.Ids.Count, conversation.Chats.Single().Answer));
+        Assert.Equal(["første", "anden"], claude.Prompts);
+    }
+
+    [Fact]
+    public async Task Cancel_WhenClaudeIsStillStarting_ThenTheMessageIsSentAndWithdrawn()
+    {
+        // Arrange
+        var started = new TaskCompletionSource();
+        (claude.Launched, claude.Reply) = (started.Task, Silent);
+        var sending = conversation.SendAsync("hej");
+
+        // Act
+        conversation.Cancel();
+        started.SetResult();
+        await sending;
+
+        // Assert
+        Assert.Equal((claude.Ids.Single(), "Afbrudt."), (claude.Withdrawn.Single(), conversation.Chats.Single().Answer));
     }
 
     [Fact]
@@ -1427,15 +1449,14 @@ public sealed class ConversationTests : IDisposable
         public int Interrupts { get; private set; }
         public bool IsRunning { get; set; }
         public IClaudeListener Listener { get; private set; } = null!;
-        public Action? Starting { get; set; }
+        public Task Launched { get; set; } = Task.CompletedTask;
         public ClaudeSettings Settings { get; set; } = ClaudeSettings.Default;
 
         public Task StartAsync(string? sessionId, IClaudeListener listener)
         {
             Starts.Add(sessionId);
             (Listener, IsRunning) = (listener, true);
-            Starting?.Invoke();
-            return Task.CompletedTask;
+            return Launched;
         }
 
         public Task SendAsync(string id, string prompt, IReadOnlyList<ImageAttachment> images)

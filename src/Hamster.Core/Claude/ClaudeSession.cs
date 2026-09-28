@@ -6,19 +6,27 @@ using Hamster.Core.Languages;
 
 namespace Hamster.Core.Claude;
 
-public sealed class ClaudeSession(TextReader output, TextWriter input, IClaudeListener listener)
+public sealed class ClaudeSession(Task<(TextReader Output, TextWriter Input)> streams, IClaudeListener listener)
 {
-    readonly TextWriter input = TextWriter.Synchronized(input);
+    readonly Lock order = new();
     readonly ConcurrentDictionary<string, CancellationTokenSource> questions = new();
     readonly ConcurrentDictionary<string, TaskCompletionSource<JsonObject?>> replies = new();
+    Task writing = streams;
     volatile bool detached;
 
+    public ClaudeSession(TextReader output, TextWriter input, IClaudeListener listener) : this(Task.FromResult((output, input)), listener)
+    {
+    }
+
     public int Results { get; private set; }
+
+    TextWriter Input => streams.IsCompletedSuccessfully ? streams.Result.Input : throw NotRunning();
 
     public async Task ReadAsync()
     {
         try
         {
+            var (output, _) = await streams;
             while (await output.ReadLineAsync() is { } line)
             {
                 foreach (var message in ClaudeProtocol.Parse(line))
@@ -36,8 +44,7 @@ public sealed class ClaudeSession(TextReader output, TextWriter input, IClaudeLi
         }
     }
 
-    public Task SendAsync(string id, string prompt, IReadOnlyList<ImageAttachment> images) =>
-        Task.Run(() => Send(ClaudeProtocol.UserMessage(prompt, images, id)));
+    public Task SendAsync(string id, string prompt, IReadOnlyList<ImageAttachment> images) => Queue(() => Write(detached ? throw NotRunning() : ClaudeProtocol.UserMessage(prompt, images, id)));
 
     public async Task<JsonObject?> RequestAsync(JsonObject request, TimeSpan timeout)
     {
@@ -46,8 +53,10 @@ public sealed class ClaudeSession(TextReader output, TextWriter input, IClaudeLi
         try
         {
             if (detached)
-                throw new InvalidOperationException(Strings.Of("Claude.NotRunning"));
-            await Task.Run(() => Send(ClaudeProtocol.Control(request, id)));
+            {
+                throw NotRunning();
+            }
+            await SendAsync(ClaudeProtocol.Control(request, id));
             return await reply.Task.WaitAsync(timeout);
         }
         catch (TimeoutException)
@@ -60,11 +69,26 @@ public sealed class ClaudeSession(TextReader output, TextWriter input, IClaudeLi
         }
     }
 
-    public void Send(string json)
+    public Task SendAsync(string json) => Queue(() => Write(json));
+
+    public Task CloseAsync() => Queue(() => Input.Close());
+
+    Task Queue(Action write)
     {
+        lock (order)
+        {
+            return writing = writing.ContinueWith(_ => write(), TaskScheduler.Default);
+        }
+    }
+
+    void Write(string json)
+    {
+        var input = Input;
         input.Write(json + '\n');
         input.Flush();
     }
+
+    InvalidOperationException NotRunning() => new(streams.Exception?.InnerException?.Message ?? Strings.Of("Claude.NotRunning"));
 
     public void Detach()
     {
@@ -119,7 +143,9 @@ public sealed class ClaudeSession(TextReader output, TextWriter input, IClaudeLi
         {
             var answer = await listener.AskPermissionAsync(request, cancellationToken);
             if (questions.TryRemove(request.RequestId, out _))
-                Send(answer == PermissionAnswer.Deny ? ClaudeProtocol.Deny(request) : ClaudeProtocol.Allow(request, answer == PermissionAnswer.AllowAlways));
+            {
+                await SendAsync(answer == PermissionAnswer.Deny ? ClaudeProtocol.Deny(request) : ClaudeProtocol.Allow(request, answer == PermissionAnswer.AllowAlways));
+            }
         }
         catch (Exception exception) when (exception is OperationCanceledException or IOException or ObjectDisposedException)
         {

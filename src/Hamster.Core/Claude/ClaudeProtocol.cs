@@ -62,7 +62,7 @@ public sealed record Usage(double FiveHour, double SevenDay, DateTimeOffset? Fiv
 
 public static class ClaudeProtocol
 {
-    public const string PetInstructions = "Appen viser selv de kilder, du har søgt i og hentet. Skriv derfor ikke en kilde- eller kildeliste-sektion i svaret. Nævn ikke MCP-servere eller connectors, der mangler godkendelse, medmindre brugeren beder om noget, der kræver dem. Når brugeren beder om en påmindelse, så brug CronCreate med en prompt, der beder dig om kun at skrive påmindelsen til brugeren, når den affyres. Når du vil vise et billede, så skriv det som et markdown-billede med den fulde sti i vinkelparenteser og med skråstreger, fx ![graf](<C:/Users/navn/graf.png>).";
+    public const string PetInstructions = "Appen viser selv de kilder, du har søgt i og hentet. Skriv derfor ikke en kilde- eller kildeliste-sektion i svaret. Nævn ikke MCP-servere eller connectors, der mangler godkendelse, medmindre brugeren beder om noget, der kræver dem. Når brugeren beder om en påmindelse, så brug CronCreate med en prompt, der beder dig om kun at skrive påmindelsen til brugeren, når den affyres. Chatten vises i en app, der kan vise billeder: når du har gemt eller fundet et billede, som brugeren skal se, så skriv den fulde sti til filen i backticks, så vises billedet i svaret.";
 
     public static string[] Arguments(string? sessionId, ClaudeSettings settings, string instructions = "") =>
     [
