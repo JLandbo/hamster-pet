@@ -1,27 +1,3 @@
-using System.ComponentModel;
-using System.Diagnostics;
-using System.Globalization;
-using System.IO;
-using System.Runtime.InteropServices;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Animation;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Threading;
-using Microsoft.Win32;
-using Hamster.Core.Chats;
-using Hamster.Core.Claude;
-using Hamster.Core.Connections;
-using Hamster.Core.Feeds;
-using Hamster.Core.Languages;
-using Hamster.Core.Music;
-using Hamster.Core.Pet;
-using Hamster.Core.Prompts;
-using Hamster.Core.Storage;
 using Hamster.Desktop;
 using Hamster.Rendering;
 using Hamster.Themes;
@@ -103,8 +79,16 @@ public partial class MainWindow : Window
         PetArea.Children.Remove(Pet);
         petWindow = new Window
         {
-            WindowStyle = WindowStyle.None, AllowsTransparency = true, Background = Brushes.Transparent, Topmost = true, ShowInTaskbar = false,
-            ShowActivated = false, ResizeMode = ResizeMode.NoResize, UseLayoutRounding = true, AllowDrop = true, Content = Pet,
+            WindowStyle = WindowStyle.None,
+            AllowsTransparency = true,
+            Background = Brushes.Transparent,
+            Topmost = true,
+            ShowInTaskbar = false,
+            ShowActivated = false,
+            ResizeMode = ResizeMode.NoResize,
+            UseLayoutRounding = true,
+            AllowDrop = true,
+            Content = Pet,
         };
         petWindow.DragOver += Window_DragOver;
         petWindow.Drop += Window_Drop;
@@ -762,7 +746,7 @@ public partial class MainWindow : Window
         else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && ClipboardFiles() is { } files)
         {
             e.Handled = true;
-            await Attach(files);
+            await AttachAsync(files);
         }
         else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && ClipboardImage() is { } image)
         {
@@ -836,13 +820,13 @@ public partial class MainWindow : Window
     {
         if (e.Data.GetData(DataFormats.FileDrop) is string[] files)
         {
-            await Attach(files);
+            await AttachAsync(files);
         }
     }
 
-    Task Attach(IEnumerable<string> files) => attaching = AttachAsync([.. files], attaching);
+    Task AttachAsync(IEnumerable<string> files) => attaching = ReadAttachmentsAsync([.. files], attaching);
 
-    async Task AttachAsync(string[] files, Task previous)
+    async Task ReadAttachmentsAsync(string[] files, Task previous)
     {
         var images = await Task.Run(() => files.Select(ImageAttachment.FromFile).ToArray());
         await previous;

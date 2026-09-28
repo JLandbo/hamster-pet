@@ -1,9 +1,3 @@
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Documents;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-
 namespace Hamster.Tests;
 
 public sealed class PictureMentionsTests : IDisposable
@@ -114,7 +108,7 @@ public sealed class PictureMentionsTests : IDisposable
 
         // Act
         var document = MarkdownConverter.Render($@"Se {free}:\graf.png", PictureMentions.In);
-        UiThread.Until(() => !Images(document).Any());
+        UiThread.Until(() => !Documents.Images(document).Any());
 
         // Assert
         Assert.Single(document.Blocks);
@@ -182,7 +176,7 @@ public sealed class PictureMentionsTests : IDisposable
         var document = Rendered("![graf](<{dir/}/graf.png>)\n\nGemt i {dir}\\graf.png");
 
         // Assert
-        Assert.Single(Images(document));
+        Assert.Single(Documents.Images(document));
     });
 
     [Theory]
@@ -196,7 +190,7 @@ public sealed class PictureMentionsTests : IDisposable
 
         // Act
         var document = MarkdownConverter.Render(Filled($@"Se {{dir}}\{file}"), PictureMentions.In);
-        UiThread.Until(() => !Images(document).Any());
+        UiThread.Until(() => !Documents.Images(document).Any());
 
         // Assert
         Assert.Single(document.Blocks);
@@ -209,7 +203,7 @@ public sealed class PictureMentionsTests : IDisposable
         var document = MarkdownConverter.Render(Filled("```\n{dir}\\graf.png\n```"), PictureMentions.In);
 
         // Assert
-        Assert.Empty(Images(document));
+        Assert.Empty(Documents.Images(document));
     });
 
     [Fact]
@@ -219,26 +213,20 @@ public sealed class PictureMentionsTests : IDisposable
         var document = MarkdownConverter.Render(Filled(@"Se {dir}\graf.png"));
 
         // Assert
-        Assert.Empty(Images(document));
+        Assert.Empty(Documents.Images(document));
     });
 
     [Fact]
     public void Convert_WhenAnAnswerMentionsAnImage_ThenTheBubbleShowsIt() => UiThread.Run(() =>
     {
         // Act
-        var document = (FlowDocument)new ChatMarkdownConverter().Convert(Filled(@"Grafen er gemt i `{dir}\graf.png`"), typeof(FlowDocument), null!, null!);
-        UiThread.Until(() => Images(document).All(image => image.Source is not null));
+        var document = Documents.Loaded((FlowDocument)new ChatMarkdownConverter().Convert(Filled(@"Grafen er gemt i `{dir}\graf.png`"), typeof(FlowDocument), null!, null!));
 
         // Assert
-        Assert.IsType<BitmapImage>(Assert.Single(Images(document)).Source);
+        Assert.IsType<BitmapImage>(Assert.Single(Documents.Images(document)).Source);
     });
 
-    FlowDocument Rendered(string answer)
-    {
-        var document = MarkdownConverter.Render(Filled(answer), PictureMentions.In);
-        UiThread.Until(() => Images(document).All(image => image.Source is not null));
-        return document;
-    }
+    FlowDocument Rendered(string answer) => Documents.Loaded(MarkdownConverter.Render(Filled(answer), PictureMentions.In));
 
     string Filled(string text)
     {
@@ -273,9 +261,5 @@ public sealed class PictureMentionsTests : IDisposable
             _ => [],
         }).Prepend(blocks);
 
-    static IEnumerable<string> PicturesOf(IEnumerable<Block> blocks) =>
-        blocks.SelectMany(block => Images(block)).Select(image => ((Hyperlink)((InlineUIContainer)image.Parent).Parent).NavigateUri.LocalPath);
-
-    static IEnumerable<Image> Images(DependencyObject element) =>
-        LogicalTreeHelper.GetChildren(element).OfType<DependencyObject>().SelectMany(child => child is Image image ? [image] : Images(child));
+    static IEnumerable<string> PicturesOf(IEnumerable<Block> blocks) => blocks.SelectMany(Documents.Links).Where(link => Documents.Images(link).Any()).Select(link => link.NavigateUri.LocalPath);
 }

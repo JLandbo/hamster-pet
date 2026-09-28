@@ -1,14 +1,3 @@
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Threading;
-
 namespace Hamster.Tests;
 
 public class MarkdownConverterTests : IDisposable
@@ -135,7 +124,7 @@ public class MarkdownConverterTests : IDisposable
         var document = Rendered(markdown);
 
         // Assert
-        Assert.Equal([10, 20, 10, 20], Pictures(document).Select(picture => ((BitmapImage)picture.Source).PixelWidth));
+        Assert.Equal([10, 20, 10, 20], Documents.Images(document).Select(picture => ((BitmapImage)picture.Source).PixelWidth));
     });
 
     [Fact]
@@ -180,7 +169,7 @@ public class MarkdownConverterTests : IDisposable
         // Arrange
         var file = ImageFile("graf.png", 40);
         var document = Rendered($"![graf](<{file}>)");
-        var link = Assert.Single(Hyperlinks(document));
+        var link = Assert.Single(Documents.Links(document));
         var clicked = false;
         link.AddHandler(Mouse.MouseDownEvent, new MouseButtonEventHandler((_, _) => clicked = true), true);
 
@@ -307,7 +296,7 @@ public class MarkdownConverterTests : IDisposable
         var document = Rendered($"[![graf](<{file}>)](https://example.com)");
 
         // Assert
-        Assert.Equal((new Uri("https://example.com"), true), (Assert.Single(Hyperlinks(document)).NavigateUri, Picture(document)?.Source is not null));
+        Assert.Equal((new Uri("https://example.com"), true), (Assert.Single(Documents.Links(document)).NavigateUri, Picture(document)?.Source is not null));
     });
     [Fact]
     public void Render_WhenPlainText_ThenOneParagraphWithTheText()
@@ -422,7 +411,7 @@ public class MarkdownConverterTests : IDisposable
         var document = MarkdownConverter.Render(markdown);
 
         // Assert
-        Assert.Equal(new Uri("https://example.com"), Assert.Single(Hyperlinks(document)).NavigateUri);
+        Assert.Equal(new Uri("https://example.com"), Assert.Single(Documents.Links(document)).NavigateUri);
     }
 
     [Theory]
@@ -455,17 +444,9 @@ public class MarkdownConverterTests : IDisposable
 
     static string DocumentText(FlowDocument document) => new TextRange(document.ContentStart, document.ContentEnd).Text.Trim();
 
-    static Image? Picture(DependencyObject element) => Pictures(element).FirstOrDefault();
+    static Image? Picture(DependencyObject element) => Documents.Images(element).FirstOrDefault();
 
-    static IEnumerable<Image> Pictures(DependencyObject element) =>
-        LogicalTreeHelper.GetChildren(element).OfType<DependencyObject>().SelectMany(child => child is Image image ? [image] : Pictures(child));
-
-    static FlowDocument Rendered(string markdown)
-    {
-        var document = MarkdownConverter.Render(markdown);
-        UiThread.Until(() => Pictures(document).All(picture => picture.Source is not null));
-        return document;
-    }
+    static FlowDocument Rendered(string markdown) => Documents.Loaded(MarkdownConverter.Render(markdown));
 
     static int Width(FlowDocument document) => Assert.IsType<BitmapImage>(Picture(document)!.Source).PixelWidth;
 
@@ -514,7 +495,4 @@ public class MarkdownConverterTests : IDisposable
         writer.Write(png);
         return icon.ToArray();
     }
-
-    static IEnumerable<Hyperlink> Hyperlinks(DependencyObject element) =>
-        LogicalTreeHelper.GetChildren(element).OfType<DependencyObject>().SelectMany(child => child is Hyperlink link ? Hyperlinks(child).Prepend(link) : Hyperlinks(child));
 }

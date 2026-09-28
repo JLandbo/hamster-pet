@@ -1,11 +1,3 @@
-using System.Net;
-using System.Net.Http;
-using System.Windows;
-using System.Windows.Interop;
-using Microsoft.Web.WebView2.Core;
-using Hamster.Core.Connections;
-using Hamster.Core.Languages;
-
 namespace Hamster.Desktop;
 
 public sealed class WebSession(string folder) : IWebSession

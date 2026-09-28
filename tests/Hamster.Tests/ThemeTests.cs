@@ -1,6 +1,3 @@
-using System.Windows;
-using System.Windows.Media;
-
 namespace Hamster.Tests;
 
 public sealed class ThemeTests : IDisposable

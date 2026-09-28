@@ -1,8 +1,3 @@
-using System.IO;
-using System.Text.Json;
-using System.Windows;
-using System.Windows.Media;
-
 namespace Hamster.Themes;
 
 public sealed record Theme(string Name, IReadOnlyDictionary<string, Color> Colors)

@@ -1,8 +1,4 @@
-using System.IO;
-using System.Security.Cryptography;
-using System.Text;
 using Hamster.Core.Claude;
-using Hamster.Core.Prompts;
 
 namespace Hamster.Core.Chats;
 

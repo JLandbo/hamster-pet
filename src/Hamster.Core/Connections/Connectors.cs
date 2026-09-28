@@ -1,6 +1,3 @@
-using System.ComponentModel;
-using System.Text;
-using System.Text.Json.Nodes;
 using Hamster.Core.Claude;
 using Hamster.Core.Languages;
 

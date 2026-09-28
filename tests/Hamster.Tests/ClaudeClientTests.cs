@@ -1,8 +1,3 @@
-using System.ComponentModel;
-using System.Text.Json.Nodes;
-using System.Threading.Channels;
-using System.Windows.Threading;
-
 namespace Hamster.Tests;
 
 public sealed class ClaudeClientTests : IDisposable

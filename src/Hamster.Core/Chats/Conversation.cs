@@ -1,6 +1,3 @@
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.IO;
 using Hamster.Core.Claude;
 using Hamster.Core.Languages;
 using Hamster.Core.Storage;

@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace Hamster.Core.Prompts;
 
 public sealed record Prompt(string Name, string File);

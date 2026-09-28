@@ -1,6 +1,3 @@
-using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
-
 namespace Hamster.Tests;
 
 public sealed partial class TranslationTests

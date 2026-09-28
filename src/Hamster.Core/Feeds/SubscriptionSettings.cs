@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using Hamster.Core.Languages;
 
 namespace Hamster.Core.Feeds;

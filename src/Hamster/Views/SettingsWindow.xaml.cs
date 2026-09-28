@@ -1,17 +1,3 @@
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Navigation;
-using Hamster.Core.Connections;
-using Hamster.Core.Feeds;
-using Hamster.Core.Languages;
-using Hamster.Core.Pet;
 using Hamster.Desktop;
 using Hamster.Rendering;
 using Hamster.Themes;

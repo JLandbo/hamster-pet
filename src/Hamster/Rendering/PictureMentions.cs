@@ -1,14 +1,8 @@
-using System.Globalization;
-using System.IO;
-using System.Text.RegularExpressions;
-using System.Windows.Data;
-
 namespace Hamster.Rendering;
 
 public static partial class PictureMentions
 {
-    public static IEnumerable<Uri> In(string text) =>
-        Mention().Matches(text).Select(match => Local(match.Value)).OfType<Uri>().DistinctBy(uri => uri.LocalPath, StringComparer.OrdinalIgnoreCase);
+    public static IEnumerable<Uri> In(string text) => Mention().Matches(text).Select(match => Local(match.Value)).OfType<Uri>().DistinctBy(uri => uri.LocalPath, StringComparer.OrdinalIgnoreCase);
 
     static Uri? Local(string mention)
     {

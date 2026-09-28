@@ -1,12 +1,14 @@
-using System.IO;
-
 namespace Hamster.Core.Chats;
 
 public sealed record ImageAttachment(string Name, string MediaType, byte[] Data)
 {
     static readonly Dictionary<string, string> MediaTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        [".png"] = "image/png", [".jpg"] = "image/jpeg", [".jpeg"] = "image/jpeg", [".gif"] = "image/gif", [".webp"] = "image/webp",
+        [".png"] = "image/png",
+        [".jpg"] = "image/jpeg",
+        [".jpeg"] = "image/jpeg",
+        [".gif"] = "image/gif",
+        [".webp"] = "image/webp",
     };
 
     public static ImageAttachment? FromFile(string path)

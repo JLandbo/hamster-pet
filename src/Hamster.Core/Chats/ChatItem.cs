@@ -1,9 +1,5 @@
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using Hamster.Core.Claude;
 using Hamster.Core.Languages;
-using Hamster.Core.Prompts;
 
 namespace Hamster.Core.Chats;
 

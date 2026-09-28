@@ -1,20 +1,6 @@
-using System.Globalization;
-using System.IO;
-using System.Net.Http;
-using System.Runtime.InteropServices;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using Markdig;
-using Markdig.Syntax;
-using Markdig.Syntax.Inlines;
+using Hamster.Desktop;
 using Block = System.Windows.Documents.Block;
 using Inline = System.Windows.Documents.Inline;
-using Hamster.Core.Languages;
-using Hamster.Desktop;
 
 namespace Hamster.Rendering;
 
@@ -240,7 +226,11 @@ public sealed class MarkdownConverter : IValueConverter
         var link = new Hyperlink(picture) { NavigateUri = uri, ToolTip = uri.IsFile ? uri.LocalPath : uri.AbsoluteUri, TextDecorations = null };
         return new Figure(new Paragraph(link) { TextAlignment = TextAlignment.Center, Margin = new(0) })
         {
-            Width = new(PictureWidth, FigureUnitType.Column), HorizontalAnchor = FigureHorizontalAnchor.ColumnCenter, WrapDirection = WrapDirection.None, Padding = new(0), Margin = Spacing,
+            Width = new(PictureWidth, FigureUnitType.Column),
+            HorizontalAnchor = FigureHorizontalAnchor.ColumnCenter,
+            WrapDirection = WrapDirection.None,
+            Padding = new(0),
+            Margin = Spacing,
         };
     }
 

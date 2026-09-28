@@ -1,7 +1,3 @@
-using System.Diagnostics;
-using System.Runtime.ExceptionServices;
-using System.Windows.Threading;
-
 namespace Hamster.Tests;
 
 static class UiThread

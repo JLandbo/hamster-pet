@@ -1,9 +1,3 @@
-using System.IO;
-using System.Net.Http;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-
 namespace Hamster.Core.Connections;
 
 public sealed record ToolCall(string Name, JsonObject Arguments);

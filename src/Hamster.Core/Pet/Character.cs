@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.IO;
 using Hamster.Core.Languages;
 
 namespace Hamster.Core.Pet;

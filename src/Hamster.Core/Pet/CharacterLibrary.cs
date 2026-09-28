@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace Hamster.Core.Pet;
 
 public sealed class CharacterLibrary(string folder)

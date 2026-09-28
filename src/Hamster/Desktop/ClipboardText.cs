@@ -1,6 +1,3 @@
-using System.Runtime.InteropServices;
-using System.Windows;
-
 namespace Hamster.Desktop;
 
 public static class ClipboardText

@@ -1,12 +1,3 @@
-using System.ComponentModel;
-using System.Diagnostics;
-using System.Windows;
-using System.Windows.Controls.Primitives;
-using System.Windows.Input;
-using System.Windows.Navigation;
-using Hamster.Core.Feeds;
-using Hamster.Core.Languages;
-
 namespace Hamster.Views;
 
 public partial class FeedWindow : Window

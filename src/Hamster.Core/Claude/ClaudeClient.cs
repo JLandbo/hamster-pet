@@ -1,8 +1,3 @@
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Text;
-using System.Text.Json.Nodes;
 using Hamster.Core.Chats;
 using Hamster.Core.Languages;
 using Hamster.Core.Storage;
@@ -39,7 +34,7 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
     static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
     static readonly TimeSpan RequestTimeout = TimeSpan.FromMinutes(1);
 
-    (Task<Process?> Process, ClaudeSession Session)? current;
+    (Task<Process?> Starting, ClaudeSession Session)? current;
     ClaudeSettings settings = store.Load();
 
     public ClaudeSettings Settings
@@ -68,11 +63,11 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
     public Task StartAsync(string? sessionId, IClaudeListener listener)
     {
         End();
-        var process = Task.Run<Process?>(() => Start(sessionId));
-        var session = new ClaudeSession(StreamsAsync(process), listener);
-        current = (process, session);
-        _ = RunAsync(process, session, listener);
-        return process;
+        var starting = Task.Run<Process?>(() => Start(sessionId));
+        var session = new ClaudeSession(StreamsAsync(starting), listener);
+        current = (starting, session);
+        _ = RunAsync(starting, session, listener);
+        return starting;
     }
 
     public Task SendAsync(string id, string prompt, IReadOnlyList<ImageAttachment> images) =>
@@ -83,11 +78,11 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
 
     public void Interrupt()
     {
-        if (current is not var (process, session))
+        if (current is not var (starting, session))
             return;
         var results = session.Results;
         _ = session.SendAsync(ClaudeProtocol.Interrupt());
-        _ = KillAfterAsync(process, () => session.Results == results);
+        _ = KillAfterAsync(starting, () => session.Results == results);
     }
 
     public void Withdraw(string id)
@@ -100,13 +95,13 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
 
     public void End()
     {
-        if (current is not var (process, session))
+        if (current is not var (starting, session))
             return;
         current = null;
         session.Detach();
         _ = session.SendAsync(ClaudeProtocol.EndSession());
         _ = session.CloseAsync();
-        _ = KillAfterAsync(process, () => true);
+        _ = KillAfterAsync(starting, () => true);
     }
 
     async Task RunAsync(Task<Process?> starting, ClaudeSession session, IClaudeListener listener)
@@ -118,7 +113,7 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
         }
         catch (Exception)
         {
-            if (current?.Process == starting)
+            if (current?.Starting == starting)
             {
                 current = null;
             }
@@ -137,7 +132,7 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
             }
             await process.WaitForExitAsync();
             var error = (await errors).Trim();
-            if (current?.Process != starting)
+            if (current?.Starting != starting)
             {
                 return;
             }

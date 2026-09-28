@@ -1,5 +1,3 @@
-using System.Runtime.InteropServices;
-
 namespace Hamster.Desktop;
 
 public static partial class ForegroundWindow

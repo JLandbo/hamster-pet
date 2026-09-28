@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace Hamster.Core.Storage;
 
 public static class DataFolder
