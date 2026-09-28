@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
 
 namespace Hamster;
 
@@ -24,4 +26,20 @@ public partial class App : Application
         current = next;
         Resources.MergedDictionaries.Add(next);
     }
+
+    void Reader_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        var copyLink = ((FrameworkElement)sender).ContextMenu.Items.OfType<MenuItem>().Last();
+        copyLink.Tag = LinkAt(e.OriginalSource as DependencyObject);
+        copyLink.Visibility = copyLink.Tag is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    static Uri? LinkAt(DependencyObject? element) => element switch
+    {
+        null => null,
+        Hyperlink link => link.NavigateUri,
+        _ => LinkAt(LogicalTreeHelper.GetParent(element)),
+    };
+
+    void CopyLink_Click(object sender, RoutedEventArgs e) => ClipboardText.Copy(((Uri)((MenuItem)sender).Tag).AbsoluteUri, _ => { });
 }

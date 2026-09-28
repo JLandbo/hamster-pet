@@ -235,6 +235,11 @@
                 <MenuItem Header="{DynamicResource Edit.Paste}" Command="ApplicationCommands.Paste" />
             </ContextMenu>
 
+            <ContextMenu x:Key="ReadMenu" x:Shared="False" Style="{StaticResource PopupMenu}">
+                <MenuItem Header="{DynamicResource Edit.Copy}" Command="ApplicationCommands.Copy" />
+                <MenuItem Header="{DynamicResource Edit.CopyLink}" Click="CopyLink_Click" />
+            </ContextMenu>
+
             <Style x:Key="SliderPart" TargetType="RepeatButton">
                 <Setter Property="Focusable" Value="False" />
                 <Setter Property="IsTabStop" Value="False" />
@@ -283,7 +288,8 @@
 
             <Style TargetType="FlowDocumentScrollViewer">
                 <Setter Property="SelectionBrush" Value="{DynamicResource Attention}" />
-                <Setter Property="ContextMenu" Value="{DynamicResource TextMenu}" />
+                <Setter Property="ContextMenu" Value="{DynamicResource ReadMenu}" />
+                <EventSetter Event="ContextMenuOpening" Handler="Reader_ContextMenuOpening" />
             </Style>
 
             <Style TargetType="ToolTip">

@@ -82,6 +82,7 @@
     "Edit.Cut": "Cut",
     "Edit.Copy": "Copy",
     "Edit.Paste": "Paste",
+    "Edit.CopyLink": "Copy link",
     "Code.Copy": "Copy",
     "Main.DeleteChat": "Delete message",
     "Main.CopyAnswer": "Copy answer",
