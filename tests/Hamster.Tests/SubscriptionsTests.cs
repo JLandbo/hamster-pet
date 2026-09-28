@@ -411,6 +411,31 @@ public sealed class SubscriptionsTests : IDisposable
     }
 
     [Fact]
+    public async Task RefreshAsync_WhenTheSubscriptionsChangeWhileFetching_ThenTheNewItemsAreNotNews()
+    {
+        // Arrange
+        FeedItem[] items = [Item("a")];
+        var gate = Task.CompletedTask;
+        List<bool> news = [];
+        var feed = new Feed([("Jira", async () => { await gate; return items; })]);
+        feed.Changed += news.Add;
+        await feed.RefreshAsync();
+        var fetching = new TaskCompletionSource();
+        gate = fetching.Task;
+        var refreshing = feed.RefreshAsync();
+        items = [Item("a"), Item("b")];
+
+        // Act
+        var changed = feed.RefreshAsync(subscriptionsChanged: true);
+        fetching.SetResult();
+        await refreshing;
+        await changed;
+
+        // Assert
+        Assert.Equal([false, false, false], news);
+    }
+
+    [Fact]
     public async Task RefreshAsync_WhenTheSubscriptionsChanged_ThenExistingItemsAreNotNews()
     {
         // Arrange
@@ -878,7 +903,7 @@ public sealed class SubscriptionsTests : IDisposable
     }
 
     [Fact]
-    public void JiraItems_WhenTheDescriptionHasImages_ThenLeavesThemOutOfTheTextAndItsLength()
+    public void JiraItems_WhenTheDescriptionHasImages_ThenMarksThemWithoutCountingTheirAddresses()
     {
         // Arrange
         var json = """{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":"Følgende:\n\n![](blob:https://media/?id=LONG)Problem i dag ![](blob:https://media/?id=LONG)"}}]}"""
@@ -888,7 +913,7 @@ public sealed class SubscriptionsTests : IDisposable
         var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
 
         // Assert
-        Assert.Equal("Følgende:\n\nProblem i dag", description);
+        Assert.Equal("Følgende:\n\n[Billede]Problem i dag [Billede]", description);
     }
 
     [Fact]
@@ -1035,7 +1060,20 @@ public sealed class SubscriptionsTests : IDisposable
     }
 
     [Fact]
-    public void JiraItems_WhenAnImageIsInsideALink_ThenRemovesTheImage()
+    public void JiraItems_WhenTheDescriptionHasAnAttachedImage_ThenMarksIt()
+    {
+        // Arrange
+        const string content = """{"type":"paragraph","content":[{"type":"text","text":"Se her"}]},{"type":"mediaSingle","content":[{"type":"media","attrs":{"type":"file","id":"abc","collection":"x"}}]}""";
+
+        // Act
+        var description = Described(content);
+
+        // Assert
+        Assert.Equal("Se her\n\n[Billede]", description);
+    }
+
+    [Fact]
+    public void JiraItems_WhenAnImageIsInsideALink_ThenMarksTheImage()
     {
         // Arrange
         const string json = """{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":"Før [![x](a)](b) efter"}}]}""";
@@ -1044,11 +1082,11 @@ public sealed class SubscriptionsTests : IDisposable
         var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
 
         // Assert
-        Assert.Equal("Før [](b) efter", description);
+        Assert.Equal("Før [[Billede]](b) efter", description);
     }
 
     [Fact]
-    public void JiraItems_WhenAnImageHoldsAnImage_ThenRemovesOnlyTheImage()
+    public void JiraItems_WhenAnImageHoldsAnImage_ThenMarksOnlyTheOuterImage()
     {
         // Arrange
         const string json = """{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":"Før ![a ![b](x)](y) efter"}}]}""";
@@ -1057,7 +1095,7 @@ public sealed class SubscriptionsTests : IDisposable
         var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
 
         // Assert
-        Assert.Equal("Før  efter", description);
+        Assert.Equal("Før [Billede] efter", description);
     }
 
     [Fact]

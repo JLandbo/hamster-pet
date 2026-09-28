@@ -6,7 +6,16 @@ namespace Hamster;
 
 public enum ConnectorSource { Off, Hamster, ClaudeAi, Login }
 
-public sealed record ConnectorField(string Label, bool Secret);
+public sealed record ConnectorField(string Key, bool Secret)
+{
+    public string Label => Key switch
+    {
+        "email" => Strings.Of("Settings.Email"),
+        "api-token" => Strings.Of("Settings.ApiToken"),
+        "token" => Strings.Of("Settings.Token"),
+        _ => Key,
+    };
+}
 
 public sealed record WebLogin(string SiteSuffix, string CheckPath)
 {
@@ -70,12 +79,12 @@ public sealed class Connectors(IClaudeClient claude, Action restart, Func<bool> 
     public static readonly IReadOnlyList<Connector> All =
     [
         new("Atlassian Rovo", "hamster-atlassian-rovo", "https://mcp.atlassian.com/v2/mcp", new("https://id.atlassian.com/manage-profile/security/api-tokens"),
-            [new("E-mail", Secret: false), new("API-token", Secret: true)],
+            [new("email", Secret: false), new("api-token", Secret: true)],
             values => $"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes($"{values[0]}:{values[1]}"))}",
             ClaudeAiName: "claude.ai Atlassian Rovo",
             Login: new(".atlassian.net", "/rest/api/3/myself")),
         new("GitHub", "hamster-github", "https://api.githubcopilot.com/mcp/", new("https://github.com/settings/personal-access-tokens"),
-            [new("Token", Secret: true)],
+            [new("token", Secret: true)],
             values => $"Bearer {values[0]}",
             CanBeReadOnly: true),
         new("Microsoft 365", "hamster-microsoft-365", "https://microsoft365.mcp.claude.com/mcp", null, [], null,

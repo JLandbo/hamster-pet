@@ -495,7 +495,7 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
 
     static string DescriptionOf(JsonNode? description)
     {
-        var markdown = WithoutImages(description switch
+        var markdown = WithImagesMarked(description switch
         {
             JsonValue value when value.TryGetValue(out string? text) => text,
             JsonObject document => MarkdownOf(document),
@@ -507,9 +507,11 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
         return $"{(cut.LastIndexOfAny([' ', '\n', '\r', '\t']) is > 0 and var space ? cut[..space] : cut).TrimEnd()} …";
     }
 
-    static string WithoutImages(string markdown) =>
+    static string WithImagesMarked(string markdown) =>
         Markdown.Parse(markdown, SourcePositions).Descendants<LinkInline>().Where(link => link.IsImage && !InsideImage(link)).Reverse()
-            .Aggregate(markdown, (text, image) => text.Remove(image.Span.Start, image.Span.Length));
+            .Aggregate(markdown, (text, image) => text.Remove(image.Span.Start, image.Span.Length).Insert(image.Span.Start, ImageMark));
+
+    static string ImageMark => Strings.Of("Tasks.Image");
 
     static bool InsideImage(Inline inline) => inline.Parent is { } parent && (parent is LinkInline { IsImage: true } || InsideImage(parent));
 
@@ -524,6 +526,7 @@ public sealed class Subscriptions(Connectors connectors, ClaudeFetcher fetcher, 
         "codeBlock" => CodeBlockOf(item),
         "blockquote" => $"> {ChildrenOf(item).Trim().Replace("\n", "\n> ")}\n\n",
         "rule" => "---\n\n",
+        "mediaSingle" => $"{ImageMark}\n\n",
         "inlineCard" => (string?)item["attrs"]?["url"] ?? "",
         "blockCard" or "embedCard" => $"{(string?)item["attrs"]?["url"]}\n\n",
         "date" => DayOf(item["attrs"]?["timestamp"]),
@@ -786,7 +789,7 @@ public sealed class Feed(IReadOnlyList<(string Source, Func<Task<IReadOnlyList<F
             (Items, Errors) = ([.. sources.SelectMany(source => fetched.GetValueOrDefault(source.Source) ?? [])], errors);
             if (errors.Count == 0)
                 UpdatedAt = DateTime.Now;
-            Changed?.Invoke(news);
+            Changed?.Invoke(news && !forget);
         }
         while (again);
     }

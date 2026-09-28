@@ -1,8 +1,12 @@
 using System.Globalization;
+using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Markdig;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
@@ -20,6 +24,11 @@ public sealed class MarkdownConverter : IValueConverter
     const string Emphasis = "Text";
     const string Subtle = "Muted";
     const string Icons = "IconFont";
+    const double PictureWidth = 0.9;
+    const double PictureHeight = 320;
+    static readonly string[] PictureFiles = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".ico", ".webp"];
+
+    public static bool ShowWebImages { get; set; }
 
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => Render((string)value);
 
@@ -137,12 +146,41 @@ public sealed class MarkdownConverter : IValueConverter
         AutolinkInline link => new Run(link.Url),
         HtmlEntityInline entity => new Run(entity.Transcoded.ToString()),
         HtmlInline html => new Run(html.Tag),
+        LinkInline { IsImage: true } image when PictureUri(image.Url) is { } uri => Picture(image, uri),
         LinkInline { IsImage: false } link when WebUri(link.Url) is { } uri && !InsideLink(link) => Span(link, new Hyperlink { NavigateUri = uri, ToolTip = uri.AbsoluteUri }),
         ContainerInline container => Span(container, new Span()),
         _ => new Run(inline.ToString()),
     };
 
     static bool InsideLink(Markdig.Syntax.Inlines.Inline inline) => inline.Parent?.ContainsParentOfType<LinkInline>() == true;
+
+    static Uri? PictureUri(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri is { IsFile: true, IsUnc: false }
+            ? PictureFiles.Contains(Path.GetExtension(uri.LocalPath), StringComparer.OrdinalIgnoreCase) && File.Exists(uri.LocalPath) ? uri : null
+            : ShowWebImages ? WebUri(url) : null;
+
+    static Inline Picture(LinkInline image, Uri uri)
+    {
+        var bitmap = new BitmapImage();
+        try
+        {
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.UriSource = uri.IsFile ? new Uri($"{uri.AbsoluteUri}?{File.GetLastWriteTimeUtc(uri.LocalPath).Ticks}") : uri;
+            bitmap.EndInit();
+        }
+        catch (Exception exception) when (exception is IOException or FormatException or NotSupportedException or UnauthorizedAccessException
+            or ArgumentException or InvalidOperationException or OverflowException or ExternalException)
+        {
+            return Span(image, new Span());
+        }
+        var picture = new InlineUIContainer(new Image { Source = bitmap, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, MaxHeight = PictureHeight });
+        var link = new Hyperlink(picture) { NavigateUri = uri, ToolTip = uri.IsFile ? uri.LocalPath : uri.AbsoluteUri, TextDecorations = null };
+        return InsideLink(image) ? picture : new Figure(new Paragraph(link) { TextAlignment = TextAlignment.Center, Margin = new(0) })
+        {
+            Width = new(PictureWidth, FigureUnitType.Column), HorizontalAnchor = FigureHorizontalAnchor.ColumnCenter, WrapDirection = WrapDirection.None, Padding = new(0), Margin = Spacing,
+        };
+    }
 
     static Uri? WebUri(string? url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? uri : null;
 

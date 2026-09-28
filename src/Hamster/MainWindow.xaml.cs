@@ -106,6 +106,7 @@ public partial class MainWindow : Window
         ShowSize();
         SizeSlider.ValueChanged += SizeSlider_ValueChanged;
         AutoHideItem.IsChecked = pet.AutoHide;
+        MarkdownConverter.ShowWebImages = pet.ShowWebImages;
         chatsExpanded = pet.ChatsExpanded;
         ((App)Application.Current).Use(Translation.All.FirstOrDefault(translation => translation.Name == pet.LanguageName) ?? Translation.Danish);
         instructionsFile = Path.Combine(data, "instructions.txt");
@@ -258,7 +259,7 @@ public partial class MainWindow : Window
             settings.Activate();
             return;
         }
-        var window = settings = new SettingsWindow(ChooseLanguage, (int)hideTime.TotalSeconds, ChooseHideSeconds, themes, petFile.Load().ThemeName, ChooseTheme, characters, character.Name, ChooseCharacter, connectors, subscriptions);
+        var window = settings = new SettingsWindow(ChooseLanguage, (int)hideTime.TotalSeconds, ChooseHideSeconds, MarkdownConverter.ShowWebImages, ChooseWebImages, themes, petFile.Load().ThemeName, ChooseTheme, characters, character.Name, ChooseCharacter, connectors, subscriptions);
         RememberSize(window, settingsSize);
         window.Closed += (_, _) => _ = CheckConnectorsAsync();
         window.Show();
@@ -370,6 +371,13 @@ public partial class MainWindow : Window
         FadeWhenIdle();
     }
 
+    void ChooseWebImages(bool show)
+    {
+        petFile.Save(petFile.Load() with { ShowWebImages = show });
+        MarkdownConverter.ShowWebImages = show;
+        ChatList.Items.Refresh();
+    }
+
     void ChooseCharacter(Character chosen)
     {
         petFile.Save(petFile.Load() with { CharacterName = chosen.Name });
@@ -423,9 +431,10 @@ public partial class MainWindow : Window
 
     void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        Apply(OnScreen(placement));
+        Apply(OnScreen());
         FitToScreen();
         petWindow.Show();
+        SystemEvents.DisplaySettingsChanged += Display_Changed;
         UpdateToolbar();
         ScrollToNewest();
         _ = conversation.StartAsync();
@@ -434,14 +443,24 @@ public partial class MainWindow : Window
             feedTimer.Start();
     }
 
-    Placement OnScreen(Placement saved)
+    Placement OnScreen()
     {
+        Place();
+        var screen = ScreenArea.Of(PetArea);
         var pet = PetArea.TranslatePoint(new Point(), this);
         var (petLeftToRight, petTopToBottom) = (ActualWidth - pet.X, ActualHeight - pet.Y);
-        var corners = new Rect(SystemParameters.VirtualScreenLeft + petLeftToRight, SystemParameters.VirtualScreenTop + petTopToBottom,
-            SystemParameters.VirtualScreenWidth - PetArea.ActualWidth, SystemParameters.VirtualScreenHeight - petTopToBottom);
-        return saved.ClampedTo(corners);
+        var corners = new Rect(screen.Left + petLeftToRight, screen.Top + petTopToBottom, screen.Width - PetArea.ActualWidth, screen.Height - petTopToBottom);
+        return placement.ClampedTo(corners);
     }
+
+    Placement PlacementAtPet => placement with { Right = petWindow.Left + PetArea.Width + PetArea.Margin.Right, Bottom = petWindow.Top + PetArea.Height };
+
+    void Display_Changed(object? sender, EventArgs e) => Dispatcher.BeginInvoke(() =>
+    {
+        placement = PlacementAtPet;
+        Apply(OnScreen());
+        FitToScreen();
+    });
 
     void Apply(Placement next)
     {
@@ -488,6 +507,7 @@ public partial class MainWindow : Window
 
     void Window_Closed(object sender, EventArgs e)
     {
+        SystemEvents.DisplaySettingsChanged -= Display_Changed;
         conversation.Save();
         settings?.Close();
         feedWindow?.Close();
@@ -558,7 +578,7 @@ public partial class MainWindow : Window
 
     void Pet_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        placement = placement with { Right = petWindow.Left + PetArea.Width + PetArea.Margin.Right, Bottom = petWindow.Top + PetArea.Height };
+        placement = PlacementAtPet;
         (pressed, dragging, dragStart, pressedAt) = (true, false, e.GetPosition(petWindow), DateTime.UtcNow);
         Touch();
         Pet.CaptureMouse();
@@ -669,7 +689,8 @@ public partial class MainWindow : Window
         if (beforeFullScreen is { } previous)
         {
             beforeFullScreen = null;
-            Apply(previous);
+            placement = previous;
+            Apply(OnScreen());
         }
         else
         {
@@ -991,7 +1012,8 @@ public partial class MainWindow : Window
 
     void Link_RequestNavigate(object sender, RequestNavigateEventArgs e)
     {
-        Open(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }, Strings.Format("Main.LinkFailed", e.Uri.AbsoluteUri));
+        var target = e.Uri.IsFile ? e.Uri.LocalPath : e.Uri.AbsoluteUri;
+        Open(new ProcessStartInfo(target) { UseShellExecute = true }, Strings.Format("Main.LinkFailed", target));
         e.Handled = true;
     }
 
@@ -1074,7 +1096,7 @@ public partial class MainWindow : Window
         resizeQueued = false;
         ShowSize();
         UpdateLayout();
-        Apply(OnScreen(placement));
+        Apply(OnScreen());
         FreezeHiddenChats();
     }
 

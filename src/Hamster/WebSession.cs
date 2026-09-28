@@ -39,8 +39,6 @@ public sealed class WebSession(string folder)
             ? false
             : throw new InvalidOperationException($"{(int)response.StatusCode} {response.ReasonPhrase}"));
 
-    public async Task<string> GetAsync(string url) => await (await ReaderAsync(url))(url);
-
     public async Task<Func<string, Task<string>>> ReaderAsync(string site)
     {
         var cookies = await CookieHeaderAsync(site);

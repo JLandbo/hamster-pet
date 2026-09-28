@@ -42,6 +42,7 @@ public partial class SettingsWindow : Window
 {
     readonly Action<Translation> chooseLanguage;
     readonly Action<int> chooseHideSeconds;
+    readonly Action<bool> chooseWebImages;
     readonly ThemeLibrary themes;
     readonly Action<Theme> chooseTheme;
     readonly CharacterLibrary characters;
@@ -53,7 +54,7 @@ public partial class SettingsWindow : Window
     string chosen;
     string? chosenTheme;
 
-    public SettingsWindow(Action<Translation> chooseLanguage, int hideSeconds, Action<int> chooseHideSeconds, ThemeLibrary themes, string? chosenTheme, Action<Theme> chooseTheme, CharacterLibrary characters, string chosen,
+    public SettingsWindow(Action<Translation> chooseLanguage, int hideSeconds, Action<int> chooseHideSeconds, bool webImages, Action<bool> chooseWebImages, ThemeLibrary themes, string? chosenTheme, Action<Theme> chooseTheme, CharacterLibrary characters, string chosen,
         Action<Character> choose, Connectors connectors, Subscriptions subscriptions)
     {
         InitializeComponent();
@@ -62,6 +63,7 @@ public partial class SettingsWindow : Window
         HideSecondsSlider.Value = hideSeconds;
         ShowHideSeconds();
         HideSecondsSlider.ValueChanged += (_, _) => ShowHideSeconds();
+        (WebImagesBox.IsChecked, this.chooseWebImages) = (webImages, chooseWebImages);
         (this.themes, this.chosenTheme, this.chooseTheme) = (themes, chosenTheme, chooseTheme);
         (this.characters, this.chosen, this.choose, this.connectors, this.subscriptions) = (characters, chosen, choose, connectors, subscriptions);
         rows = [.. Connectors.All.Select(connector => new ConnectorRow(connector, connectors.SourceOf(connector)))];
@@ -201,6 +203,8 @@ public partial class SettingsWindow : Window
     void ShowHideSeconds() => HideSecondsText.Text = $"{HideSecondsSlider.Value} s";
 
     void HideSecondsSlider_LostMouseCapture(object sender, MouseEventArgs e) => chooseHideSeconds((int)HideSecondsSlider.Value);
+
+    void WebImages_Click(object sender, RoutedEventArgs e) => chooseWebImages(WebImagesBox.IsChecked == true);
 
     void Language_Click(object sender, RoutedEventArgs e)
     {

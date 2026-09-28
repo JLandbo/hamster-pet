@@ -72,6 +72,19 @@ public sealed class PetSettingsTests : IDisposable
     }
 
     [Fact]
+    public void Load_WhenPetSettingsWereSavedBeforeWebImages_ThenWebImagesAreOff()
+    {
+        // Arrange
+        File.WriteAllText(file, """{"CharacterName": "Hamster"}""");
+
+        // Act
+        var pet = new JsonFile<PetSettings>(file, PetSettings.Default).Load();
+
+        // Assert
+        Assert.False(pet.ShowWebImages);
+    }
+
+    [Fact]
     public void Save_WhenSizeChanges_ThenLoadReturnsIt()
     {
         // Arrange

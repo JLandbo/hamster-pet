@@ -89,12 +89,18 @@
                         </Border>
                         <TextBlock Text="{DynamicResource Settings.Language}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" />
                     </DockPanel>
-                    <DockPanel Margin="0,0,0,16">
-                        <TextBlock x:Name="HideSecondsText" DockPanel.Dock="Right" Width="44" TextAlignment="Right" Foreground="{DynamicResource Text}" VerticalAlignment="Center" />
-                        <TextBlock DockPanel.Dock="Left" Text="{DynamicResource Settings.HideAfter}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="0,0,12,0" />
-                        <Slider x:Name="HideSecondsSlider" Minimum="1" Maximum="240" TickFrequency="1" IsSnapToTickEnabled="True" Focusable="False" VerticalAlignment="Center"
-                                LostMouseCapture="HideSecondsSlider_LostMouseCapture" />
-                    </DockPanel>
+                    <TextBlock Text="{DynamicResource Settings.Chat}" Foreground="{DynamicResource Muted}" Margin="0,0,0,8" />
+                    <Border Margin="0,0,0,16" Padding="12,10" CornerRadius="10" Background="{DynamicResource Card}">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,10">
+                                <TextBlock x:Name="HideSecondsText" DockPanel.Dock="Right" Width="44" TextAlignment="Right" Foreground="{DynamicResource Text}" VerticalAlignment="Center" />
+                                <TextBlock DockPanel.Dock="Left" Text="{DynamicResource Settings.HideAfter}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                <Slider x:Name="HideSecondsSlider" Minimum="1" Maximum="240" TickFrequency="1" IsSnapToTickEnabled="True" Focusable="False" VerticalAlignment="Center"
+                                        LostMouseCapture="HideSecondsSlider_LostMouseCapture" />
+                            </DockPanel>
+                            <CheckBox x:Name="WebImagesBox" Content="{DynamicResource Settings.ShowWebImages}" Click="WebImages_Click" />
+                        </StackPanel>
+                    </Border>
                     <DockPanel Margin="0,0,0,8">
                         <Button DockPanel.Dock="Right" Content="&#xE838;" ToolTip="{DynamicResource Settings.OpenThemes}" Click="OpenThemes_Click"
                                 Style="{StaticResource SmallIconButton}" FontSize="12" VerticalAlignment="Center" />

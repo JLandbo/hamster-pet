@@ -34,7 +34,7 @@ public partial class App : Application
         copyLink.Visibility = copyLink.Tag is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    static Uri? LinkAt(DependencyObject? element) => element switch
+    internal static Uri? LinkAt(DependencyObject? element) => element switch
     {
         null => null,
         Hyperlink link => link.NavigateUri,

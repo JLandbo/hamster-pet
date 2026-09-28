@@ -1,10 +1,218 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace Hamster.Tests;
 
-public class MarkdownConverterTests
+public class MarkdownConverterTests : IDisposable
 {
+    readonly string folder = Directory.CreateTempSubdirectory().FullName;
+
+    public void Dispose()
+    {
+        MarkdownConverter.ShowWebImages = false;
+        Directory.Delete(folder, true);
+    }
+
+    [Theory]
+    [InlineData("graf.png")]
+    [InlineData("GRAF.PNG")]
+    [InlineData("graf.jpg")]
+    [InlineData("graf.jpeg")]
+    [InlineData("graf.gif")]
+    [InlineData("graf.bmp")]
+    [InlineData("graf.tif")]
+    [InlineData("graf.tiff")]
+    [InlineData("graf.ico")]
+    public void Render_WhenTheAnswerShowsALocalImage_ThenShowsIt(string name) => UiThread.Run(() =>
+    {
+        // Arrange
+        var file = ImageFile(name, 40);
+
+        // Act
+        var document = MarkdownConverter.Render($"![graf](<{file.Replace('\\', '/')}>)");
+
+        // Assert
+        Assert.Equal(40, Width(document));
+    });
+
+    [Fact]
+    public void Render_WhenTheImageIsWebP_ThenShowsIt() => UiThread.Run(() =>
+    {
+        // Arrange
+        var file = Path.Combine(folder, "graf.webp");
+        File.WriteAllBytes(file, Convert.FromBase64String("UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA=="));
+
+        // Act
+        var document = MarkdownConverter.Render($"![graf](<{file}>)");
+
+        // Assert
+        Assert.Equal(1, Width(document));
+    });
+
+    [Theory]
+    [InlineData("skråstreger")]
+    [InlineData("omvendte skråstreger")]
+    [InlineData("filadresse")]
+    public void Render_WhenThePathIsWrittenInAnotherWay_ThenShowsTheImage(string way) => UiThread.Run(() =>
+    {
+        // Arrange
+        var file = ImageFile("Skærm billeder/graf.png", 40);
+        var markdown = way switch
+        {
+            "skråstreger" => $"![graf](<{file.Replace('\\', '/')}>)",
+            "omvendte skråstreger" => $"![graf](<{file}>)",
+            _ => $"![graf]({new Uri(file).AbsoluteUri})",
+        };
+
+        // Act
+        var document = MarkdownConverter.Render(markdown);
+
+        // Assert
+        Assert.Equal(40, Width(document));
+    });
+
+    [Fact]
+    public void Render_WhenImagesShareANameOrShowUpAmongOtherContent_ThenEachShowsItsOwnFile() => UiThread.Run(() =>
+    {
+        // Arrange
+        var first = ImageFile("a/image.png", 10);
+        var second = ImageFile("b/image.png", 20);
+        var markdown = $"""
+            # Overskrift med ![a](<{first}>)
+
+            - punkt med ![b](<{second}>)
+
+            | billede |
+            |---|
+            | ![a](<{first}>) |
+
+            **fed ![b](<{second}>)**
+
+            ```
+            ![kode](<{first}>)
+            ```
+            """;
+
+        // Act
+        var document = MarkdownConverter.Render(markdown);
+
+        // Assert
+        Assert.Equal([10, 20, 10, 20], Pictures(document).Select(picture => ((BitmapImage)picture.Source).PixelWidth));
+    });
+
+    [Fact]
+    public void Render_WhenTheImageIsClicked_ThenItsLinkOpensTheFile() => UiThread.Run(() =>
+    {
+        // Arrange
+        var file = ImageFile("graf.png", 40);
+        var document = MarkdownConverter.Render($"![graf](<{file}>)");
+        var link = Assert.Single(Hyperlinks(document));
+        var clicked = false;
+        link.AddHandler(Mouse.MouseDownEvent, new MouseButtonEventHandler((_, _) => clicked = true), true);
+
+        // Act
+        Picture(document)!.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = Mouse.MouseDownEvent });
+
+        // Assert
+        Assert.Equal((file, true), (link.NavigateUri.LocalPath, clicked));
+    });
+
+    [Fact]
+    public void Render_WhenTheImageIsRightClicked_ThenCopyLinkGivesTheFile() => UiThread.Run(() =>
+    {
+        // Arrange
+        var file = ImageFile("graf.png", 40);
+        var picture = Picture(MarkdownConverter.Render($"![graf](<{file}>)"))!;
+
+        // Act
+        var link = App.LinkAt(picture);
+
+        // Assert
+        Assert.Equal(file, link?.LocalPath);
+    });
+
+    [Fact]
+    public void Render_WhenTheImageFileChanges_ThenOnlyNewAnswersShowTheNewVersion() => UiThread.Run(() =>
+    {
+        // Arrange
+        var file = ImageFile("graf.png", 10);
+        var markdown = $"![graf](<{file}>)";
+        var before = MarkdownConverter.Render(markdown);
+        ImageFile("graf.png", 20);
+        File.SetLastWriteTimeUtc(file, DateTime.UtcNow.AddMinutes(1));
+
+        // Act
+        var after = MarkdownConverter.Render(markdown);
+
+        // Assert
+        Assert.Equal((10, 20), (Width(before), Width(after)));
+    });
+
+    [Theory]
+    [InlineData("missing.png")]
+    [InlineData("notes.txt")]
+    [InlineData("broken.png")]
+    [InlineData("noframes.gif")]
+    public void Render_WhenTheFileIsNoImage_ThenShowsItsText(string name)
+    {
+        // Arrange
+        File.WriteAllText(Path.Combine(folder, "notes.txt"), "noter");
+        File.WriteAllText(Path.Combine(folder, "broken.png"), "ikke et billede");
+        File.WriteAllBytes(Path.Combine(folder, "noframes.gif"), [.. "GIF89a"u8, 1, 0, 1, 0, 0, 0, 0, 0x3B]);
+
+        // Act
+        var document = MarkdownConverter.Render($"![graf](<{Path.Combine(folder, name)}>)");
+
+        // Assert
+        Assert.Equal((null, "graf"), (Picture(document), DocumentText(document)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Render_WhenTheImageIsOnANetworkShare_ThenShowsItsText(bool webImages)
+    {
+        // Arrange
+        MarkdownConverter.ShowWebImages = webImages;
+
+        // Act
+        var document = MarkdownConverter.Render("![graf](file://server/share/graf.png)");
+
+        // Assert
+        Assert.Equal((null, "graf"), (Picture(document), DocumentText(document)));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void Render_WhenTheImageIsOnTheWeb_ThenShowsItOnlyWhenExternalImagesAreOn(bool webImages, bool shown) => UiThread.Run(() =>
+    {
+        // Arrange
+        MarkdownConverter.ShowWebImages = webImages;
+
+        // Act
+        var document = MarkdownConverter.Render("![logo](http://localhost:1/logo.png)");
+
+        // Assert
+        Assert.Equal(shown, Picture(document) is not null);
+    });
+
+    [Fact]
+    public void Render_WhenTheImageIsInsideALink_ThenTheLinkOpensTheLinkedPage() => UiThread.Run(() =>
+    {
+        // Arrange
+        var file = ImageFile("graf.png", 40);
+
+        // Act
+        var document = MarkdownConverter.Render($"[![graf](<{file}>)](https://example.com)");
+
+        // Assert
+        Assert.Equal((new Uri("https://example.com"), true), (Assert.Single(Hyperlinks(document)).NavigateUri, Picture(document) is not null));
+    });
     [Fact]
     public void Render_WhenPlainText_ThenOneParagraphWithTheText()
     {
@@ -148,6 +356,45 @@ public class MarkdownConverterTests
     }
 
     static string Text(TextElement element) => new TextRange(element.ContentStart, element.ContentEnd).Text;
+
+    static string DocumentText(FlowDocument document) => new TextRange(document.ContentStart, document.ContentEnd).Text.Trim();
+
+    static Image? Picture(DependencyObject element) => Pictures(element).FirstOrDefault();
+
+    static IEnumerable<Image> Pictures(DependencyObject element) =>
+        LogicalTreeHelper.GetChildren(element).OfType<DependencyObject>().SelectMany(child => child is Image image ? [image] : Pictures(child));
+
+    static int Width(FlowDocument document) => Assert.IsType<BitmapImage>(Picture(document)!.Source).PixelWidth;
+
+    string ImageFile(string name, int width)
+    {
+        var file = Path.Combine(folder, name);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        BitmapEncoder encoder = Path.GetExtension(name).ToLowerInvariant() switch
+        {
+            ".jpg" or ".jpeg" => new JpegBitmapEncoder(),
+            ".gif" => new GifBitmapEncoder(),
+            ".bmp" => new BmpBitmapEncoder(),
+            ".tif" or ".tiff" => new TiffBitmapEncoder(),
+            _ => new PngBitmapEncoder(),
+        };
+        encoder.Frames.Add(BitmapFrame.Create(BitmapSource.Create(width, 10, 96, 96, PixelFormats.Bgra32, null, new byte[width * 10 * 4], width * 4)));
+        using var image = new MemoryStream();
+        encoder.Save(image);
+        File.WriteAllBytes(file, Path.GetExtension(name).Equals(".ico", StringComparison.OrdinalIgnoreCase) ? Icon(image.ToArray(), width) : image.ToArray());
+        return file;
+    }
+
+    static byte[] Icon(byte[] png, int width)
+    {
+        using var icon = new MemoryStream();
+        using var writer = new BinaryWriter(icon);
+        writer.Write(new byte[] { 0, 0, 1, 0, 1, 0, (byte)width, 10, 0, 0, 1, 0, 32, 0 });
+        writer.Write(png.Length);
+        writer.Write(22);
+        writer.Write(png);
+        return icon.ToArray();
+    }
 
     static IEnumerable<Hyperlink> Hyperlinks(DependencyObject element) =>
         LogicalTreeHelper.GetChildren(element).OfType<DependencyObject>().SelectMany(child => child is Hyperlink link ? Hyperlinks(child).Prepend(link) : Hyperlinks(child));

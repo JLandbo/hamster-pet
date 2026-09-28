@@ -5,6 +5,16 @@ namespace Hamster.Tests;
 
 public sealed class ConnectorsTests : IDisposable
 {
+    [Fact]
+    public void Fields_WhenShown_ThenTheirLabelsComeFromTheLanguage()
+    {
+        // Act
+        var labels = Connectors.All.SelectMany(connector => connector.Fields).Select(field => field.Label);
+
+        // Assert
+        Assert.Equal(["E-mail", "API-token", "Token"], labels);
+    }
+
     readonly string settingsFile = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
 
     static Connector Atlassian => Connectors.All.Single(connector => connector.Title == "Atlassian Rovo");
