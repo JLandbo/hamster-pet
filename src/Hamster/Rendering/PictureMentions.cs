@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows.Data;
+using Hamster.Core.Chats;
 
 namespace Hamster.Rendering;
 
@@ -22,9 +23,18 @@ public static partial class PictureMentions
     private static partial Regex Mention();
 }
 
-public sealed class ChatMarkdownConverter : IValueConverter
+public sealed class ChatMarkdownConverter : IValueConverter, IMultiValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => MarkdownConverter.Render((string)value, PictureMentions.In);
 
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        var showImages = values[2] is ChatStatus status && status != ChatStatus.Busy;
+        var markdown = values[showImages ? 1 : 0] as string ?? "";
+        return MarkdownConverter.Render(markdown, showImages ? PictureMentions.In : null, showImages);
+    }
+
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }

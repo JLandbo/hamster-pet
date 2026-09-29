@@ -39,10 +39,18 @@ public sealed class MarkdownConverter : IValueConverter
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 
-    public static FlowDocument Render(string markdown, Func<string, IEnumerable<Uri>>? mentioned = null)
+    public static FlowDocument Render(string markdown, Func<string, IEnumerable<Uri>>? mentioned = null, bool showImages = true)
     {
         var parsed = Markdown.Parse(markdown, _pipeline);
-        if (mentioned is not null)
+        if (!showImages)
+        {
+            foreach (var image in parsed.Descendants<LinkInline>().Where(link => link.IsImage))
+            {
+                image.IsImage = false;
+                image.Url = null;
+            }
+        }
+        if (showImages && mentioned is not null)
         {
             var shown = new HashSet<string>(parsed.Descendants<LinkInline>().Where(link => link.IsImage).Select(link => PictureUri(link.Url)?.LocalPath).OfType<string>(), StringComparer.OrdinalIgnoreCase);
             foreach (var block in parsed.Descendants<LeafBlock>().Where(block => block is not CodeBlock && !block.Span.IsEmpty))

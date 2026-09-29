@@ -91,30 +91,16 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <TextBlock Text="{Binding DisplayAnswer}" Margin="16,4,0,0" Foreground="{DynamicResource Muted}" TextWrapping="Wrap">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Status}" Value="Busy">
-                                                <Setter Property="Visibility" Value="Visible" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                            <FlowDocumentScrollViewer Document="{Binding Answer, Converter={StaticResource ChatMarkdown}}" Margin="16,4,0,0"
+                            <FlowDocumentScrollViewer Margin="16,4,0,0"
                                                       VerticalScrollBarVisibility="Disabled" FocusVisualStyle="{x:Null}"
                                                       Hyperlink.RequestNavigate="Link_RequestNavigate" Foreground="{DynamicResource Muted}">
-                                <FlowDocumentScrollViewer.Style>
-                                    <Style TargetType="FlowDocumentScrollViewer" BasedOn="{StaticResource {x:Type FlowDocumentScrollViewer}}">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Status}" Value="Busy">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </FlowDocumentScrollViewer.Style>
+                                <FlowDocumentScrollViewer.Document>
+                                    <MultiBinding Converter="{StaticResource ChatMarkdown}">
+                                        <Binding Path="DisplayAnswer" />
+                                        <Binding Path="Answer" />
+                                        <Binding Path="Status" />
+                                    </MultiBinding>
+                                </FlowDocumentScrollViewer.Document>
                             </FlowDocumentScrollViewer>
                             <Button Content="{DynamicResource Main.LogIn}" Click="Login_Click" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Margin="16,8,0,0"
                                     Visibility="{Binding NeedsLogin, Converter={StaticResource VisibleWhenTrue}}" />
