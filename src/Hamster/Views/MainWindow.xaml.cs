@@ -60,6 +60,7 @@ public partial class MainWindow : Window
     readonly WebSession _web;
     readonly Feed _feed;
     readonly SystemVolume _volume;
+    readonly RevealedChats _revealed;
     readonly DispatcherTimer _timer = new();
     readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromMilliseconds(250) };
     readonly DispatcherTimer _feedTimer = new() { Interval = Subscriptions.Interval };
@@ -76,7 +77,7 @@ public partial class MainWindow : Window
     FeedWindow? _feedWindow;
     Mood _mood;
     int _frame;
-    bool _feedFetched, _resizeQueued, _pressed, _dragging, _chatsExpanded, _shown = true, _lastResponseVisible = true;
+    bool _feedFetched, _resizeQueued, _pressed, _dragging, _chatsExpanded, _revealing, _shown = true, _lastResponseVisible = true;
     Point _dragStart;
     DateTime _pressedAt, _giggleUntil, _lastMove, _lastActivity = DateTime.UtcNow, _newsSeenAt = DateTime.UtcNow;
     Placement _placement;
@@ -87,7 +88,6 @@ public partial class MainWindow : Window
     DateTime _sentAt;
     DateTime _lastResponseSeenAt;
     DateTime _frontAt;
-    double? _readingOffset;
     Button? _closedByItsButton;
     InfoWindow? _infoWindow;
 
@@ -157,7 +157,9 @@ public partial class MainWindow : Window
         ShowChatOnly();
         ShowFolder();
         Chats.Show(conversation);
+        _revealed = new RevealedChats(conversation.Chats);
         UpdateChatList();
+        RevealOlderChats();
         conversation.Changed += Conversation_Changed;
         conversation.Started += () =>
         {
@@ -479,6 +481,7 @@ public partial class MainWindow : Window
         if (_shown)
         {
             UpdateChatList();
+            RevealOlderChats();
         }
         Fade(ChatArea, _shown);
         Fade(TemporaryBanner, _shown);
@@ -598,9 +601,9 @@ public partial class MainWindow : Window
         _poppedUp = (_conversation.AnsweredAt, _conversation.IsWaitingForUser);
         FadeWhenIdle();
         var following = Chats.IsAtBottom;
-        UpdateToolbar();
         UpdateNews();
         UpdateChatList();
+        UpdateToolbar();
         if (following)
         {
             Chats.ScrollToNewest();
@@ -638,12 +641,36 @@ public partial class MainWindow : Window
         }
         _lastResponseVisible = IsLastResponseVisible(DateTime.UtcNow);
         var any = false;
-        foreach (var chat in _conversation.Chats)
+        foreach (var (index, chat) in _conversation.Chats.Index())
         {
-            chat.Shown = _chatsExpanded || _conversation.IsCurrent(chat, _lastResponseVisible, _sentAt);
+            chat.Shown = _chatsExpanded && _revealed.Contains(index) || _conversation.IsCurrent(chat, _lastResponseVisible, _sentAt);
             any |= chat.Shown;
         }
         ChatArea.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    void RevealOlderChats()
+    {
+        if (_chatsExpanded && !_revealing)
+        {
+            _revealing = true;
+            Dispatcher.BeginInvoke(RevealOlderChat, DispatcherPriority.Background);
+        }
+    }
+
+    void RevealOlderChat()
+    {
+        _revealing = false;
+        if (!_chatsExpanded || !_shown || !_revealed.RevealOlder())
+        {
+            return;
+        }
+        var scroll = Chats.ChatScroll;
+        var fromBottom = scroll.ScrollableHeight - scroll.VerticalOffset;
+        UpdateChatList();
+        scroll.UpdateLayout();
+        scroll.ScrollToVerticalOffset(scroll.ScrollableHeight - fromBottom);
+        RevealOlderChats();
     }
 
     bool IsLastResponseVisible(DateTime now) => _conversation.AnsweredAt > _lastResponseSeenAt || now - _lastResponseSeenAt < _lastResponseTime;
@@ -916,23 +943,14 @@ public partial class MainWindow : Window
 
     void ToggleChats_Click(object sender, RoutedEventArgs e)
     {
-        if (_chatsExpanded)
-        {
-            _readingOffset = Chats.IsAtBottom ? null : Chats.ChatScroll.VerticalOffset;
-        }
         _chatsExpanded = !_chatsExpanded;
         _petFile.Save(_petFile.Load() with { ChatsExpanded = _chatsExpanded });
         ToggleChats.Content = _chatsExpanded ? _collapseIcon : _expandIcon;
+        _revealed.StartFromNewest();
         Touch();
         UpdateChatList();
-        if (_chatsExpanded && _readingOffset is { } offset)
-        {
-            Chats.ChatScroll.ScrollToVerticalOffset(offset);
-        }
-        else
-        {
-            Chats.ScrollToNewest();
-        }
+        Chats.ScrollToNewest();
+        RevealOlderChats();
         Animate();
     }
 
@@ -974,7 +992,10 @@ public partial class MainWindow : Window
             return;
         }
         _claude.Settings = _claude.Settings with { WorkingDirectory = folder, LastFolder = folder ?? _claude.Settings.WorkingDirectory };
+        _revealed.StartFromNewest();
         _conversation.Switch(() => _files.Chats(folder));
+        Chats.ScrollToNewest();
+        RevealOlderChats();
     }
 
     bool CanSwitch => !_conversation.IsBusy && _conversation.BackgroundTasks == 0;
