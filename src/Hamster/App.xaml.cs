@@ -75,6 +75,7 @@ public partial class App : Application
         services.AddSingleton(provider => new CharacterLibrary(provider.GetRequiredService<DataFiles>().Characters));
         services.AddSingleton(provider => new PromptLibrary(provider.GetRequiredService<DataFiles>().Prompts));
         services.AddSingleton(provider => new ThemeLibrary(provider.GetRequiredService<DataFiles>().Themes));
+        services.AddSingleton<SystemVolume>();
         services.AddSingleton<MainWindow>();
         return services;
     }

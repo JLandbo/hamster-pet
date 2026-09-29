@@ -1,16 +1,27 @@
 <UserControl x:Class="Hamster.Views.MusicBubble"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Border x:Name="Bubble" Margin="8,0,-8,6" Padding="14,0,8,0" Height="36" CornerRadius="18" Visibility="Collapsed"
+    <Border x:Name="Bubble" Margin="8,0,-8,6" Padding="14,0,8,0" CornerRadius="18" Visibility="Collapsed"
             Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Edge}" BorderThickness="1" Effect="{StaticResource Shadow}">
-        <DockPanel VerticalAlignment="Center">
-            <Button DockPanel.Dock="Right" Content="&#xE893;" ToolTip="{DynamicResource Main.NextTrack}" Click="NextTrack_Click" Style="{StaticResource SmallIconButton}" />
-            <Button x:Name="PlayPauseButton" DockPanel.Dock="Right" Click="PlayPause_Click" Style="{StaticResource SmallIconButton}" />
-            <Button DockPanel.Dock="Right" Content="&#xE892;" ToolTip="{DynamicResource Main.PreviousTrack}" Click="PreviousTrack_Click" Style="{StaticResource SmallIconButton}" />
-            <TextBlock Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
-                <Run FontFamily="{StaticResource IconFont}" Text="&#xEC4F;" />
-                <Run x:Name="TrackText" />
-            </TextBlock>
-        </DockPanel>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="34" />
+            </Grid.RowDefinitions>
+            <DockPanel x:Name="VolumePanel" Margin="0,7,0,0" Visibility="Collapsed">
+                <Button x:Name="MuteButton" DockPanel.Dock="Left" Click="Mute_Click" Style="{StaticResource SmallIconButton}" FontSize="12" Margin="-4,0,6,0" />
+                <Slider x:Name="VolumeSlider" Focusable="False" Maximum="100" VerticalAlignment="Center" ValueChanged="VolumeSlider_ValueChanged" />
+            </DockPanel>
+            <DockPanel x:Name="TrackPanel" Grid.Row="1" VerticalAlignment="Center">
+                <Button DockPanel.Dock="Right" Content="&#xE893;" ToolTip="{DynamicResource Main.NextTrack}" Click="NextTrack_Click" Style="{StaticResource SmallIconButton}" FontSize="11" />
+                <Button x:Name="PlayPauseButton" DockPanel.Dock="Right" Click="PlayPause_Click" Style="{StaticResource SmallIconButton}" FontSize="11" />
+                <Button DockPanel.Dock="Right" Content="&#xE892;" ToolTip="{DynamicResource Main.PreviousTrack}" Click="PreviousTrack_Click" Style="{StaticResource SmallIconButton}" FontSize="11" />
+                <Button DockPanel.Dock="Right" Content="&#xE767;" ToolTip="{DynamicResource Main.Volume}" Click="Volume_Click" Style="{StaticResource SmallIconButton}" FontSize="12" />
+                <TextBlock Foreground="{DynamicResource Muted}" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                    <Run FontFamily="{StaticResource IconFont}" FontSize="14" Text="&#xEC4F;" />
+                    <Run x:Name="TrackText" />
+                </TextBlock>
+            </DockPanel>
+        </Grid>
     </Border>
 </UserControl>

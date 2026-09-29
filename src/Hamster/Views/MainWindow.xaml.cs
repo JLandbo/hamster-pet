@@ -59,6 +59,7 @@ public partial class MainWindow : Window
     readonly Subscriptions _subscriptions;
     readonly WebSession _web;
     readonly Feed _feed;
+    readonly SystemVolume _volume;
     readonly DispatcherTimer _timer = new();
     readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromMilliseconds(250) };
     readonly DispatcherTimer _feedTimer = new() { Interval = Subscriptions.Interval };
@@ -89,10 +90,10 @@ public partial class MainWindow : Window
     Button? _closedByItsButton;
 
     public MainWindow(DataFiles files, ClaudeClient claude, Conversation conversation, Connectors connectors, Subscriptions subscriptions, Feed feed,
-        WebSession web, CharacterLibrary characters, PromptLibrary prompts, ThemeLibrary themes)
+        WebSession web, CharacterLibrary characters, PromptLibrary prompts, ThemeLibrary themes, SystemVolume volume)
     {
         (_files, _claude, _conversation, _connectors, _subscriptions) = (files, claude, conversation, connectors, subscriptions);
-        (_feed, _web, _characters, _prompts, _themes) = (feed, web, characters, prompts, themes);
+        (_feed, _web, _characters, _prompts, _themes, _volume) = (feed, web, characters, prompts, themes, volume);
         InitializeComponent();
         PetArea.Children.Remove(Pet);
         _petWindow = new Window
@@ -469,7 +470,7 @@ public partial class MainWindow : Window
         UpdateToolbar();
         Chats.ScrollToNewest();
         _ = _conversation.StartAsync();
-        _ = Music.StartAsync();
+        _ = Music.StartAsync(_volume);
         if (!_chatOnly)
         {
             _feedTimer.Start();
