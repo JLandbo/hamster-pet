@@ -223,7 +223,6 @@ public partial class SettingsWindow : Window
 
     async void Window_Activated(object sender, EventArgs e)
     {
-        // Coming back to the window, e.g. from logging in in the browser, is when a connector that lost its login is worth trying again.
         _reconnected.Clear();
         ShowPartialMessagesRestart();
         ShowThemes();
@@ -305,7 +304,6 @@ public partial class SettingsWindow : Window
         try
         {
             var character = _characters.Load(name);
-            // Decodes every sheet, so a broken one shows here instead of silently falling back to the hamster when chosen.
             return new(name, character, SpriteRenderer.Render([character.Animations[Mood.Awake][0], .. character.Animations.Values.Select(frames => frames[0])])[0], null);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)

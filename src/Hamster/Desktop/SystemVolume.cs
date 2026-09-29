@@ -38,7 +38,6 @@ public sealed partial class SystemVolume
         }
     }
 
-    // Looked up on every call, so the volume follows the default speaker when it changes, e.g. when headphones are plugged in.
     static IAudioEndpointVolume Endpoint()
     {
         Marshal.ThrowExceptionForHR(CoCreateInstance(_deviceEnumerator, 0, _allContexts, typeof(IMMDeviceEnumerator).GUID, out var devices));
@@ -49,7 +48,6 @@ public sealed partial class SystemVolume
     private static partial int CoCreateInstance(in Guid classId, nint outer, uint context, in Guid interfaceId, out IMMDeviceEnumerator instance);
 }
 
-// COM calls methods by their position, so every method up to the last one used is declared in the documented order.
 [GeneratedComInterface]
 [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6")]
 internal partial interface IMMDeviceEnumerator

@@ -9,9 +9,9 @@ namespace Hamster.Core.Chats;
 public sealed class Conversation : IClaudeListener
 {
     public const int MaxChats = 100;
+    static readonly TimeSpan _readTime = TimeSpan.FromSeconds(2);
     public static string BackgroundPrompt => Strings.Of("Chat.FromClaude");
     public static string AnsweredAbove => Strings.Of("Chat.AnsweredAbove");
-    static readonly TimeSpan _readTime = TimeSpan.FromSeconds(2);
 
     readonly IClaudeClient _claude;
     JsonFile<SavedChats>? _store;

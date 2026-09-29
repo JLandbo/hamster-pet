@@ -155,7 +155,6 @@ public sealed class Connectors(IClaudeClient claude, Action restart, Func<bool> 
         }
     }
 
-    // Claude keeps a connector that lost its login in that state until asked to reconnect, so a login made since is only picked up this way.
     public async Task<bool> ReconnectAsync(IReadOnlyList<McpServer> servers, HashSet<string> reconnected)
     {
         McpServer[] broken = [.. UsedServers(servers).Where(server => server.Status is "needs-auth" or "failed" && !reconnected.Contains(server.Name))];
