@@ -65,9 +65,23 @@
             </Setter>
         </Style>
 
+        <Style x:Key="KeyButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent">
+                            <ContentPresenter />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <DataTemplate x:Key="RowTemplate" DataType="{x:Type feeds:FeedRow}">
             <StackPanel x:Name="Row">
-            <Button Click="Row_Click" ToolTip="{Binding Url}" Style="{StaticResource RowButton}">
+            <Button Click="Row_Click" Tag="{Binding ElementName=Expand}" Style="{StaticResource RowButton}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" MinWidth="74" SharedSizeGroup="Id" />
@@ -75,9 +89,11 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <Border x:Name="Chip" CornerRadius="5" Margin="0,0,10,0" HorizontalAlignment="Left" VerticalAlignment="Center">
-                        <TextBlock x:Name="Key" Text="{Binding Id}" Foreground="{DynamicResource Link}" FontFamily="{x:Static rendering:MarkdownConverter.CodeFont}" FontSize="12" />
-                    </Border>
+                    <Button x:Name="KeyLink" Click="Key_Click" ToolTip="{Binding Url}" Style="{StaticResource KeyButton}" Margin="0,0,10,0" HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <Border x:Name="Chip" CornerRadius="5">
+                            <TextBlock x:Name="Key" Text="{Binding Id}" Foreground="{DynamicResource Link}" FontFamily="{x:Static rendering:MarkdownConverter.CodeFont}" FontSize="12" />
+                        </Border>
+                    </Button>
                     <TextBlock x:Name="Title" Grid.Column="1" Text="{Binding Title}" Foreground="{DynamicResource Text}"
                                TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="2" Text="{Binding Detail}" Foreground="{DynamicResource Muted}" FontSize="12"
@@ -140,6 +156,15 @@
                 </DataTrigger>
                 <Trigger SourceName="Expand" Property="IsChecked" Value="True">
                     <Setter TargetName="Description" Property="Document" Value="{Binding Details.Description, Converter={StaticResource Markdown}}" />
+                </Trigger>
+                <Trigger SourceName="KeyLink" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Key" Property="TextDecorations">
+                        <Setter.Value>
+                            <TextDecorationCollection>
+                                <TextDecoration Location="Underline" PenOffset="2" PenOffsetUnit="Pixel" />
+                            </TextDecorationCollection>
+                        </Setter.Value>
+                    </Setter>
                 </Trigger>
                 <DataTrigger Binding="{Binding Details.Description}" Value="">
                     <Setter TargetName="Description" Property="Visibility" Value="Collapsed" />

@@ -10,24 +10,14 @@ namespace Hamster.Core.Feeds;
 
 static class JiraDescription
 {
-    const int _descriptionLength = 1500;
     static readonly MarkdownPipeline _sourcePositions = new MarkdownPipelineBuilder().UsePreciseSourceLocation().Build();
 
-    public static string Of(JsonNode? description)
+    public static string Of(JsonNode? description) => WithImagesMarked(description switch
     {
-        var markdown = WithImagesMarked(description switch
-        {
-            JsonValue value when value.TryGetValue(out string? text) => text,
-            JsonObject document => MarkdownOf(document),
-            _ => "",
-        }).Trim();
-        if (markdown.Length <= _descriptionLength)
-        {
-            return markdown;
-        }
-        var cut = markdown[.._descriptionLength];
-        return $"{(cut.LastIndexOfAny([' ', '\n', '\r', '\t']) is > 0 and var space ? cut[..space] : cut).TrimEnd()} …";
-    }
+        JsonValue value when value.TryGetValue(out string? text) => text,
+        JsonObject document => MarkdownOf(document),
+        _ => "",
+    }).Trim();
 
     static string WithImagesMarked(string markdown) => Markdown.Parse(markdown, _sourcePositions).Descendants<LinkInline>().Where(link => link.IsImage && !InsideImage(link)).Reverse()
             .Aggregate(markdown, (text, image) => text.Remove(image.Span.Start, image.Span.Length).Insert(image.Span.Start, ImageMark));

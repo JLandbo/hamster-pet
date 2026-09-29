@@ -475,17 +475,17 @@ public sealed class SubscriptionsTests : IDisposable
     }
 
     [Fact]
-    public void JiraItems_WhenTheDescriptionIsLong_ThenCutsItAtASpace()
+    public void JiraItems_WhenTheDescriptionIsLong_ThenKeepsItWhole()
     {
         // Arrange
-        var words = string.Join(' ', Enumerable.Repeat("ord", 600));
+        var words = string.Join(' ', Enumerable.Repeat("ord", 5000));
         var json = """{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":"WORDS"}}]}""".Replace("WORDS", words);
 
         // Act
         var description = Assert.Single(FeedApi.JiraItems(json, _site, new Dictionary<string, string>())).Details!.Description;
 
         // Assert
-        Assert.Equal($"{string.Join(' ', Enumerable.Repeat("ord", 375))} …", description);
+        Assert.Equal(words, description);
     }
 
     [Fact]

@@ -40,7 +40,24 @@ public partial class FeedWindow : Window
         ShowFeed();
     }
 
-    void Row_Click(object sender, RoutedEventArgs e) => Open(((FeedRow)((FrameworkElement)sender).DataContext).Url);
+    void Row_Click(object sender, RoutedEventArgs e)
+    {
+        var button = (FrameworkElement)sender;
+        if (button.DataContext is FeedRow { Details: null } row)
+        {
+            Open(row.Url);
+            return;
+        }
+        var expand = (ToggleButton)button.Tag;
+        expand.IsChecked = expand.IsChecked != true;
+        Remember(expand);
+    }
+
+    void Key_Click(object sender, RoutedEventArgs e)
+    {
+        Open(((FeedRow)((FrameworkElement)sender).DataContext).Url);
+        e.Handled = true;
+    }
 
     static void Open(string url)
     {
@@ -73,7 +90,12 @@ public partial class FeedWindow : Window
 
     void Expand_Click(object sender, RoutedEventArgs e)
     {
-        var toggle = (ToggleButton)sender;
+        Remember((ToggleButton)sender);
+        e.Handled = true;
+    }
+
+    void Remember(ToggleButton toggle)
+    {
         var url = ((FeedRow)toggle.DataContext).Url;
         if (toggle.IsChecked == true)
         {
@@ -83,7 +105,6 @@ public partial class FeedWindow : Window
         {
             _expanded.Remove(url);
         }
-        e.Handled = true;
     }
 
     void Window_ContentRendered(object? sender, EventArgs e) => (SizeToContent, MaxHeight) = (SizeToContent.Manual, double.PositiveInfinity);
