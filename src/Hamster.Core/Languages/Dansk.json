@@ -139,6 +139,7 @@
     "Main.Exit": "Afslut",
     "Main.Size": "Størrelse",
     "Main.AutoHide": "Skjul chat og menu automatisk",
+    "Main.KeepOnTop": "Placer vinduer forrest",
     "Main.ClickToRemove": "(klik for at fjerne)",
     "Main.TextFiles": "Tekst",
     "Main.SnipFailed": "Kunne ikke åbne Windows' klippeværktøj.",

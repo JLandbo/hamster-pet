@@ -87,6 +87,32 @@ public sealed class PetSettingsTests : IDisposable
     }
 
     [Fact]
+    public void Load_WhenPetSettingsWereSavedBeforeKeepOnTop_ThenWindowsAreNotKeptOnTop()
+    {
+        // Arrange
+        File.WriteAllText(_file, """{"CharacterName": "Hamster"}""");
+
+        // Act
+        var pet = Store().Load();
+
+        // Assert
+        Assert.False(pet.KeepWindowsOnTop);
+    }
+
+    [Fact]
+    public void Save_WhenKeepOnTopIsOn_ThenLoadReturnsIt()
+    {
+        // Arrange
+        var store = Store();
+
+        // Act
+        store.Save(PetSettings.Default with { KeepWindowsOnTop = true });
+
+        // Assert
+        Assert.True(store.Load().KeepWindowsOnTop);
+    }
+
+    [Fact]
     public void Save_WhenSizeChanges_ThenLoadReturnsIt()
     {
         // Arrange

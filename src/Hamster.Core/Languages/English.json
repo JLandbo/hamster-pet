@@ -139,6 +139,7 @@
     "Main.Exit": "Exit",
     "Main.Size": "Size",
     "Main.AutoHide": "Hide chat and toolbar automatically",
+    "Main.KeepOnTop": "Keep windows on top",
     "Main.ClickToRemove": "(click to remove)",
     "Main.TextFiles": "Text",
     "Main.SnipFailed": "Could not open the Windows Snipping Tool.",

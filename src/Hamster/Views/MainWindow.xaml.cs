@@ -119,6 +119,7 @@ public partial class MainWindow : Window
         ShowSize();
         SizeSlider.ValueChanged += SizeSlider_ValueChanged;
         AutoHideItem.IsChecked = pet.AutoHide;
+        KeepOnTopItem.IsChecked = Topmost = pet.KeepWindowsOnTop;
         MarkdownConverter.ShowWebImages = pet.ShowWebImages;
         _chatsExpanded = pet.ChatsExpanded;
         _hideTime = TimeSpan.FromSeconds(pet.HideSeconds);
@@ -290,7 +291,7 @@ public partial class MainWindow : Window
             _settingsWindow.Activate();
             return;
         }
-        var window = _settingsWindow = new SettingsWindow(ChooseLanguage, (int)_hideTime.TotalSeconds, ChooseHideSeconds, MarkdownConverter.ShowWebImages, ChooseWebImages, _themes, _petFile.Load().ThemeName, ChooseTheme, _characters, _character.Name, ChooseCharacter, _connectors, _subscriptions, _web);
+        var window = _settingsWindow = new SettingsWindow(ChooseLanguage, (int)_hideTime.TotalSeconds, ChooseHideSeconds, MarkdownConverter.ShowWebImages, ChooseWebImages, _themes, _petFile.Load().ThemeName, ChooseTheme, _characters, _character.Name, ChooseCharacter, _connectors, _subscriptions, _web) { Topmost = KeepOnTopItem.IsChecked };
         RememberSize(window, _settingsSize);
         window.Closed += (_, _) => _ = CheckConnectorsAsync();
         window.Show();
@@ -366,7 +367,7 @@ public partial class MainWindow : Window
             _feedWindow.Close();
             return;
         }
-        _feedWindow = new FeedWindow(_feed, _subscriptions);
+        _feedWindow = new FeedWindow(_feed, _subscriptions) { Topmost = KeepOnTopItem.IsChecked };
         RememberSize(_feedWindow, _feedSize);
         _feedWindow.Closed += (_, _) => _feedWindow = null;
         _feedWindow.Show();
@@ -520,10 +521,11 @@ public partial class MainWindow : Window
         Chats.ChatScroll.Height = Math.Clamp(Math.Min(_placement.Bottom - ScreenArea.Of(PetArea).Top, Height) - (Root.ActualHeight - Chats.ChatScroll.ActualHeight), 0, _placement.ChatHeight);
     }
 
-    static void BringToFront(Window window)
+    void BringToFront(Window window)
     {
-        window.Topmost = true;
-        window.Topmost = false;
+        // Toggling Topmost raises the window to the top of its z-order band.
+        window.Topmost = !KeepOnTopItem.IsChecked;
+        window.Topmost = KeepOnTopItem.IsChecked;
     }
 
     void Window_Deactivated(object sender, EventArgs e) => FocusManager.SetFocusedElement(this, null);
@@ -1091,6 +1093,15 @@ public partial class MainWindow : Window
     {
         _petFile.Save(_petFile.Load() with { AutoHide = AutoHideItem.IsChecked });
         FadeWhenIdle();
+    }
+
+    void KeepOnTop_Click(object sender, RoutedEventArgs e)
+    {
+        _petFile.Save(_petFile.Load() with { KeepWindowsOnTop = KeepOnTopItem.IsChecked });
+        foreach (var window in new Window?[] { this, _settingsWindow, _feedWindow }.OfType<Window>().Where(window => window.IsVisible))
+        {
+            window.Topmost = KeepOnTopItem.IsChecked;
+        }
     }
 
     void ShowSize()

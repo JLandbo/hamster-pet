@@ -225,6 +225,7 @@
                                 </MenuItem.Header>
                             </MenuItem>
                             <MenuItem x:Name="AutoHideItem" Header="{DynamicResource Main.AutoHide}" IsCheckable="True" Click="AutoHide_Click" />
+                            <MenuItem x:Name="KeepOnTopItem" Header="{DynamicResource Main.KeepOnTop}" IsCheckable="True" Click="KeepOnTop_Click" />
                             <MenuItem Header="{DynamicResource Main.NewChat}" Click="NewChat_Click" />
                             <MenuItem Header="{DynamicResource Main.Exit}" Click="Exit_Click" />
                         </ContextMenu>
