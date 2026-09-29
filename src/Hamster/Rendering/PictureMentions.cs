@@ -19,7 +19,7 @@ public static partial class PictureMentions
         return new Uri(Path.GetFullPath(uri.LocalPath));
     }
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:file:///)?[A-Za-z]:[\\/](?:(?![A-Za-z]:[\\/])[^<>""|?*`\r\n])*?\.(?:png|jpe?g|gif|bmp|tiff?|ico|webp)(?!_*[A-Za-z0-9]|\.[A-Za-z0-9])", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:file:///)?[A-Za-z]:[\\/](?:(?![A-Za-z]:[\\/])[^<>""|?*`\r\n])*?\.(?:png|jpe?g|gif|bmp|tiff?|ico)(?!_*[A-Za-z0-9]|\.[A-Za-z0-9])", RegexOptions.IgnoreCase)]
     private static partial Regex Mention();
 }
 

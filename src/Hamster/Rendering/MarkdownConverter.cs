@@ -31,7 +31,7 @@ public sealed class MarkdownConverter : IValueConverter
     const double _pictureWidth = 0.9;
     const double _pictureHeight = 320;
     const double _pictureMinimum = 100;
-    static readonly string[] _pictureFiles = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".ico", ".webp"];
+    static readonly string[] _pictureFiles = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".ico"];
 
     public static bool ShowWebImages { get; set; }
 
@@ -186,9 +186,18 @@ public sealed class MarkdownConverter : IValueConverter
 
     static bool InsideLink(Markdig.Syntax.Inlines.Inline inline) => inline.Parent?.ContainsParentOfType<LinkInline>() == true;
 
-    static Uri? PictureUri(string? url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri is { IsFile: true, IsUnc: false }
-            ? _pictureFiles.Contains(Path.GetExtension(uri.LocalPath), StringComparer.OrdinalIgnoreCase) ? uri : null
-            : ShowWebImages ? WebUri(url) : null;
+    static Uri? PictureUri(string? url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return null;
+        }
+        if (uri is { IsFile: true, IsUnc: false })
+        {
+            return _pictureFiles.Contains(Path.GetExtension(uri.LocalPath), StringComparer.OrdinalIgnoreCase) ? uri : null;
+        }
+        return ShowWebImages && uri.Scheme is "http" or "https" && !Path.GetExtension(uri.AbsolutePath).Equals(".webp", StringComparison.OrdinalIgnoreCase) ? uri : null;
+    }
 
     static Inline Picture(LinkInline image, Uri uri)
     {

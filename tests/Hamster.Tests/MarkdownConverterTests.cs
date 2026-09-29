@@ -73,20 +73,6 @@ public sealed class MarkdownConverterTests : IDisposable
         Assert.Equal((100, 75), smallest);
     });
 
-    [Fact]
-    public void Render_WhenTheImageIsWebP_ThenShowsIt() => UiThread.Run(() =>
-    {
-        // Arrange
-        var file = Path.Combine(_folder, "graf.webp");
-        File.WriteAllBytes(file, Convert.FromBase64String("UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA=="));
-
-        // Act
-        var document = Rendered($"![graf](<{file}>)");
-
-        // Assert
-        Assert.Equal(1, Width(document));
-    });
-
     [Theory]
     [InlineData("skråstreger")]
     [InlineData("omvendte skråstreger")]
@@ -240,6 +226,19 @@ public sealed class MarkdownConverterTests : IDisposable
         Assert.Equal((null, "graf"), (Picture(document), DocumentText(document)));
     });
 
+    [Fact]
+    public void Render_WhenTheImageIsWebP_ThenShowsItsText() => UiThread.Run(() =>
+    {
+        // Arrange
+        var file = ImageFile("graf.webp", 40);
+
+        // Act
+        var document = Rendered($"![graf](<{file}>)");
+
+        // Assert
+        Assert.Equal((null, "graf"), (Picture(document), DocumentText(document)));
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -292,6 +291,19 @@ public sealed class MarkdownConverterTests : IDisposable
 
         // Act
         var document = Rendered("![logo](http://localhost:1/logo.png)");
+
+        // Assert
+        Assert.Equal((null, "logo"), (Picture(document), DocumentText(document)));
+    });
+
+    [Fact]
+    public void Render_WhenTheWebImageIsWebP_ThenShowsItsText() => UiThread.Run(() =>
+    {
+        // Arrange
+        MarkdownConverter.ShowWebImages = true;
+
+        // Act
+        var document = MarkdownConverter.Render("![logo](http://localhost:1/logo.webp)");
 
         // Assert
         Assert.Equal((null, "logo"), (Picture(document), DocumentText(document)));

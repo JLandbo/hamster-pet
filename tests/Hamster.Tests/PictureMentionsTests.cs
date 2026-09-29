@@ -9,7 +9,7 @@ public sealed class PictureMentionsTests : IDisposable
     static readonly string[] _files =
     [
         "graf.png", "før.png", "efter.png", @"Skærm billeder\graf v2.png", "noter.txt", "graf.png.txt",
-        "b.png", "b.jpg", "b.jpeg", "b.gif", "b.bmp", "b.tif", "b.tiff", "b.ico", "b.webp",
+        "b.png", "b.jpg", "b.jpeg", "b.gif", "b.bmp", "b.tif", "b.tiff", "b.ico",
     ];
 
     readonly string _folder = Directory.CreateTempSubdirectory("billeder æøå ").FullName;
@@ -72,7 +72,6 @@ public sealed class PictureMentionsTests : IDisposable
     [InlineData("tif")]
     [InlineData("tiff")]
     [InlineData("ico")]
-    [InlineData("webp")]
     [InlineData("PNG")]
     public void In_WhenTheImageHasAKnownType_ThenFindsIt(string type)
     {
@@ -86,6 +85,7 @@ public sealed class PictureMentionsTests : IDisposable
     [Theory]
     [InlineData(@"Se {dir}\noter.txt")]
     [InlineData(@"Se {dir}\graf.png.txt")]
+    [InlineData(@"Se {dir}\b.webp")]
     [InlineData(@"Se {dir}\graf.png_original")]
     [InlineData("Se graf.png")]
     [InlineData("Se ./graf.png")]
