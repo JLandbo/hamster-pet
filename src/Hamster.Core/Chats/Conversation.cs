@@ -16,11 +16,12 @@ public sealed class Conversation : IClaudeListener
     readonly IClaudeClient _claude;
     JsonFile<SavedChats>? _store;
     readonly HashSet<string> _webTools = [];
-    readonly Dictionary<string, PendingPrompt> _waiting = [];
+    readonly Dictionary<string, PendingRequest> _waiting = [];
     readonly Dictionary<string, ChatItem> _toolChats = [];
     string? _sessionId, _turnMessageId;
     ChatItem? _turn, _lastAnswered, _partialChat;
-    bool _turnRunning, _autonomous, _stopping, _restartWhenIdle;
+    TurnKind _turnKind;
+    bool _stopping, _restartWhenIdle;
 
     public Conversation(IClaudeClient claude, JsonFile<SavedChats>? store)
     {
@@ -40,7 +41,7 @@ public sealed class Conversation : IClaudeListener
     public Usage? Usage { get; private set; }
     public int BackgroundTasks { get; private set; }
     public DateTime AnsweredAt { get; private set; }
-    public bool IsBusy => _turnRunning || _waiting.Count > 0;
+    public bool IsBusy => _turnKind != TurnKind.None || _waiting.Count > 0;
     public bool RestartPending => _restartWhenIdle;
     public bool IsBrowsingWeb => _webTools.Count > 0;
     public bool IsWaitingForUser => Chats.Any(chat => chat.NeedsAction);
@@ -110,7 +111,7 @@ public sealed class Conversation : IClaudeListener
         {
             queuedPrompt = chat.AddPrompt(prompt, title);
         }
-        _waiting[id] = new(chat, queuedPrompt);
+        _waiting[id] = new PendingRequest(chat, queuedPrompt);
         Changed?.Invoke();
         try
         {
@@ -134,11 +135,7 @@ public sealed class Conversation : IClaudeListener
             }
             else
             {
-                foreach (var waitingId in IdsFor(failed.Chat))
-                {
-                    _claude.Withdraw(waitingId);
-                    _waiting.Remove(waitingId);
-                }
+                WithdrawWaiting(failed.Chat);
                 Finish(failed.Chat, result, stopped: false);
                 MarkAnswered(failed.Chat, stopped: false);
             }
@@ -188,25 +185,15 @@ public sealed class Conversation : IClaudeListener
 
     public void Delete(ChatItem chat)
     {
-        var ids = IdsFor(chat);
         if (chat == _turn)
         {
             Cancel();
-            foreach (var id in ids.Where(id => id != _turnMessageId))
-            {
-                _claude.Withdraw(id);
-            }
+            WithdrawWaiting(chat, _turnMessageId);
+            ForgetWaiting(chat);
         }
         else
         {
-            foreach (var id in ids)
-            {
-                _claude.Withdraw(id);
-            }
-        }
-        foreach (var id in ids)
-        {
-            _waiting.Remove(id);
+            WithdrawWaiting(chat);
         }
         if (chat == _lastAnswered)
         {
@@ -219,35 +206,30 @@ public sealed class Conversation : IClaudeListener
 
     public void Cancel()
     {
-        if (_turnRunning)
+        if (_turnKind != TurnKind.None)
         {
             _stopping = true;
             _claude.Interrupt();
             return;
         }
-        var waiting = _waiting.ToArray();
-        foreach (var (id, _) in waiting)
+        foreach (var chat in _waiting.Values.Select(waiting => waiting.Chat).Distinct().ToArray())
         {
-            _claude.Withdraw(id);
-        }
-        foreach (var chat in waiting.Select(entry => entry.Value.Chat).Distinct())
-        {
+            WithdrawWaiting(chat);
             Finish(chat, new ClaudeResult(null, "", IsError: true), stopped: true);
         }
-        _waiting.Clear();
         Save();
         Changed?.Invoke();
     }
 
     public void TurnStarted(string? messageId)
     {
-        if (_turnRunning)
+        if (_turnKind != TurnKind.None)
         {
             return;
         }
         _turnMessageId = messageId;
         _turn = messageId is null ? null : _waiting.GetValueOrDefault(messageId)?.Chat;
-        (_turnRunning, _autonomous) = (true, _turn is null);
+        _turnKind = _turn is null ? TurnKind.Autonomous : TurnKind.User;
         Changed?.Invoke();
     }
 
@@ -259,7 +241,7 @@ public sealed class Conversation : IClaudeListener
 
     public void PartialMessageReceived(string text)
     {
-        if (_partialChat is null && _autonomous)
+        if (_partialChat is null && _turnKind == TurnKind.Autonomous)
         {
             _partialChat = _turn = Add(new ChatItem(BackgroundPrompt));
             _partialChat.StartPartialAnswer();
@@ -274,7 +256,7 @@ public sealed class Conversation : IClaudeListener
     public void AssistantTextReceived(string text)
     {
         var chat = _partialChat ?? _turn;
-        if (chat is null && _autonomous)
+        if (chat is null && _turnKind == TurnKind.Autonomous)
         {
             chat = _partialChat = _turn = Add(new ChatItem(BackgroundPrompt));
             Changed?.Invoke();
@@ -347,7 +329,7 @@ public sealed class Conversation : IClaudeListener
     public void ResultReceived(ClaudeResult result)
     {
         var stopped = result.IsError && _stopping;
-        var failedToStart = result.IsError && result.Answers is null && !_turnRunning;
+        var failedToStart = result.IsError && result.Answers is null && _turnKind == TurnKind.None;
         List<ChatItem> answered = failedToStart ? [.. _waiting.Values.Select(waiting => waiting.Chat).Distinct()] : [];
         if (failedToStart)
         {
@@ -362,16 +344,12 @@ public sealed class Conversation : IClaudeListener
         }
         answered = [.. answered.Distinct()];
 
-        var target = answered.FirstOrDefault() ?? _turn ?? (_autonomous && result.Text.Length > 0 ? Add(new ChatItem(BackgroundPrompt)) : null);
+        var target = answered.FirstOrDefault() ?? _turn ?? (_turnKind == TurnKind.Autonomous && result.Text.Length > 0 ? Add(new ChatItem(BackgroundPrompt)) : null);
         if (target is not null)
         {
             if (stopped)
             {
-                foreach (var id in IdsFor(target))
-                {
-                    _claude.Withdraw(id);
-                    _waiting.Remove(id);
-                }
+                WithdrawWaiting(target);
             }
             Finish(target, result, stopped, complete: !WaitingFor(target));
         }
@@ -419,7 +397,7 @@ public sealed class Conversation : IClaudeListener
 
     void EndTurn()
     {
-        (_turn, _partialChat, _turnMessageId, _turnRunning, _autonomous, _stopping) = (null, null, null, false, false, false);
+        (_turn, _partialChat, _turnMessageId, _turnKind, _stopping) = (null, null, null, TurnKind.None, false);
         _webTools.Clear();
         Save();
         Changed?.Invoke();
@@ -434,14 +412,31 @@ public sealed class Conversation : IClaudeListener
     }
 
     ChatItem? ChatFor(string? toolUseId) => toolUseId is not null && _toolChats.TryGetValue(toolUseId, out var chat) && Chats.Contains(chat) ? chat
-        : _turn ?? (_autonomous ? _turn = Add(new ChatItem(BackgroundPrompt)) : Chats.LastOrDefault());
+        : _turn ?? (_turnKind == TurnKind.Autonomous ? _turn = Add(new ChatItem(BackgroundPrompt)) : Chats.LastOrDefault());
 
-    ChatItem? OpenChat() => _turn is { Status: ChatStatus.Busy } && !_autonomous && Chats.Contains(_turn) ? _turn
+    ChatItem? OpenChat() => _turnKind == TurnKind.User && _turn is { Status: ChatStatus.Busy } && Chats.Contains(_turn) ? _turn
         : _waiting.Values.Select(waiting => waiting.Chat).LastOrDefault(chat => chat.Status == ChatStatus.Busy);
 
-    string[] IdsFor(ChatItem chat) => [.. _waiting.Where(entry => entry.Value.Chat == chat).Select(entry => entry.Key)];
+    string[] WaitingIds(ChatItem chat) => [.. _waiting.Where(entry => entry.Value.Chat == chat).Select(entry => entry.Key)];
 
     bool WaitingFor(ChatItem chat) => _waiting.Values.Any(waiting => waiting.Chat == chat);
+
+    void WithdrawWaiting(ChatItem chat, string? except = null)
+    {
+        foreach (var id in WaitingIds(chat).Where(id => id != except))
+        {
+            _claude.Withdraw(id);
+            _waiting.Remove(id);
+        }
+    }
+
+    void ForgetWaiting(ChatItem chat)
+    {
+        foreach (var id in WaitingIds(chat))
+        {
+            _waiting.Remove(id);
+        }
+    }
 
     ChatItem Add(ChatItem chat)
     {
@@ -494,5 +489,7 @@ public sealed class Conversation : IClaudeListener
         return chat.Status == ChatStatus.Busy && pending.Length == 0 ? null : chat.ToRecordWithout(pending);
     }
 
-    sealed record PendingPrompt(ChatItem Chat, ChatPrompt Prompt);
+    enum TurnKind { None, User, Autonomous }
+
+    sealed record PendingRequest(ChatItem Chat, ChatPrompt Prompt);
 }
