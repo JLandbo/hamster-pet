@@ -46,8 +46,8 @@ public sealed class CharacterLibraryTests : IDisposable
         var copy = _library.Load(Path.GetFileName(_library.AddCopy()));
 
         // Assert
-        Assert.Equal(Character.Hamster.Palette, copy.Palette);
-        Assert.Equal(Character.Hamster.Animations[Mood.Sad].Select(frame => frame.Rows), copy.Animations[Mood.Sad].Select(frame => frame.Rows));
+        Assert.Equal(Character.Hamster.Animations[Mood.Sad].Select(frame => (frame.Index, frame.Width, frame.Height, frame.Milliseconds)), copy.Animations[Mood.Sad].Select(frame => (frame.Index, frame.Width, frame.Height, frame.Milliseconds)));
+        Assert.Equal(Character.Hamster.Animations[Mood.Sad][0].Sheet, copy.Animations[Mood.Sad][0].Sheet);
     }
 
     [Fact]

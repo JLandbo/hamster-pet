@@ -266,11 +266,19 @@ public partial class MainWindow : Window
 
     void UseCharacter(Character next)
     {
-        _character = next;
-        _images = next.Animations.ToDictionary(animation => animation.Key, animation => animation.Value.Select(frame => SpriteRenderer.Render(frame.Rows, next.Palette)).ToArray());
+        try
+        {
+            (_images, _character) = (ImagesOf(next), next);
+        }
+        catch (InvalidDataException)
+        {
+            (_images, _character) = (ImagesOf(Character.Hamster), Character.Hamster);
+        }
         _frame = 0;
         Animate();
     }
+
+    static Dictionary<Mood, BitmapSource[]> ImagesOf(Character character) => character.Animations.ToDictionary(animation => animation.Key, animation => SpriteRenderer.Render(animation.Value));
 
     void ShowChatOnly()
     {

@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Pet\Hamster\*.txt" LogicalName="%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Pet\Hamster PNG\*" LogicalName="%(Filename)%(Extension)" />
     <EmbeddedResource Include="Languages\*.json" LogicalName="Languages/%(Filename)%(Extension)" />
   </ItemGroup>
 

@@ -1,3 +1,6 @@
+using System.Buffers.Binary;
+using System.Text;
+
 namespace Hamster.Tests;
 
 public sealed class CharacterTests : IDisposable
@@ -19,114 +22,101 @@ public sealed class CharacterTests : IDisposable
     }
 
     [Fact]
-    public void Hamster_WhenLoaded_ThenSpinStartsOnTheNormalBody()
-    {
-        // Act
-        var firstSpinFrame = Character.Hamster.Animations[Mood.Spin][0].Rows;
-
-        // Assert
-        Assert.Equal(Character.Hamster.Animations[Mood.Awake][0].Rows, firstSpinFrame);
-    }
-
-    [Fact]
-    public void Hamster_WhenLoaded_ThenFramesOnlyUseItsPalette()
-    {
-        // Act
-        var colors = Character.Hamster.Animations.Values.SelectMany(frames => frames).SelectMany(frame => frame.Rows).SelectMany(row => row).Distinct();
-
-        // Assert
-        Assert.All(colors, color => Assert.True(color == '.' || Character.Hamster.Palette.ContainsKey(color), $"Unknown color '{color}'"));
-    }
-
-    [Fact]
-    public void FromFolder_WhenFilesAreMissing_ThenUsesTheHamsters()
+    public void FromFolder_WhenAnimationsAreMissing_ThenUsesTheHamsters()
     {
         // Arrange
-        File.WriteAllText(Path.Combine(_folder, "palette.txt"), "a 112233\n");
+        File.WriteAllBytes(Path.Combine(_folder, "awake.png"), Png(40, 10));
+        File.WriteAllText(Path.Combine(_folder, "timing.txt"), "awake 100 250\n");
 
         // Act
         var character = Character.FromFolder(_folder);
 
         // Assert
-        Assert.Equal(0xFF112233u, character.Palette['a']);
         Assert.Same(Character.Hamster.Animations[Mood.Dance], character.Animations[Mood.Dance]);
     }
 
     [Fact]
-    public void FromFolder_WhenThePaletteLacksAColor_ThenBorrowsTheHamsters()
+    public void FromFolder_WhenAnAnimationIsAPng_ThenSplitsItIntoFramesWithTheirTimings()
     {
         // Arrange
-        File.WriteAllText(Path.Combine(_folder, "palette.txt"), "a 112233\n");
+        File.WriteAllBytes(Path.Combine(_folder, "awake.png"), Png(40, 10));
+        File.WriteAllText(Path.Combine(_folder, "timing.txt"), "awake 100 250\n");
 
         // Act
-        var character = Character.FromFolder(_folder);
+        var frames = Character.FromFolder(_folder).Animations[Mood.Awake];
 
         // Assert
-        Assert.Equal((0xFF112233u, Character.Hamster.Palette['K']), (character.Palette['a'], character.Palette['K']));
+        Assert.Equal([(0, 20, 10, 100), (1, 20, 10, 250)], frames.Select(frame => (frame.Index, frame.Width, frame.Height, frame.Milliseconds)));
     }
 
     [Fact]
-    public void FromFolder_WhenAColorHasEightDigits_ThenKeepsItsTransparency()
+    public void FromFolder_WhenTheTimingStartsWithAByteOrderMark_ThenStillReadsIt()
     {
         // Arrange
-        File.WriteAllText(Path.Combine(_folder, "palette.txt"), "a 80F5C542\n");
+        File.WriteAllBytes(Path.Combine(_folder, "awake.png"), Png(40, 10));
+        File.WriteAllText(Path.Combine(_folder, "timing.txt"), "awake 100 250\n", new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
         // Act
-        var character = Character.FromFolder(_folder);
+        var frames = Character.FromFolder(_folder).Animations[Mood.Awake];
 
         // Assert
-        Assert.Equal(0x80F5C542u, character.Palette['a']);
+        Assert.Equal(2, frames.Length);
     }
 
     [Fact]
-    public void FromFolder_WhenFramesAreBig_ThenLoadsThemInTheirOwnSize()
+    public void FromFolder_WhenThePngsWidthDoesNotFitTheFrames_ThenSaysWhichFile()
     {
         // Arrange
-        File.WriteAllText(Path.Combine(_folder, "sleep.txt"), "700\n" + string.Join('\n', Enumerable.Repeat(new string('.', 64), 64)));
-
-        // Act
-        var frame = Character.FromFolder(_folder).Animations[Mood.Sleep][0];
-
-        // Assert
-        Assert.Equal((64, 64), (frame.Width, frame.Height));
-    }
-
-    [Fact]
-    public void FromFolder_WhenAFrameDiffersFromTheFirst_ThenSaysWhichFile()
-    {
-        // Arrange
-        File.WriteAllText(Path.Combine(_folder, "sleep.txt"), "700\n....\n....\n\n700\n..\n..\n");
+        File.WriteAllBytes(Path.Combine(_folder, "awake.png"), Png(30, 10));
+        File.WriteAllText(Path.Combine(_folder, "timing.txt"), "awake 100 100 100 100\n");
 
         // Act
         var loading = () => Character.FromFolder(_folder);
 
         // Assert
-        Assert.StartsWith("sleep.txt:", Assert.Throws<InvalidDataException>(loading).Message);
+        Assert.StartsWith("awake.png:", Assert.Throws<InvalidDataException>(loading).Message);
     }
 
-    [Fact]
-    public void FromFolder_WhenRowsDifferInLength_ThenSaysWhichFile()
+    [Theory]
+    [InlineData("sleep 100\n")]
+    [InlineData(null)]
+    public void FromFolder_WhenThePngHasNoTiming_ThenSaysSo(string? timing)
     {
         // Arrange
-        File.WriteAllText(Path.Combine(_folder, "sleep.txt"), "700\n....\n..\n");
+        File.WriteAllBytes(Path.Combine(_folder, "awake.png"), Png(40, 10));
+        if (timing is not null)
+        {
+            File.WriteAllText(Path.Combine(_folder, "timing.txt"), timing);
+        }
 
         // Act
         var loading = () => Character.FromFolder(_folder);
 
         // Assert
-        Assert.StartsWith("sleep.txt:", Assert.Throws<InvalidDataException>(loading).Message);
+        Assert.Contains("timing.txt", Assert.Throws<InvalidDataException>(loading).Message);
     }
 
-    [Fact]
-    public void FromFolder_WhenThePaletteIsBroken_ThenSaysSo()
+    [Theory]
+    [InlineData("awake 100 x\n")]
+    [InlineData("awake\n")]
+    [InlineData("awake 0\n")]
+    public void FromFolder_WhenTheTimingIsBroken_ThenSaysSo(string timing)
     {
         // Arrange
-        File.WriteAllText(Path.Combine(_folder, "palette.txt"), "a blå\n");
+        File.WriteAllText(Path.Combine(_folder, "timing.txt"), timing);
 
         // Act
         var loading = () => Character.FromFolder(_folder);
 
         // Assert
-        Assert.StartsWith("palette.txt:", Assert.Throws<InvalidDataException>(loading).Message);
+        Assert.StartsWith("timing.txt:", Assert.Throws<InvalidDataException>(loading).Message);
+    }
+
+    static byte[] Png(int width, int height)
+    {
+        byte[] header = [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, .. "IHDR"u8, 0, 0, 0, 0, 0, 0, 0, 0];
+        BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(16), width);
+        BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(20), height);
+        return header;
     }
 }

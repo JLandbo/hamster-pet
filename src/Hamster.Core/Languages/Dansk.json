@@ -181,9 +181,9 @@
     "Claude.FolderScope": "mappen {0}",
     "Export.You": "Du",
     "Export.StillAnswering": "(svarer stadig)",
-    "Character.BadPalette": "{0}: hver linje skal være et tegn og en farve, fx \"a E3D3B7\".",
-    "Character.FramesDiffer": "{0}: alle frames skal have samme størrelse som den første ({1}×{2}).",
-    "Character.BadFrame": "{0}: hver frame skal have en varighed i millisekunder og derefter linjer, der alle er lige lange.",
-    "Character.MissingFile": "{0} mangler {1}."
+    "Character.MissingFile": "{0} mangler {1}.",
+    "Character.BadTiming": "{0}: hver linje skal være en animation efterfulgt af varigheder i millisekunder, fx \"awake 250 300\".",
+    "Character.MissingTiming": "{0} mangler varigheder for {1}.",
+    "Character.BadSheet": "{0}: skal være et PNG-billede, hvis bredde går op i de {1} frames fra timing.txt."
   }
 }

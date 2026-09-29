@@ -181,9 +181,9 @@
     "Claude.FolderScope": "the folder {0}",
     "Export.You": "You",
     "Export.StillAnswering": "(still answering)",
-    "Character.BadPalette": "{0}: each line must be a character and a color, e.g. \"a E3D3B7\".",
-    "Character.FramesDiffer": "{0}: all frames must be the same size as the first one ({1}×{2}).",
-    "Character.BadFrame": "{0}: each frame must have a duration in milliseconds followed by lines that are all the same length.",
-    "Character.MissingFile": "{0} is missing {1}."
+    "Character.MissingFile": "{0} is missing {1}.",
+    "Character.BadTiming": "{0}: each line must be an animation followed by durations in milliseconds, e.g. \"awake 250 300\".",
+    "Character.MissingTiming": "{0} is missing durations for {1}.",
+    "Character.BadSheet": "{0}: must be a PNG image whose width divides evenly into the {1} frames in timing.txt."
   }
 }

@@ -302,7 +302,7 @@ public partial class SettingsWindow : Window
         try
         {
             var character = _characters.Load(name);
-            return new(name, character, SpriteRenderer.Render(character.Animations[Mood.Awake][0].Rows, character.Palette), null);
+            return new(name, character, SpriteRenderer.Render([character.Animations[Mood.Awake][0]])[0], null);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
         {

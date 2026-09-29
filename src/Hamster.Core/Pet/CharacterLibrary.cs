@@ -16,7 +16,7 @@ public sealed class CharacterLibrary(string folder)
         Directory.CreateDirectory(target);
         foreach (var file in Character.Files)
         {
-            File.WriteAllText(Path.Combine(target, file), Character.ReadBuiltIn(file));
+            File.WriteAllBytes(Path.Combine(target, file), Character.ReadBuiltIn(file)!);
         }
         return target;
     }
