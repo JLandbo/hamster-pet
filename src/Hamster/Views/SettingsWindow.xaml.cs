@@ -302,7 +302,8 @@ public partial class SettingsWindow : Window
         try
         {
             var character = _characters.Load(name);
-            return new(name, character, SpriteRenderer.Render([character.Animations[Mood.Awake][0]])[0], null);
+            // Decodes every sheet, so a broken one shows here instead of silently falling back to the hamster when chosen.
+            return new(name, character, SpriteRenderer.Render([character.Animations[Mood.Awake][0], .. character.Animations.Values.Select(frames => frames[0])])[0], null);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
         {

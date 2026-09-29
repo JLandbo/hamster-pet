@@ -5,6 +5,8 @@ namespace Hamster.Core.Storage;
 
 public sealed class JsonFile<T>(string path, T empty, bool readOnly = false)
 {
+    const int _attempts = 5;
+    static readonly TimeSpan _retryDelay = TimeSpan.FromMilliseconds(50);
     static readonly JsonSerializerOptions _options = new()
     {
         WriteIndented = true,
@@ -35,6 +37,15 @@ public sealed class JsonFile<T>(string path, T empty, bool readOnly = false)
         {
             return;
         }
+        // Virus scanners and search indexing can lock a file for a moment right after it was written, so replacing it is retried.
+        for (var attempt = 1; !TryWrite(value) && attempt < _attempts; attempt++)
+        {
+            Thread.Sleep(_retryDelay);
+        }
+    }
+
+    bool TryWrite(T value)
+    {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -45,9 +56,11 @@ public sealed class JsonFile<T>(string path, T empty, bool readOnly = false)
                 file.Flush(flushToDisk: true);
             }
             File.Move(temporary, path, overwrite: true);
+            return true;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            return false;
         }
     }
 }

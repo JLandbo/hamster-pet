@@ -182,8 +182,8 @@
     "Export.You": "You",
     "Export.StillAnswering": "(still answering)",
     "Character.MissingFile": "{0} is missing {1}.",
-    "Character.BadTiming": "{0}: each line must be an animation followed by durations in milliseconds, e.g. \"awake 250 300\".",
+    "Character.BadSprite": "{0}: must have width and height in pixels and animations with durations in milliseconds, e.g. \"awake\": [250, 300] or \"awake\": 250.",
     "Character.MissingTiming": "{0} is missing durations for {1}.",
-    "Character.BadSheet": "{0}: must be a PNG image whose width divides evenly into the {1} frames in timing.txt."
+    "Character.BadSheet": "{0}: does not fit frames of {1}×{2} pixels from sprite.json."
   }
 }

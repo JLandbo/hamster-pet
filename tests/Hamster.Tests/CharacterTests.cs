@@ -25,8 +25,7 @@ public sealed class CharacterTests : IDisposable
     public void FromFolder_WhenAnimationsAreMissing_ThenUsesTheHamsters()
     {
         // Arrange
-        File.WriteAllBytes(Path.Combine(_folder, "awake.png"), Png(40, 10));
-        File.WriteAllText(Path.Combine(_folder, "timing.txt"), "awake 100 250\n");
+        WriteAwake(40, 10, """{"width": 20, "height": 10, "animations": {"awake": 100}}""");
 
         // Act
         var character = Character.FromFolder(_folder);
@@ -36,11 +35,10 @@ public sealed class CharacterTests : IDisposable
     }
 
     [Fact]
-    public void FromFolder_WhenAnAnimationIsAPng_ThenSplitsItIntoFramesWithTheirTimings()
+    public void FromFolder_WhenEachFrameHasADuration_ThenSplitsThePngIntoThoseFrames()
     {
         // Arrange
-        File.WriteAllBytes(Path.Combine(_folder, "awake.png"), Png(40, 10));
-        File.WriteAllText(Path.Combine(_folder, "timing.txt"), "awake 100 250\n");
+        WriteAwake(40, 10, """{"width": 20, "height": 10, "animations": {"awake": [100, 250]}}""");
 
         // Act
         var frames = Character.FromFolder(_folder).Animations[Mood.Awake];
@@ -50,11 +48,24 @@ public sealed class CharacterTests : IDisposable
     }
 
     [Fact]
-    public void FromFolder_WhenTheTimingStartsWithAByteOrderMark_ThenStillReadsIt()
+    public void FromFolder_WhenAnAnimationHasOneDuration_ThenEveryFrameInThePngUsesIt()
     {
         // Arrange
-        File.WriteAllBytes(Path.Combine(_folder, "awake.png"), Png(40, 10));
-        File.WriteAllText(Path.Combine(_folder, "timing.txt"), "awake 100 250\n", new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        WriteAwake(60, 10, """{"width": 20, "height": 10, "animations": {"awake": 150}}""");
+
+        // Act
+        var frames = Character.FromFolder(_folder).Animations[Mood.Awake];
+
+        // Assert
+        Assert.Equal([(0, 150), (1, 150), (2, 150)], frames.Select(frame => (frame.Index, frame.Milliseconds)));
+    }
+
+    [Fact]
+    public void FromFolder_WhenTheSpriteStartsWithAByteOrderMark_ThenStillReadsIt()
+    {
+        // Arrange
+        File.WriteAllBytes(Path.Combine(_folder, "awake.png"), PngHeader(40, 10));
+        File.WriteAllText(Path.Combine(_folder, "sprite.json"), """{"width": 20, "height": 10, "animations": {"awake": 100}}""", new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
         // Act
         var frames = Character.FromFolder(_folder).Animations[Mood.Awake];
@@ -63,12 +74,14 @@ public sealed class CharacterTests : IDisposable
         Assert.Equal(2, frames.Length);
     }
 
-    [Fact]
-    public void FromFolder_WhenThePngsWidthDoesNotFitTheFrames_ThenSaysWhichFile()
+    [Theory]
+    [InlineData(30, 10, "[100, 100]")]
+    [InlineData(30, 10, "100")]
+    [InlineData(40, 12, "100")]
+    public void FromFolder_WhenThePngDoesNotFitTheFrames_ThenSaysWhichFile(int width, int height, string awake)
     {
         // Arrange
-        File.WriteAllBytes(Path.Combine(_folder, "awake.png"), Png(30, 10));
-        File.WriteAllText(Path.Combine(_folder, "timing.txt"), "awake 100 100 100 100\n");
+        WriteAwake(width, height, """{"width": 20, "height": 10, "animations": {"awake": AWAKE}}""".Replace("AWAKE", awake));
 
         // Act
         var loading = () => Character.FromFolder(_folder);
@@ -77,42 +90,58 @@ public sealed class CharacterTests : IDisposable
         Assert.StartsWith("awake.png:", Assert.Throws<InvalidDataException>(loading).Message);
     }
 
-    [Theory]
-    [InlineData("sleep 100\n")]
-    [InlineData(null)]
-    public void FromFolder_WhenThePngHasNoTiming_ThenSaysSo(string? timing)
+    [Fact]
+    public void FromFolder_WhenThereIsNoSpriteFile_ThenSaysSo()
     {
         // Arrange
-        File.WriteAllBytes(Path.Combine(_folder, "awake.png"), Png(40, 10));
-        if (timing is not null)
-        {
-            File.WriteAllText(Path.Combine(_folder, "timing.txt"), timing);
-        }
+        File.WriteAllBytes(Path.Combine(_folder, "awake.png"), PngHeader(40, 10));
 
         // Act
         var loading = () => Character.FromFolder(_folder);
 
         // Assert
-        Assert.Contains("timing.txt", Assert.Throws<InvalidDataException>(loading).Message);
+        Assert.Contains("sprite.json", Assert.Throws<InvalidDataException>(loading).Message);
     }
 
-    [Theory]
-    [InlineData("awake 100 x\n")]
-    [InlineData("awake\n")]
-    [InlineData("awake 0\n")]
-    public void FromFolder_WhenTheTimingIsBroken_ThenSaysSo(string timing)
+    [Fact]
+    public void FromFolder_WhenTheSpriteLacksTheAnimation_ThenSaysWhichPng()
     {
         // Arrange
-        File.WriteAllText(Path.Combine(_folder, "timing.txt"), timing);
+        WriteAwake(40, 10, """{"width": 20, "height": 10, "animations": {"sleep": 100}}""");
 
         // Act
         var loading = () => Character.FromFolder(_folder);
 
         // Assert
-        Assert.StartsWith("timing.txt:", Assert.Throws<InvalidDataException>(loading).Message);
+        Assert.Contains("awake.png", Assert.Throws<InvalidDataException>(loading).Message);
     }
 
-    static byte[] Png(int width, int height)
+    [Theory]
+    [InlineData("""{"width": 20""")]
+    [InlineData("""{"width": 0, "height": 10, "animations": {"awake": 100}}""")]
+    [InlineData("""{"width": 20, "height": 10}""")]
+    [InlineData("""{"width": 20, "height": 10, "animations": {"awake": "x"}}""")]
+    [InlineData("""{"width": 20, "height": 10, "animations": {"awake": []}}""")]
+    [InlineData("""{"width": 20, "height": 10, "animations": {"awake": [100, 0]}}""")]
+    public void FromFolder_WhenTheSpriteIsBroken_ThenSaysSo(string sprite)
+    {
+        // Arrange
+        WriteAwake(40, 10, sprite);
+
+        // Act
+        var loading = () => Character.FromFolder(_folder);
+
+        // Assert
+        Assert.StartsWith("sprite.json:", Assert.Throws<InvalidDataException>(loading).Message);
+    }
+
+    void WriteAwake(int width, int height, string sprite)
+    {
+        File.WriteAllBytes(Path.Combine(_folder, "awake.png"), PngHeader(width, height));
+        File.WriteAllText(Path.Combine(_folder, "sprite.json"), sprite);
+    }
+
+    static byte[] PngHeader(int width, int height)
     {
         byte[] header = [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, .. "IHDR"u8, 0, 0, 0, 0, 0, 0, 0, 0];
         BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(16), width);

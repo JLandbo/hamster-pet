@@ -182,8 +182,8 @@
     "Export.You": "Du",
     "Export.StillAnswering": "(svarer stadig)",
     "Character.MissingFile": "{0} mangler {1}.",
-    "Character.BadTiming": "{0}: hver linje skal være en animation efterfulgt af varigheder i millisekunder, fx \"awake 250 300\".",
+    "Character.BadSprite": "{0}: skal have width og height i pixels og animations med varigheder i millisekunder, fx \"awake\": [250, 300] eller \"awake\": 250.",
     "Character.MissingTiming": "{0} mangler varigheder for {1}.",
-    "Character.BadSheet": "{0}: skal være et PNG-billede, hvis bredde går op i de {1} frames fra timing.txt."
+    "Character.BadSheet": "{0}: passer ikke til frames på {1}×{2} pixels fra sprite.json."
   }
 }
