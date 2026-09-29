@@ -146,6 +146,7 @@
                                             <MenuItem x:Name="SaveChatItem" Header="{DynamicResource Main.SaveChat}" Click="SaveChat_Click" />
                                             <MenuItem Header="{DynamicResource Main.OpenClaude}" Click="OpenClaude_Click" />
                                             <MenuItem Header="{DynamicResource Main.Settings}" Click="Settings_Click" />
+                                            <MenuItem Header="{DynamicResource Main.InfoAndLicenses}" Click="InfoAndLicenses_Click" />
                                             <MenuItem x:Name="UsageItem" IsEnabled="False" />
                                         </ContextMenu>
                                     </Button.ContextMenu>

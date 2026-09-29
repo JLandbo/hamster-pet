@@ -89,6 +89,7 @@ public partial class MainWindow : Window
     DateTime _frontAt;
     double? _readingOffset;
     Button? _closedByItsButton;
+    InfoWindow? _infoWindow;
 
     public MainWindow(DataFiles files, ClaudeClient claude, Conversation conversation, Connectors connectors, Subscriptions subscriptions, Feed feed,
         WebSession web, CharacterLibrary characters, PromptLibrary prompts, ThemeLibrary themes, SystemVolume volume)
@@ -304,6 +305,18 @@ public partial class MainWindow : Window
         var window = _settingsWindow = new SettingsWindow(ChooseLanguage, (int)_hideTime.TotalSeconds, ChooseHideSeconds, (int)_lastResponseTime.TotalSeconds, ChooseLastResponseSeconds, MarkdownConverter.ShowWebImages, ChooseWebImages, _claude.Settings.EnablePartialMessages, ChoosePartialMessages, _themes, _petFile.Load().ThemeName, ChooseTheme, _characters, _character.Name, ChooseCharacter, _connectors, _subscriptions, _web) { Topmost = KeepOnTopItem.IsChecked };
         RememberSize(window, _settingsSize);
         window.Closed += (_, _) => _ = CheckConnectorsAsync();
+        window.Show();
+    }
+
+    void InfoAndLicenses_Click(object sender, RoutedEventArgs e)
+    {
+        if (_infoWindow is { IsVisible: true })
+        {
+            _infoWindow.Close();
+            return;
+        }
+        var window = _infoWindow = new InfoWindow { Topmost = KeepOnTopItem.IsChecked };
+        window.Closed += (_, _) => _infoWindow = null;
         window.Show();
     }
 
@@ -556,6 +569,7 @@ public partial class MainWindow : Window
         _conversation.Save();
         _settingsWindow?.Close();
         _feedWindow?.Close();
+        _infoWindow?.Close();
         _petWindow.Close();
         _claude.End();
     }
@@ -690,7 +704,7 @@ public partial class MainWindow : Window
         _newsSeenAt = now;
         Pet.ReleaseMouseCapture();
         Activate();
-        foreach (var window in new Window?[] { _settingsWindow, _feedWindow }.OfType<Window>().Where(window => window.IsVisible))
+        foreach (var window in new Window?[] { _settingsWindow, _feedWindow, _infoWindow }.OfType<Window>().Where(window => window.IsVisible))
         {
             BringToFront(window);
         }
@@ -1141,7 +1155,7 @@ public partial class MainWindow : Window
     void KeepOnTop_Click(object sender, RoutedEventArgs e)
     {
         _petFile.Save(_petFile.Load() with { KeepWindowsOnTop = KeepOnTopItem.IsChecked });
-        foreach (var window in new Window?[] { this, _settingsWindow, _feedWindow }.OfType<Window>().Where(window => window.IsVisible))
+        foreach (var window in new Window?[] { this, _settingsWindow, _feedWindow, _infoWindow }.OfType<Window>().Where(window => window.IsVisible))
         {
             window.Topmost = KeepOnTopItem.IsChecked;
         }

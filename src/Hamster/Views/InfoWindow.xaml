@@ -1,0 +1,55 @@
+<Window x:Class="Hamster.Views.InfoWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{DynamicResource Info.Title}" Width="500" Height="420" MinWidth="420" MinHeight="300"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="CanResize"
+        ShowInTaskbar="False" WindowStartupLocation="CenterScreen" UseLayoutRounding="True"
+        FontFamily="{StaticResource UiFont}" FontSize="13">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" GlassFrameThickness="0" ResizeBorderThickness="16" UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <Style x:Key="LicenseItem" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Text}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+    </Window.Resources>
+
+    <Border Margin="12" Padding="20,16,20,20" CornerRadius="16" Background="{DynamicResource Surface}"
+            BorderBrush="{DynamicResource Edge}" BorderThickness="1" Effect="{StaticResource Shadow}">
+        <DockPanel>
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,16" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="{DynamicResource Common.Close}" Click="Close_Click" IsCancel="True" Style="{StaticResource SmallIconButton}" FontSize="12" VerticalAlignment="Center" />
+                <TextBlock Text="{DynamicResource Info.Title}" Foreground="{DynamicResource Text}" FontSize="18" FontWeight="SemiBold" />
+            </DockPanel>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                <StackPanel>
+                    <TextBlock Text="{DynamicResource Info.Description}" Foreground="{DynamicResource Text}" TextWrapping="Wrap" Margin="0,0,0,18" />
+                    <TextBlock Text="{DynamicResource Info.Licenses}" Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,8" />
+                    <Border Padding="12,10" CornerRadius="10" Background="{DynamicResource Card}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource LicenseItem}">
+                                <Run Text="Markdig 1.4.0 — " /><Hyperlink NavigateUri="https://github.com/xoofx/markdig/blob/main/license.txt" RequestNavigate="Link_RequestNavigate">BSD-2-Clause</Hyperlink>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource LicenseItem}">
+                                <Run Text="Microsoft.Extensions.DependencyInjection and Abstractions 10.0.12 — " /><Hyperlink NavigateUri="https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/LICENSE.TXT" RequestNavigate="Link_RequestNavigate">MIT</Hyperlink>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource LicenseItem}">
+                                <Run Text="Microsoft WebView2 1.0.4191.47 — " /><Hyperlink NavigateUri="https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.4191.47/License" RequestNavigate="Link_RequestNavigate">License</Hyperlink>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource LicenseItem}" Margin="0">
+                                <Run Text=".NET 10 and WPF — " /><Hyperlink NavigateUri="https://dotnet.microsoft.com/en-us/dotnet_library_license.htm" RequestNavigate="Link_RequestNavigate">License</Hyperlink><Run Text=" · " /><Hyperlink NavigateUri="https://github.com/dotnet/runtime/blob/main/THIRD-PARTY-NOTICES.TXT" RequestNavigate="Link_RequestNavigate">Third-party notices</Hyperlink>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource LicenseItem}" Margin="0,10,0,0">
+                                <Run Text="Microsoft Windows SDK for .NET 10.0.19041.57 — " /><Hyperlink NavigateUri="https://aka.ms/WinSDKLicenseURL" RequestNavigate="Link_RequestNavigate">License</Hyperlink>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+    </Border>
+</Window>
