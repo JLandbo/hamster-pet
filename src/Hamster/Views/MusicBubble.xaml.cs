@@ -9,10 +9,10 @@ namespace Hamster.Views;
 
 public partial class MusicBubble : UserControl
 {
-    const string _playIcon = "";
-    const string _pauseIcon = "";
-    const string _volumeIcon = "";
-    const string _mutedIcon = "";
+    const string _playIcon = "\uE768";
+    const string _pauseIcon = "\uE769";
+    const string _volumeIcon = "\uE767";
+    const string _mutedIcon = "\uE74F";
 
     MusicPlayer? _music;
     SystemVolume? _volume;
@@ -74,7 +74,10 @@ public partial class MusicBubble : UserControl
 
     void Mute_Click(object sender, RoutedEventArgs e)
     {
-        _volume?.SetMuted(!_muted);
+        if (_volume?.Read() is var (_, muted))
+        {
+            _volume.SetMuted(!muted);
+        }
         ReadVolume();
     }
 }

@@ -308,15 +308,47 @@ public sealed class ConnectorsTests : IDisposable
     public async Task ProblemsAsync_WhenTheProblemChanges_ThenItIsAnotherProblem()
     {
         // Arrange
-        var claude = new StatusClaude(Status(("hamster-github", "needs-auth", "https://api.githubcopilot.com/mcp/", null, false)),
-            Status(("hamster-github", "failed", "https://api.githubcopilot.com/mcp/", "401", false)));
-        var connectors = new Connectors(claude, () => { }, () => false);
+        var needsLogin = new StatusClaude(Status(("hamster-github", "needs-auth", "https://api.githubcopilot.com/mcp/", null, false)));
+        var failed = new StatusClaude(Status(("hamster-github", "failed", "https://api.githubcopilot.com/mcp/", "401", false)));
 
         // Act
-        var (first, second) = (await connectors.ProblemsAsync(TimeSpan.Zero), await connectors.ProblemsAsync(TimeSpan.Zero));
+        var (first, second) = (await new Connectors(needsLogin, () => { }, () => false).ProblemsAsync(TimeSpan.Zero), await new Connectors(failed, () => { }, () => false).ProblemsAsync(TimeSpan.Zero));
 
         // Assert
         Assert.NotEqual(Assert.Single(first), Assert.Single(second));
+    }
+
+    [Fact]
+    public async Task ProblemsAsync_WhenAConnectorHasLoggedInSinceItLostItsLogin_ThenReconnectsItAndReportsNoProblem()
+    {
+        // Arrange
+        var claude = new StatusClaude(
+            Status(("hamster-github", "needs-auth", "https://api.githubcopilot.com/mcp/", null, false)),
+            Status(("hamster-github", "connected", "https://api.githubcopilot.com/mcp/", null, false)));
+
+        // Act
+        var problems = await new Connectors(claude, () => { }, () => false).ProblemsAsync(TimeSpan.Zero);
+
+        // Assert
+        Assert.Empty(problems);
+        Assert.Equal(["hamster-github"], claude.Sent.Where(request => (string?)request["subtype"] == "mcp_reconnect").Select(request => (string?)request["serverName"]));
+    }
+
+    [Fact]
+    public async Task ReconnectAsync_WhenTheConnectorWasTriedBefore_ThenLeavesIt()
+    {
+        // Arrange
+        var claude = new StatusClaude();
+        var connectors = new Connectors(claude, () => { }, () => false);
+        McpServer[] servers = [new("hamster-github", "needs-auth", "https://api.githubcopilot.com/mcp/", null)];
+        HashSet<string> reconnected = [];
+        await connectors.ReconnectAsync(servers, reconnected);
+
+        // Act
+        await connectors.ReconnectAsync(servers, reconnected);
+
+        // Assert
+        Assert.Single(claude.Sent);
     }
 
     [Fact]
@@ -464,7 +496,7 @@ public sealed class ConnectorsTests : IDisposable
         public Task<JsonObject?> RequestAsync(JsonObject request)
         {
             Sent.Add(request);
-            return Task.FromResult<JsonObject?>(statuses[Math.Min(Requests++, statuses.Length - 1)]);
+            return Task.FromResult((string?)request["subtype"] == "mcp_status" ? statuses[Math.Min(Requests++, statuses.Length - 1)] : null);
         }
 
         public void Interrupt()

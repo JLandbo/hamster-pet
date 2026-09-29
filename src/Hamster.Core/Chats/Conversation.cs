@@ -225,6 +225,7 @@ public sealed class Conversation : IClaudeListener
         {
             _partialChat = _turn = Add(new ChatItem(BackgroundPrompt));
             _partialChat.StartPartialAnswer();
+            Changed?.Invoke();
         }
         if (_partialChat is not null && Chats.Contains(_partialChat))
         {

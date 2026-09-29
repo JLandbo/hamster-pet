@@ -588,6 +588,22 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
+    public async Task PartialMessageReceived_WhenClaudeStartsATurnByItself_ThenTellsTheWindowAboutTheNewChat()
+    {
+        // Arrange
+        await _conversation.SendAsync("hej");
+        _claude.Listener.TurnStarted(null);
+        var changed = false;
+        _conversation.Changed += () => changed = true;
+
+        // Act
+        _claude.Listener.PartialMessageReceived("Opgaven er ");
+
+        // Assert
+        Assert.Equal((Conversation.BackgroundPrompt, true), (_conversation.Chats[^1].Prompt, changed));
+    }
+
+    [Fact]
     public async Task ToolStarted_WhenABackgroundTurnHasEnded_ThenAddsNoChat()
     {
         // Arrange

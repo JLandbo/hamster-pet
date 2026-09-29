@@ -135,10 +135,15 @@ public sealed class Connectors(IClaudeClient claude, Action restart, Func<bool> 
         {
             return [];
         }
+        HashSet<string> reconnected = [];
         for (var check = 1; ; check++)
         {
             var servers = await ServersAsync();
             await EnableAsync(servers);
+            if (await ReconnectAsync(servers, reconnected))
+            {
+                servers = await ServersAsync();
+            }
             var problems = All.Where(connector => SourceOf(connector) != ConnectorSource.Off)
                 .Select(connector => (Problem: connector.ProblemIn(servers, UsesClaudeAi(connector)), Missing: UsesClaudeAi(connector) && connector.FindIn(servers, claudeAi: true) is null))
                 .Where(found => found.Problem is not null).ToArray();
@@ -150,10 +155,30 @@ public sealed class Connectors(IClaudeClient claude, Action restart, Func<bool> 
         }
     }
 
+    // Claude keeps a connector that lost its login in that state until asked to reconnect, so a login made since is only picked up this way.
+    public async Task<bool> ReconnectAsync(IReadOnlyList<McpServer> servers, HashSet<string> reconnected)
+    {
+        McpServer[] broken = [.. UsedServers(servers).Where(server => server.Status is "needs-auth" or "failed" && !reconnected.Contains(server.Name))];
+        foreach (var server in broken)
+        {
+            reconnected.Add(server.Name);
+            try
+            {
+                await claude.RequestAsync(ClaudeProtocol.McpReconnect(server.Name));
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+        return broken.Length > 0;
+    }
+
+    IEnumerable<McpServer> UsedServers(IReadOnlyList<McpServer> servers) => All.Where(connector => SourceOf(connector) != ConnectorSource.Off)
+        .Select(connector => connector.FindIn(servers, UsesClaudeAi(connector))).OfType<McpServer>();
+
     public async Task EnableAsync(IReadOnlyList<McpServer> servers)
     {
-        foreach (var server in All.Where(connector => SourceOf(connector) != ConnectorSource.Off)
-            .Select(connector => connector.FindIn(servers, UsesClaudeAi(connector))).OfType<McpServer>().Where(server => server.Status == "disabled"))
+        foreach (var server in UsedServers(servers).Where(server => server.Status == "disabled"))
         {
             await claude.RequestAsync(ClaudeProtocol.McpToggle(server.Name, true));
         }

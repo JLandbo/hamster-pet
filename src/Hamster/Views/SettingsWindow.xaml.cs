@@ -60,6 +60,7 @@ public partial class SettingsWindow : Window
     readonly Subscriptions _subscriptions;
     readonly ObservableCollection<CharacterChoice> _tiles = [];
     readonly ConnectorRow[] _rows;
+    readonly HashSet<string> _reconnected = [];
     string _chosenCharacter;
     string? _chosenTheme;
     bool _partialMessagesAwaitingRestart;
@@ -222,6 +223,8 @@ public partial class SettingsWindow : Window
 
     async void Window_Activated(object sender, EventArgs e)
     {
+        // Coming back to the window, e.g. from logging in in the browser, is when a connector that lost its login is worth trying again.
+        _reconnected.Clear();
         ShowPartialMessagesRestart();
         ShowThemes();
         await ShowCharactersAsync();
@@ -359,6 +362,10 @@ public partial class SettingsWindow : Window
         {
             var servers = await _connectors.ServersAsync();
             await _connectors.EnableAsync(servers);
+            if (await _connectors.ReconnectAsync(servers, _reconnected))
+            {
+                servers = await _connectors.ServersAsync();
+            }
             foreach (var row in _rows)
             {
                 row.Show(servers, _connectors.RestartPending);

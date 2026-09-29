@@ -166,6 +166,8 @@ public static class ClaudeProtocol
 
     public static JsonObject McpToggle(string serverName, bool enabled) => new() { ["subtype"] = "mcp_toggle", ["serverName"] = serverName, ["enabled"] = enabled };
 
+    public static JsonObject McpReconnect(string serverName) => new() { ["subtype"] = "mcp_reconnect", ["serverName"] = serverName };
+
     public static IReadOnlyList<McpServer> McpServers(JsonObject? status) => status?["mcpServers"] is JsonArray servers
             ? [.. servers.OfType<JsonObject>().Where(server => (string?)server["name"] is not null).Select(server => new McpServer(
                 (string)server["name"]!,

@@ -37,15 +37,6 @@ public sealed class JsonFile<T>(string path, T empty, bool readOnly = false)
         {
             return;
         }
-        // Virus scanners and search indexing can lock a file for a moment right after it was written, so replacing it is retried.
-        for (var attempt = 1; !TryWrite(value) && attempt < _attempts; attempt++)
-        {
-            Thread.Sleep(_retryDelay);
-        }
-    }
-
-    bool TryWrite(T value)
-    {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -55,6 +46,21 @@ public sealed class JsonFile<T>(string path, T empty, bool readOnly = false)
                 JsonSerializer.Serialize(file, value, _options);
                 file.Flush(flushToDisk: true);
             }
+            // Virus scanners and search indexing can lock a file for a moment right after it was written, so replacing it is retried.
+            for (var attempt = 1; !TryReplace(temporary) && attempt < _attempts; attempt++)
+            {
+                Thread.Sleep(_retryDelay);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    bool TryReplace(string temporary)
+    {
+        try
+        {
             File.Move(temporary, path, overwrite: true);
             return true;
         }

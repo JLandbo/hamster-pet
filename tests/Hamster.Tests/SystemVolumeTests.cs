@@ -8,7 +8,7 @@ public sealed class SystemVolumeTests
     public void Read_WhenThereIsASpeaker_ThenGivesALevelBetweenZeroAndOne()
     {
         // Act
-        var (level, _) = _volume.Read()!.Value;
+        var (level, _) = Current();
 
         // Assert
         Assert.InRange(level, 0, 1);
@@ -18,25 +18,32 @@ public sealed class SystemVolumeTests
     public void SetLevel_WhenSetToTheCurrentLevel_ThenKeepsIt()
     {
         // Arrange
-        var (level, _) = _volume.Read()!.Value;
+        var (level, _) = Current();
 
         // Act
         _volume.SetLevel(level);
 
         // Assert
-        Assert.Equal(level, _volume.Read()!.Value.Level, 3);
+        Assert.Equal(level, Current().Level, 3);
     }
 
     [Fact]
     public void SetMuted_WhenSetToTheCurrentState_ThenKeepsIt()
     {
         // Arrange
-        var (_, muted) = _volume.Read()!.Value;
+        var (_, muted) = Current();
 
         // Act
         _volume.SetMuted(muted);
 
         // Assert
-        Assert.Equal(muted, _volume.Read()!.Value.Muted);
+        Assert.Equal(muted, Current().Muted);
+    }
+
+    (double Level, bool Muted) Current()
+    {
+        var current = _volume.Read();
+        Assert.SkipWhen(current is null, "Maskinen har ingen lydenhed.");
+        return current.GetValueOrDefault();
     }
 }
