@@ -14,6 +14,7 @@ public sealed class ClaudeSessionTests
     const string _started = """{"type":"command_lifecycle","command_uuid":"id-1","state":"started"}""";
     const string _partialStarted = """{"type":"stream_event","user_message_uuid":"id-1","event":{"type":"message_start"}}""";
     const string _partialText = """{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hej"}}}""";
+    const string _assistantText = """{"type":"assistant","message":{"content":[{"type":"text","text":"Hej med dig"}]}}""";
     const string _tasks = """{"type":"system","subtype":"background_tasks_changed","tasks":[]}""";
     const string _status = """{"type":"system","subtype":"status","status":null,"permissionMode":"plan"}""";
     const string _result = """{"type":"result","subtype":"success","is_error":false,"result":"Svar","session_id":"session-1","user_message_uuids":["id-1"]}""";
@@ -102,6 +103,19 @@ public sealed class ClaudeSessionTests
         // Assert
         Assert.Equal(["id-1"], listener.PartialStarts);
         Assert.Equal(["Hej"], listener.PartialTexts);
+    }
+
+    [Fact]
+    public async Task ReadAsync_WhenAssistantTextCompletes_ThenForwardsTheCompleteText()
+    {
+        // Arrange
+        var listener = new FakeListener();
+
+        // Act
+        await new ClaudeSession(Output(_assistantText), new StringWriter(), listener).ReadAsync();
+
+        // Assert
+        Assert.Equal(["Hej med dig"], listener.AssistantTexts);
     }
 
     [Fact]

@@ -8,6 +8,7 @@ sealed class FakeListener(PermissionAnswer? answer = PermissionAnswer.Allow) : I
     public List<string?> Turns { get; } = [];
     public List<string?> PartialStarts { get; } = [];
     public List<string> PartialTexts { get; } = [];
+    public List<string> AssistantTexts { get; } = [];
     public List<ToolUse> Started { get; } = [];
     public List<ToolResult> Finished { get; } = [];
     public List<Usage> Usages { get; } = [];
@@ -22,6 +23,8 @@ sealed class FakeListener(PermissionAnswer? answer = PermissionAnswer.Allow) : I
     public void PartialMessageStarted(string? messageId) => PartialStarts.Add(messageId);
 
     public void PartialMessageReceived(string text) => PartialTexts.Add(text);
+
+    public void AssistantTextReceived(string text) => AssistantTexts.Add(text);
 
     public void ToolStarted(ToolUse tool)
     {

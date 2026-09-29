@@ -6,7 +6,10 @@ namespace Hamster.Core.Chats;
 
 public enum ChatStatus { Busy, Done, Error }
 
-public sealed record ChatRecord(string Prompt, string Answer, ChatStatus Status, string? Title = null, IReadOnlyList<string>? Commands = null, IReadOnlyList<string>? Sources = null);
+public sealed record ChatPrompt(string Text, string? Title = null);
+
+public sealed record ChatRecord(string Prompt, string Answer, ChatStatus Status, string? Title = null, IReadOnlyList<string>? Commands = null, IReadOnlyList<string>? Sources = null,
+    IReadOnlyList<ChatPrompt>? AdditionalPrompts = null);
 
 public sealed record SavedChats(string? SessionId, IReadOnlyList<ChatRecord> Chats, decimal Cost = 0, Usage? Usage = null)
 {

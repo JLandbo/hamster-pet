@@ -200,6 +200,10 @@ public sealed partial class ClaudeFetcher(string workspace)
         {
         }
 
+        public void AssistantTextReceived(string text)
+        {
+        }
+
         public void UsageReported(Usage usage)
         {
         }

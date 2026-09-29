@@ -60,7 +60,47 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
-    public async Task PartialMessageStarted_WhenQueuedPromptIdDiffersFromTheActiveTurn_ThenUsesTheActiveChat()
+    public async Task AssistantTextReceived_WhenClaudeWritesAroundAToolCall_ThenKeepsBothMessagesWithoutDuplicatingTheResult()
+    {
+        // Arrange
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
+        var chat = Assert.Single(_conversation.Chats);
+
+        // Act
+        _claude.Listener.PartialMessageStarted(_claude.Ids[0]);
+        _claude.Listener.PartialMessageReceived("Jeg undersøger det.");
+        _claude.Listener.AssistantTextReceived("Jeg undersøger det.");
+        _claude.Listener.PartialMessageStarted(_claude.Ids[0]);
+        _claude.Listener.PartialMessageReceived("Her er svaret.");
+        _claude.Listener.AssistantTextReceived("Her er svaret.");
+        _claude.Listener.ResultReceived(_answered with { Text = "Her er svaret.", Answers = [_claude.Ids[0]] });
+
+        // Assert
+        Assert.Equal(("Jeg undersøger det.\n\nHer er svaret.", ChatStatus.Done), (chat.Answer, chat.Status));
+    }
+
+    [Fact]
+    public async Task AssistantTextReceived_WhenPartialMessagesAreDisabled_ThenKeepsTheAnswerHiddenUntilTheTurnFinishes()
+    {
+        // Arrange
+        _claude.Settings = _claude.Settings with { EnablePartialMessages = false };
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
+        var chat = Assert.Single(_conversation.Chats);
+
+        // Act
+        _claude.Listener.AssistantTextReceived("Hele svaret");
+        var whileBusy = chat.DisplayAnswer;
+        _claude.Listener.ResultReceived(_answered with { Text = "Hele svaret", Answers = [_claude.Ids[0]] });
+
+        // Assert
+        Assert.Matches(@"^Tygger… \d+ s$", whileBusy);
+        Assert.Equal(("Hele svaret", "Hele svaret", ChatStatus.Done), (chat.Answer, chat.DisplayAnswer, chat.Status));
+    }
+
+    [Fact]
+    public async Task PartialMessageStarted_WhenFollowUpWasSent_ThenUsesTheSharedChat()
     {
         // Arrange
         _claude.Reply = Silent;
@@ -71,14 +111,97 @@ public sealed class ConversationTests : IDisposable
         // Act
         _claude.Listener.PartialMessageStarted(_claude.Ids[1]);
         _claude.Listener.PartialMessageReceived("Kladde til første");
-        foreach (var chat in _conversation.Chats)
+        foreach (var item in _conversation.Chats)
         {
-            chat.RefreshDisplayAnswer();
+            item.RefreshDisplayAnswer();
         }
 
         // Assert
-        Assert.Equal("Kladde til første", _conversation.Chats[0].DisplayAnswer);
-        Assert.Matches(@"^Tygger… \d+ s$", _conversation.Chats[1].DisplayAnswer);
+        var chat = Assert.Single(_conversation.Chats);
+        Assert.Equal((2, "første\n\nanden", "Kladde til første"), (chat.Prompts.Count, chat.DisplayPrompt, chat.DisplayAnswer));
+    }
+
+    [Fact]
+    public async Task ResultReceived_WhenFollowUpNeedsAnotherTurn_ThenKeepsTheChatBusyAndAppendsBothAnswers()
+    {
+        // Arrange
+        _claude.Reply = Silent;
+        await _conversation.SendAsync("første");
+        await _conversation.SendAsync("anden");
+        var chat = Assert.Single(_conversation.Chats);
+
+        // Act
+        _claude.Listener.TurnStarted(_claude.Ids[0]);
+        _claude.Listener.PartialMessageStarted(_claude.Ids[0]);
+        _claude.Listener.PartialMessageReceived("Første svar");
+        _claude.Listener.AssistantTextReceived("Første svar");
+        _claude.Listener.ResultReceived(_answered with { Text = "Første svar", Answers = [_claude.Ids[0]] });
+        var afterFirst = (chat.Answer, chat.Status, _conversation.IsBusy);
+        _claude.Listener.TurnStarted(_claude.Ids[1]);
+        _claude.Listener.PartialMessageStarted(_claude.Ids[1]);
+        _claude.Listener.PartialMessageReceived("Andet svar");
+        _claude.Listener.AssistantTextReceived("Andet svar");
+        _claude.Listener.ResultReceived(_answered with { Text = "Andet svar", Answers = [_claude.Ids[1]] });
+
+        // Assert
+        Assert.Equal(("Første svar", ChatStatus.Busy, true), afterFirst);
+        Assert.Equal(("Første svar\n\nAndet svar", ChatStatus.Done, false), (chat.Answer, chat.Status, _conversation.IsBusy));
+    }
+
+    [Fact]
+    public async Task ResultReceived_WhenFollowUpStillWaits_ThenSavesOnlyTheCompletedPromptAndAnswer()
+    {
+        // Arrange
+        _claude.Reply = Silent;
+        await _conversation.SendAsync("første");
+        await _conversation.SendAsync("anden");
+        _claude.Listener.TurnStarted(_claude.Ids[0]);
+
+        // Act
+        _claude.Listener.ResultReceived(_answered with { Text = "Første svar", Answers = [_claude.Ids[0]] });
+        var restarted = new Conversation(new FakeClaude(), Store());
+
+        // Assert
+        var saved = Assert.Single(restarted.Chats);
+        Assert.Equal(["første"], saved.Prompts.Select(prompt => prompt.Text));
+        Assert.Equal(("Første svar", ChatStatus.Done), (saved.Answer, saved.Status));
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenFollowUpCannotBeSent_ThenKeepsTheRunningChatAndShowsASeparateError()
+    {
+        // Arrange
+        _claude.Reply = Started;
+        await _conversation.SendAsync("første");
+        _claude.Reply = (_, _) => throw new IOException("pipe brudt");
+
+        // Act
+        await _conversation.SendAsync("anden");
+
+        // Assert
+        Assert.Equal(2, _conversation.Chats.Count);
+        Assert.Equal(("første", ChatStatus.Busy), (_conversation.Chats[0].DisplayPrompt, _conversation.Chats[0].Status));
+        Assert.Equal(("anden", ChatStatus.Error), (_conversation.Chats[1].DisplayPrompt, _conversation.Chats[1].Status));
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenTheFirstSendFailsAfterAFollowUpWasSent_ThenWithdrawsTheFollowUp()
+    {
+        // Arrange
+        var firstSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _claude.Reply = Silent;
+        _claude.Sending = _ => _claude.Ids.Count == 1 ? firstSend.Task : Task.CompletedTask;
+
+        // Act
+        var sendingFirst = _conversation.SendAsync("første");
+        await _conversation.SendAsync("anden");
+        firstSend.SetException(new IOException("pipe brudt"));
+        await sendingFirst;
+
+        // Assert
+        var chat = Assert.Single(_conversation.Chats);
+        Assert.Equal([_claude.Ids[1]], _claude.Withdrawn);
+        Assert.Equal((2, ChatStatus.Error, false), (chat.Prompts.Count, chat.Status, _conversation.IsBusy));
     }
 
     [Fact]
@@ -403,6 +526,24 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
+    public async Task Constructor_WhenACompletedChatHadFollowUps_ThenRestoresThemInTheSameChat()
+    {
+        // Arrange
+        _claude.Reply = Started;
+        await _conversation.SendAsync("første");
+        await _conversation.SendAsync("anden");
+        _claude.Listener.ResultReceived(_answered with { Answers = [.. _claude.Ids] });
+
+        // Act
+        var restarted = new Conversation(new FakeClaude(), Store());
+
+        // Assert
+        var chat = Assert.Single(restarted.Chats);
+        Assert.Equal(["første", "anden"], chat.Prompts.Select(prompt => prompt.Text));
+        Assert.Equal(("første\n\nanden", "Svar"), (chat.DisplayPrompt, chat.Answer));
+    }
+
+    [Fact]
     public async Task AskPermissionAsync_WhenAsked_ThenWaitsForUser()
     {
         // Act
@@ -619,7 +760,7 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
-    public async Task ResultReceived_WhenMessagesWereAnsweredTogether_ThenTheFirstGetsTheAnswer()
+    public async Task ResultReceived_WhenMessagesWereAnsweredTogether_ThenOneChatContainsBothPromptsAndTheAnswer()
     {
         // Arrange
         _claude.Reply = Started;
@@ -630,7 +771,9 @@ public sealed class ConversationTests : IDisposable
         _claude.Listener.ResultReceived(_answered with { Answers = [.. _claude.Ids] });
 
         // Assert
-        Assert.Equal(["Svar", Conversation.AnsweredAbove], _conversation.Chats.Select(chat => chat.Answer));
+        var chat = Assert.Single(_conversation.Chats);
+        Assert.Equal(["første", "anden"], chat.Prompts.Select(prompt => prompt.Text));
+        Assert.Equal(("Svar", ChatStatus.Done), (chat.Answer, chat.Status));
         Assert.False(_conversation.IsBusy);
     }
 
@@ -867,7 +1010,7 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
-    public async Task Delete_WhenChatWaitsForItsTurn_ThenWithdrawsItFromClaude()
+    public async Task Delete_WhenRunningChatHasAFollowUp_ThenInterruptsTheTurnAndWithdrawsTheFollowUp()
     {
         // Arrange
         _claude.Reply = Started;
@@ -875,11 +1018,11 @@ public sealed class ConversationTests : IDisposable
         await _conversation.SendAsync("anden");
 
         // Act
-        _conversation.Delete(_conversation.Chats[1]);
+        _conversation.Delete(Assert.Single(_conversation.Chats));
 
         // Assert
         Assert.Equal([_claude.Ids[1]], _claude.Withdrawn);
-        Assert.Equal(0, _claude.Interrupts);
+        Assert.Equal((1, 0), (_claude.Interrupts, _conversation.Chats.Count));
     }
 
     [Fact]
@@ -996,6 +1139,24 @@ public sealed class ConversationTests : IDisposable
         // Assert
         var chat = Assert.Single(_conversation.Chats);
         Assert.Equal((1, "Afbrudt.", ChatStatus.Error, 0.2m), (_claude.Interrupts, chat.Answer, chat.Status, _conversation.Cost));
+    }
+
+    [Fact]
+    public async Task Cancel_WhenRunningChatHasAFollowUp_ThenWithdrawsTheFollowUpAndFinishesOnce()
+    {
+        // Arrange
+        _claude.Reply = Started;
+        await _conversation.SendAsync("første");
+        await _conversation.SendAsync("anden");
+
+        // Act
+        _conversation.Cancel();
+        _claude.Listener.ResultReceived(_stopped with { Answers = [_claude.Ids[0]] });
+
+        // Assert
+        var chat = Assert.Single(_conversation.Chats);
+        Assert.Equal([_claude.Ids[1]], _claude.Withdrawn);
+        Assert.Equal((2, "Afbrudt.", ChatStatus.Error, false), (chat.Prompts.Count, chat.Answer, chat.Status, _conversation.IsBusy));
     }
 
     [Fact]
@@ -1237,7 +1398,7 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
-    public async Task Exited_WhenMessagesWait_ThenTheRunningChatIsTheOneShown()
+    public async Task Exited_WhenFollowUpWaits_ThenTheSharedChatShowsTheFailure()
     {
         // Arrange
         _claude.Reply = Started;
@@ -1248,7 +1409,8 @@ public sealed class ConversationTests : IDisposable
         _claude.Listener.Exited("claude stoppede uventet");
 
         // Assert
-        Assert.Equal((true, false), (_conversation.IsCurrent(_conversation.Chats[0], showLastResponse: true, DateTime.MinValue), _conversation.IsCurrent(_conversation.Chats[1], showLastResponse: true, DateTime.MinValue)));
+        var chat = Assert.Single(_conversation.Chats);
+        Assert.Equal((2, ChatStatus.Error, true), (chat.Prompts.Count, chat.Status, _conversation.IsCurrent(chat, showLastResponse: true, DateTime.MinValue)));
     }
 
     [Fact]
@@ -1522,6 +1684,7 @@ public sealed class ConversationTests : IDisposable
         public bool IsRunning { get; set; }
         public IClaudeListener Listener { get; private set; } = null!;
         public Task Launched { get; set; } = Task.CompletedTask;
+        public Func<string, Task>? Sending { get; set; }
         public ClaudeSettings Settings { get; set; } = ClaudeSettings.Default;
 
         public Task StartAsync(string? sessionId, IClaudeListener listener)
@@ -1537,7 +1700,7 @@ public sealed class ConversationTests : IDisposable
             Prompts.Add(prompt);
             Images.AddRange(images);
             Reply(Listener, id);
-            return Task.CompletedTask;
+            return Sending?.Invoke(id) ?? Task.CompletedTask;
         }
 
         public Task<JsonObject?> RequestAsync(JsonObject request) => Task.FromResult<JsonObject?>(null);

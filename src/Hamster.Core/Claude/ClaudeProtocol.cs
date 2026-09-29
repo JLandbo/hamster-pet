@@ -38,6 +38,8 @@ public sealed record PartialMessageStarted(string? MessageId) : ClaudeEvent;
 
 public sealed record PartialMessageText(string Text) : ClaudeEvent;
 
+public sealed record AssistantText(string Text) : ClaudeEvent;
+
 public sealed record ModeChanged(string Mode) : ClaudeEvent;
 
 public sealed record BackgroundTasksChanged(int Count) : ClaudeEvent;
@@ -110,8 +112,7 @@ public static class ClaudeProtocol
 
         return (string?)message["type"] switch
         {
-            "assistant" => ContentBlocks(message, "tool_use").Select(block =>
-                new ToolUse((string)block["id"]!, (string)block["name"]!, Detail(block["input"]), (string?)message["parent_tool_use_id"], block["input"]?.ToJsonString())),
+            "assistant" => AssistantEvents(message),
             "user" => ContentBlocks(message, "tool_result").Select(block => new ToolResult((string)block["tool_use_id"]!, ContentText(block["content"]), (bool?)block["is_error"] == true)),
             "command_lifecycle" when (string?)message["state"] == "started" => [new TurnStarted((string?)message["command_uuid"])],
             "stream_event" when IsMainMessage(message) && (string?)message["event"]?["type"] == "message_start" => [new PartialMessageStarted((string?)message["user_message_uuid"])],
@@ -220,6 +221,21 @@ public static class ClaudeProtocol
     static IEnumerable<JsonNode> ContentBlocks(JsonNode message, string type) => message["message"]?["content"] is JsonArray content
             ? content.OfType<JsonNode>().Where(block => (string?)block["type"] == type)
             : [];
+
+    static IEnumerable<ClaudeEvent> AssistantEvents(JsonNode message)
+    {
+        if (message["message"]?["content"] is not JsonArray content)
+        {
+            return [];
+        }
+        var parent = (string?)message["parent_tool_use_id"];
+        return content.OfType<JsonNode>().SelectMany<JsonNode, ClaudeEvent>(block => (string?)block["type"] switch
+        {
+            "text" when parent is null && (string?)block["text"] is { Length: > 0 } text => [new AssistantText(text)],
+            "tool_use" => [new ToolUse((string)block["id"]!, (string)block["name"]!, Detail(block["input"]), parent, block["input"]?.ToJsonString())],
+            _ => [],
+        });
+    }
 
     static string Detail(JsonNode? input) => _detailFields.Select(field => input is JsonObject fields && fields[field] is JsonValue value && value.TryGetValue(out string? text) ? text : null)
             .FirstOrDefault(text => text is not null) ?? "";

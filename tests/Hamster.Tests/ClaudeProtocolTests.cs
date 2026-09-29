@@ -34,7 +34,7 @@ public sealed class ClaudeProtocolTests
     }
 
     [Fact]
-    public void Parse_WhenAssistantUsesTool_ThenReturnsToolUse()
+    public void Parse_WhenAssistantWritesAndUsesTool_ThenReturnsBothInOrder()
     {
         // Arrange
         const string line = """{"type":"assistant","message":{"content":[{"type":"text","text":"Jeg søger."},{"type":"tool_use","id":"toolu_1","name":"WebSearch","input":{}}]}}""";
@@ -43,7 +43,20 @@ public sealed class ClaudeProtocolTests
         var events = ClaudeProtocol.Parse(line);
 
         // Assert
-        Assert.Equal([new ToolUse("toolu_1", "WebSearch", Input: "{}")], events);
+        Assert.Equal([new AssistantText("Jeg søger."), new ToolUse("toolu_1", "WebSearch", Input: "{}")], events);
+    }
+
+    [Fact]
+    public void Parse_WhenSubagentWrites_ThenDoesNotReturnItsText()
+    {
+        // Arrange
+        const string line = """{"type":"assistant","parent_tool_use_id":"toolu_agent","message":{"content":[{"type":"text","text":"Internt svar"}]}}""";
+
+        // Act
+        var events = ClaudeProtocol.Parse(line);
+
+        // Assert
+        Assert.Empty(events);
     }
 
     [Theory]

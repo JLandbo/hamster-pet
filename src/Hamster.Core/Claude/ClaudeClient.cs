@@ -13,6 +13,7 @@ public interface IClaudeListener
     void TurnStarted(string? messageId);
     void PartialMessageStarted(string? messageId);
     void PartialMessageReceived(string text);
+    void AssistantTextReceived(string text);
     void ToolStarted(ToolUse tool);
     void ToolFinished(ToolResult result);
     Task<PermissionAnswer> AskPermissionAsync(PermissionRequest request, CancellationToken cancellationToken);

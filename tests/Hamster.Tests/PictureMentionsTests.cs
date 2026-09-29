@@ -230,6 +230,40 @@ public sealed class PictureMentionsTests : IDisposable
         Assert.IsType<BitmapImage>(Assert.Single(Documents.Images(document)).Source);
     });
 
+    [Fact]
+    public void Convert_WhenChatIsBusy_ThenUsesPartialMarkdownWithoutLoadingImages() => UiThread.Run(() =>
+    {
+        // Arrange
+        var converter = new ChatMarkdownConverter();
+        var partial = Filled("**Delvist** ![graf](<{dir/}/graf.png>)");
+        var answer = Filled("Færdigt ![graf](<{dir/}/graf.png>)");
+
+        // Act
+        var document = (FlowDocument)converter.Convert([partial, answer, ChatStatus.Busy], typeof(FlowDocument), null!, null!);
+
+        // Assert
+        Assert.Empty(Documents.Images(document));
+        Assert.Contains("Delvist graf", new TextRange(document.ContentStart, document.ContentEnd).Text);
+        Assert.DoesNotContain("Færdigt", new TextRange(document.ContentStart, document.ContentEnd).Text);
+    });
+
+    [Theory]
+    [InlineData(ChatStatus.Done)]
+    [InlineData(ChatStatus.Error)]
+    public void Convert_WhenChatIsFinished_ThenUsesTheFinalAnswerAndLoadsImages(ChatStatus status) => UiThread.Run(() =>
+    {
+        // Arrange
+        var converter = new ChatMarkdownConverter();
+        var answer = Filled("Færdigt ![graf](<{dir/}/graf.png>)");
+
+        // Act
+        var document = Documents.Loaded((FlowDocument)converter.Convert(["Delvist", answer, status], typeof(FlowDocument), null!, null!));
+
+        // Assert
+        Assert.Contains("Færdigt", new TextRange(document.ContentStart, document.ContentEnd).Text);
+        Assert.IsType<BitmapImage>(Assert.Single(Documents.Images(document)).Source);
+    });
+
     FlowDocument Rendered(string answer) => Documents.Loaded(MarkdownConverter.Render(Filled(answer), PictureMentions.In));
 
     string Filled(string text)

@@ -92,7 +92,67 @@ public sealed class ChatItemTests
 
         // Assert
         Assert.Equal("Jeg undersøger det.", beforeNewText);
-        Assert.Equal("Her er svaret.", chat.DisplayAnswer);
+        Assert.Equal("Jeg undersøger det.\n\nHer er svaret.", chat.DisplayAnswer);
+    }
+
+    [Fact]
+    public void CompletePartialAnswer_WhenTheCompleteBlockArrives_ThenReplacesItsPreviewWithoutDuplication()
+    {
+        // Arrange
+        var chat = new ChatItem("hej");
+        chat.StartPartialAnswer();
+        chat.AppendPartialAnswer("Delvist svar");
+
+        // Act
+        chat.CompletePartialAnswer("Det komplette svar", showWhileBusy: true);
+        chat.RefreshDisplayAnswer();
+
+        // Assert
+        Assert.Equal(("Det komplette svar", "Det komplette svar"), (chat.Answer, chat.DisplayAnswer));
+    }
+
+    [Fact]
+    public void CompleteResult_WhenItMatchesTheLastCompleteBlock_ThenDoesNotDuplicateIt()
+    {
+        // Arrange
+        var chat = new ChatItem("hej");
+        chat.CompletePartialAnswer("Svar", showWhileBusy: true);
+
+        // Act
+        chat.CompleteResult("Svar");
+        chat.Status = ChatStatus.Done;
+
+        // Assert
+        Assert.Equal("Svar", chat.Answer);
+    }
+
+    [Fact]
+    public void CompletePartialAnswer_WhenLiveTextIsDisabled_ThenHidesItUntilDone()
+    {
+        // Arrange
+        var chat = new ChatItem("hej");
+
+        // Act
+        chat.CompletePartialAnswer("Svar", showWhileBusy: false);
+        var busy = chat.DisplayAnswer;
+        chat.Status = ChatStatus.Done;
+
+        // Assert
+        Assert.Matches(@"^Tygger… \d+ s$", busy);
+        Assert.Equal("Svar", chat.DisplayAnswer);
+    }
+
+    [Fact]
+    public void AddPrompt_WhenAFollowUpIsAdded_ThenShowsBothInTheSameChat()
+    {
+        // Arrange
+        var chat = new ChatItem("første");
+
+        // Act
+        chat.AddPrompt("anden", title: null);
+
+        // Assert
+        Assert.Equal((2, "første\n\nanden"), (chat.Prompts.Count, chat.DisplayPrompt));
     }
 
     [Theory]

@@ -112,6 +112,9 @@ public sealed class ClaudeSession(Task<(TextReader Output, TextWriter Input)> st
             case PartialMessageText partial:
                 listener.PartialMessageReceived(partial.Text);
                 break;
+            case AssistantText assistant:
+                listener.AssistantTextReceived(assistant.Text);
+                break;
             case ToolUse tool:
                 listener.ToolStarted(tool);
                 break;

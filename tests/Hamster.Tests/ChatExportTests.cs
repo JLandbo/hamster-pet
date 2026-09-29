@@ -27,4 +27,17 @@ public sealed class ChatExportTests
         // Assert
         Assert.Equal("## Du\n\nskriv et digt\n\n## Claude\n\n(svarer stadig)\n", markdown);
     }
+
+    [Fact]
+    public void ToMarkdown_WhenAChatHasFollowUps_ThenWritesThemBeforeTheAnswer()
+    {
+        // Arrange
+        ChatRecord[] chats = [new("første", "samlet svar", ChatStatus.Done, AdditionalPrompts: [new("anden"), new("tredje")])];
+
+        // Act
+        var markdown = ChatExport.ToMarkdown(chats);
+
+        // Assert
+        Assert.Equal("## Du\n\nførste\n\nanden\n\ntredje\n\n## Claude\n\nsamlet svar\n", markdown);
+    }
 }
