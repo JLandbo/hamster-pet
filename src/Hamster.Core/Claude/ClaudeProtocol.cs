@@ -23,8 +23,7 @@ public sealed record PermissionRequest(string RequestId, string ToolName, JsonOb
 
     public string? AlwaysScope => Suggestions is { Count: > 0 } suggestions ? string.Join(", ", suggestions.OfType<JsonObject>().SelectMany(Scope)) : null;
 
-    static IEnumerable<string> Scope(JsonObject suggestion) =>
-        suggestion["rules"] is JsonArray rules
+    static IEnumerable<string> Scope(JsonObject suggestion) => suggestion["rules"] is JsonArray rules
             ? rules.OfType<JsonObject>().Select(rule => (string?)rule["ruleContent"] is { } content ? $"{(string?)rule["toolName"]}({content})" : (string?)rule["toolName"] ?? "")
             : suggestion["directories"] is JsonArray directories
                 ? directories.Select(directory => Strings.Format("Claude.FolderScope", (string?)directory))
@@ -62,10 +61,12 @@ public sealed record Usage(double FiveHour, double SevenDay, DateTimeOffset? Fiv
 
 public static class ClaudeProtocol
 {
-    public const string PetInstructions = "Appen viser selv de kilder, du har søgt i og hentet. Skriv derfor ikke en kilde- eller kildeliste-sektion i svaret. Nævn ikke MCP-servere eller connectors, der mangler godkendelse, medmindre brugeren beder om noget, der kræver dem. Når brugeren beder om en påmindelse, så brug CronCreate med en prompt, der beder dig om kun at skrive påmindelsen til brugeren, når den affyres. Chatten vises i en app, der kan vise billeder: når du har gemt eller fundet et billede, som brugeren skal se, så skriv den fulde sti til filen i backticks, så vises billedet i svaret.";
+    public const string PetInstructions = "Appen viser selv de kilder, du har søgt i og hentet. Skriv derfor ikke en kilde- eller kildeliste-sektion i svaret. "
+        + "Nævn ikke MCP-servere eller connectors, der mangler godkendelse, medmindre brugeren beder om noget, der kræver dem. "
+        + "Når brugeren beder om en påmindelse, så brug CronCreate med en prompt, der beder dig om kun at skrive påmindelsen til brugeren, når den affyres. "
+        + "Chatten vises i en app, der kan vise billeder: når du har gemt eller fundet et billede, som brugeren skal se, så skriv den fulde sti til filen i backticks, så vises billedet i svaret.";
 
-    public static string[] Arguments(string? sessionId, ClaudeSettings settings, string instructions = "") =>
-    [
+    public static string[] Arguments(string? sessionId, ClaudeSettings settings, string instructions = "") => [
         "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
         "--permission-prompt-tool", "stdio", "--permission-mode", settings.PermissionMode,
         "--setting-sources", "user",
@@ -73,7 +74,8 @@ public static class ClaudeProtocol
         "--model", settings.Model, "--effort", settings.Effort,
         .. (sessionId is null ? Array.Empty<string>() : ["--resume", sessionId]),
         "--append-system-prompt", string.IsNullOrWhiteSpace(instructions) ? PetInstructions : $"{PetInstructions}\n\n{instructions}",
-        "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,ToolSearch,EnterPlanMode,ExitPlanMode,Workflow,TaskStop,ListAgents,CronList,CronCreate,CronDelete,ReportFindings,Skill",
+        "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,ToolSearch,EnterPlanMode,ExitPlanMode,"
+            + "Workflow,TaskStop,ListAgents,CronList,CronCreate,CronDelete,ReportFindings,Skill",
     ];
 
     static string SettingsJson(ClaudeSettings settings) => new JsonObject
@@ -83,7 +85,7 @@ public static class ClaudeProtocol
         ["deniedMcpServers"] = Connectors.DeniedServers(settings),
     }.ToJsonString();
 
-    static readonly string[] DetailFields = ["file_path", "notebook_path", "command", "url", "query", "pattern", "skill", "description"];
+    static readonly string[] _detailFields = ["file_path", "notebook_path", "command", "url", "query", "pattern", "skill", "description"];
 
     public static IEnumerable<ClaudeEvent> Parse(string line)
     {
@@ -97,7 +99,9 @@ public static class ClaudeProtocol
             return [];
         }
         if (message is not JsonObject)
+        {
             return [];
+        }
 
         return (string?)message["type"] switch
         {
@@ -132,8 +136,7 @@ public static class ClaudeProtocol
         ["session_id"] = "",
     }.ToJsonString();
 
-    static JsonNode Content(string prompt, IReadOnlyList<ImageAttachment> images) =>
-        images.Count == 0
+    static JsonNode Content(string prompt, IReadOnlyList<ImageAttachment> images) => images.Count == 0
             ? JsonValue.Create(prompt)
             : new JsonArray(
             [
@@ -155,8 +158,7 @@ public static class ClaudeProtocol
 
     public static JsonObject McpToggle(string serverName, bool enabled) => new() { ["subtype"] = "mcp_toggle", ["serverName"] = serverName, ["enabled"] = enabled };
 
-    public static IReadOnlyList<McpServer> McpServers(JsonObject? status) =>
-        status?["mcpServers"] is JsonArray servers
+    public static IReadOnlyList<McpServer> McpServers(JsonObject? status) => status?["mcpServers"] is JsonArray servers
             ? [.. servers.OfType<JsonObject>().Where(server => (string?)server["name"] is not null).Select(server => new McpServer(
                 (string)server["name"]!,
                 (string?)server["status"] ?? "",
@@ -175,7 +177,9 @@ public static class ClaudeProtocol
     {
         var body = new JsonObject { ["behavior"] = "allow", ["updatedInput"] = request.Input.DeepClone() };
         if (always && request.Suggestions is { } suggestions)
+        {
             body["updatedPermissions"] = new JsonArray([.. suggestions.OfType<JsonObject>().Select(ForThisSession)]);
+        }
         return Response(request.RequestId, body);
     }
 
@@ -186,8 +190,7 @@ public static class ClaudeProtocol
         return copy;
     }
 
-    public static string Deny(PermissionRequest request) =>
-        Response(request.RequestId, new JsonObject { ["behavior"] = "deny", ["message"] = "Brugeren afviste." });
+    public static string Deny(PermissionRequest request) => Response(request.RequestId, new JsonObject { ["behavior"] = "deny", ["message"] = "Brugeren afviste." });
 
     public static string Control(JsonObject request, string id) => new JsonObject
     {
@@ -204,13 +207,11 @@ public static class ClaudeProtocol
         ["response"] = new JsonObject { ["subtype"] = "success", ["request_id"] = requestId, ["response"] = body },
     }.ToJsonString();
 
-    static IEnumerable<JsonNode> ContentBlocks(JsonNode message, string type) =>
-        message["message"]?["content"] is JsonArray content
+    static IEnumerable<JsonNode> ContentBlocks(JsonNode message, string type) => message["message"]?["content"] is JsonArray content
             ? content.OfType<JsonNode>().Where(block => (string?)block["type"] == type)
             : [];
 
-    static string Detail(JsonNode? input) =>
-        DetailFields.Select(field => input is JsonObject fields && fields[field] is JsonValue value && value.TryGetValue(out string? text) ? text : null)
+    static string Detail(JsonNode? input) => _detailFields.Select(field => input is JsonObject fields && fields[field] is JsonValue value && value.TryGetValue(out string? text) ? text : null)
             .FirstOrDefault(text => text is not null) ?? "";
 
     static string ContentText(JsonNode? content) => content switch
@@ -220,19 +221,16 @@ public static class ClaudeProtocol
         _ => "",
     };
 
-    static string ResultText(JsonNode message) =>
-        (string?)message["result"]
+    static string ResultText(JsonNode message) => (string?)message["result"]
         ?? (message["errors"] is JsonArray { Count: > 0 } errors ? string.Join('\n', errors.Select(error => (string?)error)) : null)
         ?? (string?)message["subtype"]
         ?? "";
 
-    static IReadOnlyList<string>? Answers(JsonNode message) =>
-        message["user_message_uuids"] is JsonArray ids ? [.. ids.Select(id => (string)id!)]
+    static IReadOnlyList<string>? Answers(JsonNode message) => message["user_message_uuids"] is JsonArray ids ? [.. ids.Select(id => (string)id!)]
         : (string?)message["user_message_uuid"] is { } id ? [id]
         : null;
 
-    static IEnumerable<ClaudeEvent> UsageOf(JsonNode? windows) =>
-        (double?)windows?["five_hour"]?["utilization"] is { } fiveHour && (double?)windows?["seven_day"]?["utilization"] is { } sevenDay
+    static IEnumerable<ClaudeEvent> UsageOf(JsonNode? windows) => (double?)windows?["five_hour"]?["utilization"] is { } fiveHour && (double?)windows?["seven_day"]?["utilization"] is { } sevenDay
             ? [new Usage(fiveHour, sevenDay, ResetOf(windows["five_hour"]), ResetOf(windows["seven_day"]))]
             : [];
 

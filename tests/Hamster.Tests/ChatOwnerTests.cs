@@ -2,17 +2,17 @@ namespace Hamster.Tests;
 
 public sealed class ChatOwnerTests
 {
-    readonly string file = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
+    readonly string _file = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
 
     [Fact]
     public void TryOwn_WhenAnotherHamsterOwnsThePlace_ThenFails()
     {
         // Arrange
         using var owner = new ChatOwner();
-        owner.TryOwn(file);
+        owner.TryOwn(_file);
 
         // Act
-        var owned = OwnOnAnotherThread(file);
+        var owned = OwnOnAnotherThread(_file);
 
         // Assert
         Assert.False(owned);
@@ -23,11 +23,11 @@ public sealed class ChatOwnerTests
     {
         // Arrange
         using var owner = new ChatOwner();
-        owner.TryOwn(file);
-        owner.TryOwn($"{file}.andet");
+        owner.TryOwn(_file);
+        owner.TryOwn($"{_file}.andet");
 
         // Act
-        var owned = OwnOnAnotherThread(file);
+        var owned = OwnOnAnotherThread(_file);
 
         // Assert
         Assert.True(owned);
@@ -37,13 +37,13 @@ public sealed class ChatOwnerTests
     public void TryOwn_WhenTheOwnerDiedWithoutLeaving_ThenSucceeds()
     {
         // Arrange
-        var thread = new Thread(() => new ChatOwner().TryOwn(file));
+        var thread = new Thread(() => new ChatOwner().TryOwn(_file));
         thread.Start();
         thread.Join();
 
         // Act
         using var owner = new ChatOwner();
-        var owned = owner.TryOwn(file);
+        var owned = owner.TryOwn(_file);
 
         // Assert
         Assert.True(owned);
@@ -54,40 +54,40 @@ public sealed class ChatOwnerTests
     {
         // Arrange
         using var owner = new ChatOwner();
-        owner.TryOwn(file);
-        using var other = new HeldPlace($"{file}.andet");
+        owner.TryOwn(_file);
+        using var other = new HeldPlace($"{_file}.andet");
 
         // Act
-        var ownedNew = owner.TryOwn($"{file}.andet");
+        var ownedNew = owner.TryOwn($"{_file}.andet");
 
         // Assert
-        Assert.Equal((false, true), (ownedNew, OwnOnAnotherThread(file)));
+        Assert.Equal((false, true), (ownedNew, OwnOnAnotherThread(_file)));
     }
 
     sealed class HeldPlace : IDisposable
     {
-        readonly ManualResetEventSlim leave = new();
-        readonly Thread thread;
+        readonly ManualResetEventSlim _leave = new();
+        readonly Thread _thread;
 
         public HeldPlace(string file)
         {
             using var held = new ManualResetEventSlim();
-            thread = new Thread(() =>
+            _thread = new Thread(() =>
             {
                 using var owner = new ChatOwner();
                 owner.TryOwn(file);
                 held.Set();
-                leave.Wait();
+                _leave.Wait();
             });
-            thread.Start();
+            _thread.Start();
             held.Wait();
         }
 
         public void Dispose()
         {
-            leave.Set();
-            thread.Join();
-            leave.Dispose();
+            _leave.Set();
+            _thread.Join();
+            _leave.Dispose();
         }
     }
 

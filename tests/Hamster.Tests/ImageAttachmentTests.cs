@@ -2,15 +2,15 @@ namespace Hamster.Tests;
 
 public sealed class ImageAttachmentTests : IDisposable
 {
-    readonly string directory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString())).FullName;
+    readonly string _directory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString())).FullName;
 
-    public void Dispose() => Directory.Delete(directory, recursive: true);
+    public void Dispose() => Directory.Delete(_directory, recursive: true);
 
     [Fact]
     public void FromFile_WhenImage_ThenReadsItWithMediaType()
     {
         // Arrange
-        var path = Path.Combine(directory, "Skærm.JPG");
+        var path = Path.Combine(_directory, "Skærm.JPG");
         File.WriteAllBytes(path, [1, 2, 3]);
 
         // Act
@@ -25,7 +25,7 @@ public sealed class ImageAttachmentTests : IDisposable
     public void FromFile_WhenNotAnImage_ThenNull()
     {
         // Arrange
-        var path = Path.Combine(directory, "noter.txt");
+        var path = Path.Combine(_directory, "noter.txt");
         File.WriteAllText(path, "hej");
 
         // Act

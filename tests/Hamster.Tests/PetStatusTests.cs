@@ -1,6 +1,6 @@
 namespace Hamster.Tests;
 
-public class PetStatusTests
+public sealed class PetStatusTests
 {
     public static TheoryData<PetStatus, Mood> Cases()
     {

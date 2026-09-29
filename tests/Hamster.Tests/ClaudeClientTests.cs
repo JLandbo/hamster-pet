@@ -7,19 +7,23 @@ namespace Hamster.Tests;
 
 public sealed class ClaudeClientTests : IDisposable
 {
-    readonly string settingsFile = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
-    readonly string workspace = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}");
+    readonly string _settingsFile = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
+    readonly string _workspace = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}");
 
     static CancellationToken Token => TestContext.Current.CancellationToken;
 
-    JsonFile<ClaudeSettings> Store() => new(settingsFile, ClaudeSettings.Default);
+    JsonFile<ClaudeSettings> Store() => new(_settingsFile, ClaudeSettings.Default);
+
+    ClaudeClient NewClient() => new(_workspace, "instructions.txt", Store());
+
+    static ClaudeSession NewSession(TextWriter input) => new(new StringReader(""), input, new FakeListener());
 
     public void Dispose()
     {
-        File.Delete(settingsFile);
-        if (Directory.Exists(workspace))
+        File.Delete(_settingsFile);
+        if (Directory.Exists(_workspace))
         {
-            Directory.Delete(workspace);
+            Directory.Delete(_workspace);
         }
     }
 
@@ -28,11 +32,11 @@ public sealed class ClaudeClientTests : IDisposable
     {
         // Arrange
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
-        var client = new ClaudeClient(workspace, "findes-ikke.txt", Store());
-        client.Settings = client.Settings with { WorkingDirectory = Path.Combine(workspace, "findes-ikke") };
+        var client = new ClaudeClient(_workspace, "findes-ikke.txt", Store());
+        client.Settings = client.Settings with { WorkingDirectory = Path.Combine(_workspace, "findes-ikke") };
 
         // Act
-        var starting = client.StartAsync(null, new ClaudeSessionTests.FakeListener());
+        var starting = client.StartAsync(null, new FakeListener());
         var runningAtOnce = client.IsRunning;
         UiThread.Until(() => starting.IsCompleted && !client.IsRunning);
 
@@ -45,9 +49,9 @@ public sealed class ClaudeClientTests : IDisposable
     {
         // Arrange
         var streams = new TaskCompletionSource<(TextReader, TextWriter)>();
-        var input = new ClaudeSessionTests.LineWriter();
-        var client = new ClaudeClient("workspace", "instructions.txt", Store());
-        client.Attach(new ClaudeSession(streams.Task, new ClaudeSessionTests.FakeListener()));
+        var input = new LineWriter();
+        var client = NewClient();
+        client.Attach(new ClaudeSession(streams.Task, new FakeListener()));
 
         // Act
         _ = client.SendAsync("id-1", "hej", []);
@@ -66,9 +70,9 @@ public sealed class ClaudeClientTests : IDisposable
     {
         // Arrange
         var streams = new TaskCompletionSource<(TextReader, TextWriter)>();
-        var input = new ClaudeSessionTests.LineWriter();
-        var client = new ClaudeClient("workspace", "instructions.txt", Store());
-        client.Attach(new ClaudeSession(streams.Task, new ClaudeSessionTests.FakeListener()));
+        var input = new LineWriter();
+        var client = NewClient();
+        client.Attach(new ClaudeSession(streams.Task, new FakeListener()));
         _ = client.SendAsync("id-1", "hej", []);
 
         // Act
@@ -83,9 +87,9 @@ public sealed class ClaudeClientTests : IDisposable
     public async Task End_WhenAnEarlierMessageIsStillBeingWritten_ThenReturnsAtOnceAndEndsAfterIt()
     {
         // Arrange
-        var client = new ClaudeClient("workspace", "instructions.txt", Store());
-        using var input = new ClaudeSessionTests.LineWriter(blocked: true);
-        var session = new ClaudeSession(new StringReader(""), input, new ClaudeSessionTests.FakeListener());
+        var client = NewClient();
+        using var input = new LineWriter(blocked: true);
+        var session = NewSession(input);
         client.Attach(session);
         _ = session.SendAsync("stor besked");
 
@@ -103,9 +107,9 @@ public sealed class ClaudeClientTests : IDisposable
     public async Task Interrupt_WhenAPromptIsStillBeingWritten_ThenReturnsAtOnce()
     {
         // Arrange
-        var client = new ClaudeClient("workspace", "instructions.txt", Store());
-        using var input = new ClaudeSessionTests.LineWriter(blocked: true);
-        client.Attach(new ClaudeSession(new StringReader(""), input, new ClaudeSessionTests.FakeListener()));
+        var client = NewClient();
+        using var input = new LineWriter(blocked: true);
+        client.Attach(NewSession(input));
         _ = client.SendAsync("id-1", "hej", []);
 
         // Act
@@ -121,9 +125,9 @@ public sealed class ClaudeClientTests : IDisposable
     public async Task Choose_WhenAPromptIsStillBeingWritten_ThenReturnsAtOnce()
     {
         // Arrange
-        var client = new ClaudeClient("workspace", "instructions.txt", Store());
-        using var input = new ClaudeSessionTests.LineWriter(blocked: true);
-        client.Attach(new ClaudeSession(new StringReader(""), input, new ClaudeSessionTests.FakeListener()));
+        var client = NewClient();
+        using var input = new LineWriter(blocked: true);
+        client.Attach(NewSession(input));
         _ = client.SendAsync("id-1", "hej", []);
 
         // Act
@@ -139,7 +143,7 @@ public sealed class ClaudeClientTests : IDisposable
     public void Settings_WhenNothingSaved_ThenOpus55WithXhighInManualMode()
     {
         // Act
-        var client = new ClaudeClient("workspace", "instructions.txt", Store());
+        var client = NewClient();
 
         // Assert
         Assert.Equal(new ClaudeSettings("claude-opus-5-5", "xhigh", "default"), client.Settings);
@@ -149,10 +153,10 @@ public sealed class ClaudeClientTests : IDisposable
     public void Settings_WhenChanged_ThenTheNextStartUsesThem()
     {
         // Arrange
-        new ClaudeClient("workspace", "instructions.txt", Store()).Settings = new("claude-sonnet-5", "low", "plan", @"C:\projekt");
+        NewClient().Settings = new("claude-sonnet-5", "low", "plan", @"C:\projekt");
 
         // Act
-        var restarted = new ClaudeClient("workspace", "instructions.txt", Store());
+        var restarted = NewClient();
 
         // Assert
         Assert.Equal(new ClaudeSettings("claude-sonnet-5", "low", "plan", @"C:\projekt"), restarted.Settings);
@@ -162,22 +166,22 @@ public sealed class ClaudeClientTests : IDisposable
     public void Choose_WhenClaudeIsNotRunning_ThenTheNextStartUsesTheChoice()
     {
         // Arrange
-        var client = new ClaudeClient("workspace", "instructions.txt", Store());
+        var client = NewClient();
 
         // Act
         client.Choose(client.Settings with { Effort = "low" }, ClaudeProtocol.SetEffort("low"));
 
         // Assert
-        Assert.Equal("low", new ClaudeClient("workspace", "instructions.txt", Store()).Settings.Effort);
+        Assert.Equal("low", NewClient().Settings.Effort);
     }
 
     [Fact]
     public async Task Choose_WhenClaudeRunsWithTheSameEffort_ThenStillSendsIt()
     {
         // Arrange
-        var client = new ClaudeClient("workspace", "instructions.txt", Store());
-        var input = new ClaudeSessionTests.LineWriter();
-        client.Attach(new ClaudeSession(new StringReader(""), input, new ClaudeSessionTests.FakeListener()));
+        var client = NewClient();
+        var input = new LineWriter();
+        client.Attach(NewSession(input));
 
         // Act
         client.Choose(client.Settings, ClaudeProtocol.SetEffort(client.Settings.Effort));
@@ -190,9 +194,9 @@ public sealed class ClaudeClientTests : IDisposable
     public async Task Settings_WhenClaudeRuns_ThenSendsNothing()
     {
         // Arrange
-        var client = new ClaudeClient("workspace", "instructions.txt", Store());
-        var input = new ClaudeSessionTests.LineWriter();
-        var session = new ClaudeSession(new StringReader(""), input, new ClaudeSessionTests.FakeListener());
+        var client = NewClient();
+        var input = new LineWriter();
+        var session = NewSession(input);
         client.Attach(session);
 
         // Act
@@ -207,9 +211,9 @@ public sealed class ClaudeClientTests : IDisposable
     public async Task Withdraw_WhenAPromptIsStillBeingWritten_ThenReturnsAtOnceAndKeepsTheOrder()
     {
         // Arrange
-        var client = new ClaudeClient("workspace", "instructions.txt", Store());
-        using var input = new ClaudeSessionTests.LineWriter(blocked: true);
-        client.Attach(new ClaudeSession(new StringReader(""), input, new ClaudeSessionTests.FakeListener()));
+        var client = NewClient();
+        using var input = new LineWriter(blocked: true);
+        client.Attach(NewSession(input));
         _ = client.SendAsync("id-1", "hej", []);
 
         // Act
@@ -226,7 +230,7 @@ public sealed class ClaudeClientTests : IDisposable
     public async Task SendAsync_WhenNotStarted_ThenFailsWithInvalidOperation()
     {
         // Arrange
-        var client = new ClaudeClient("workspace", "instructions.txt", Store());
+        var client = NewClient();
 
         // Act
         var sending = () => client.SendAsync("id-1", "hej", []);
@@ -239,7 +243,7 @@ public sealed class ClaudeClientTests : IDisposable
     public async Task RequestAsync_WhenNotStarted_ThenFailsWithInvalidOperation()
     {
         // Arrange
-        var client = new ClaudeClient("workspace", "instructions.txt", Store());
+        var client = NewClient();
 
         // Act
         var asking = () => client.RequestAsync(new JsonObject { ["subtype"] = "mcp_status" });

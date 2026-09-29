@@ -4,30 +4,37 @@ namespace Hamster.Tests;
 
 public sealed class ConversationTests : IDisposable
 {
-    readonly string directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-    readonly FakeClaude claude = new();
-    readonly Conversation conversation;
+    readonly string _directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+    readonly FakeClaude _claude = new();
+    readonly Conversation _conversation;
+    static readonly ClaudeResult _answered = new("session-1", "Svar", IsError: false);
+    static readonly ClaudeResult _stopped = new("session-1", "error_during_execution", IsError: true, Cost: 0.2m);
+    static readonly ClaudeResult _cannotResume = new("session-1", "No conversation found", IsError: true);
 
-    public ConversationTests() => conversation = new Conversation(claude, Store());
+    public ConversationTests() => _conversation = new Conversation(_claude, Store());
 
-    JsonFile<SavedChats> Store() => new(Path.Combine(directory, "chats.json"), SavedChats.Empty);
+    JsonFile<SavedChats> Store() => new(Path.Combine(_directory, "chats.json"), SavedChats.Empty);
+
+    JsonFile<SavedChats> Folder() => new(Path.Combine(_directory, "folder.json"), SavedChats.Empty);
 
     static CancellationToken Token => TestContext.Current.CancellationToken;
 
     public void Dispose()
     {
-        if (Directory.Exists(directory))
-            Directory.Delete(directory, recursive: true);
+        if (Directory.Exists(_directory))
+        {
+            Directory.Delete(_directory, recursive: true);
+        }
     }
 
     [Fact]
     public async Task SendAsync_WhenClaudeAnswers_ThenChatIsDone()
     {
         // Act
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Assert
-        var chat = Assert.Single(conversation.Chats);
+        var chat = Assert.Single(_conversation.Chats);
         Assert.Equal(("Svar", ChatStatus.Done), (chat.Answer, chat.Status));
     }
 
@@ -35,11 +42,11 @@ public sealed class ConversationTests : IDisposable
     public async Task SendAsync_WhenATitleIsGiven_ThenTheChatShowsItButClaudeGetsThePrompt()
     {
         // Act
-        await conversation.SendAsync("Giv mig et overblik over mine sager.", title: "Dagens overblik");
+        await _conversation.SendAsync("Giv mig et overblik over mine sager.", title: "Dagens overblik");
 
         // Assert
-        var chat = conversation.Chats.Single();
-        Assert.Equal(("Dagens overblik", "Giv mig et overblik over mine sager.", "Giv mig et overblik over mine sager."), (chat.DisplayPrompt, chat.Prompt, claude.Prompts.Single()));
+        var chat = _conversation.Chats.Single();
+        Assert.Equal(("Dagens overblik", "Giv mig et overblik over mine sager.", "Giv mig et overblik over mine sager."), (chat.DisplayPrompt, chat.Prompt, _claude.Prompts.Single()));
     }
 
     [Fact]
@@ -47,17 +54,17 @@ public sealed class ConversationTests : IDisposable
     {
         // Arrange
         var started = new TaskCompletionSource();
-        claude.Launched = started.Task;
+        _claude.Launched = started.Task;
 
         // Act
-        var first = conversation.SendAsync("første");
-        var second = conversation.SendAsync("anden");
+        var first = _conversation.SendAsync("første");
+        var second = _conversation.SendAsync("anden");
         started.SetResult();
         await first;
         await second;
 
         // Assert
-        Assert.Equal(["første", "anden"], claude.Prompts);
+        Assert.Equal(["første", "anden"], _claude.Prompts);
     }
 
     [Fact]
@@ -65,125 +72,125 @@ public sealed class ConversationTests : IDisposable
     {
         // Arrange
         var started = new TaskCompletionSource();
-        (claude.Launched, claude.Reply) = (started.Task, Silent);
-        var sending = conversation.SendAsync("hej");
+        (_claude.Launched, _claude.Reply) = (started.Task, Silent);
+        var sending = _conversation.SendAsync("hej");
 
         // Act
-        conversation.Cancel();
+        _conversation.Cancel();
         started.SetResult();
         await sending;
 
         // Assert
-        Assert.Equal((claude.Ids.Single(), "Afbrudt."), (claude.Withdrawn.Single(), conversation.Chats.Single().Answer));
+        Assert.Equal((_claude.Ids.Single(), "Afbrudt."), (_claude.Withdrawn.Single(), _conversation.Chats.Single().Answer));
     }
 
     [Fact]
     public async Task Cancel_WhenNoTurnHasStarted_ThenWithdrawsTheMessage()
     {
         // Arrange
-        claude.Reply = Silent;
-        await conversation.SendAsync("hej");
+        _claude.Reply = Silent;
+        await _conversation.SendAsync("hej");
 
         // Act
-        conversation.Cancel();
+        _conversation.Cancel();
 
         // Assert
-        Assert.Equal((claude.Ids[0], "Afbrudt.", false), (claude.Withdrawn.Single(), conversation.Chats.Single().Answer, conversation.IsBusy));
+        Assert.Equal((_claude.Ids[0], "Afbrudt.", false), (_claude.Withdrawn.Single(), _conversation.Chats.Single().Answer, _conversation.IsBusy));
     }
 
     [Fact]
     public async Task SendAsync_WhenCalledTwice_ThenBothGoToTheSameClaude()
     {
         // Act
-        await conversation.SendAsync("hej");
-        await conversation.SendAsync("igen");
+        await _conversation.SendAsync("hej");
+        await _conversation.SendAsync("igen");
 
         // Assert
-        Assert.Equal([null], claude.Starts);
+        Assert.Equal([null], _claude.Starts);
     }
 
     [Fact]
     public async Task SendAsync_WhenBusy_ThenSendsRightAway()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("første");
+        _claude.Reply = Started;
+        await _conversation.SendAsync("første");
 
         // Act
-        await conversation.SendAsync("anden");
+        await _conversation.SendAsync("anden");
 
         // Assert
-        Assert.Equal(2, claude.Ids.Count);
+        Assert.Equal(2, _claude.Ids.Count);
     }
 
     [Fact]
     public async Task StartAsync_WhenSessionWasSaved_ThenResumesIt()
     {
         // Arrange
-        await conversation.SendAsync("hej");
-        var restarted = new Conversation(claude, Store());
+        await _conversation.SendAsync("hej");
+        var restarted = new Conversation(_claude, Store());
 
         // Act
         await restarted.StartAsync();
 
         // Assert
-        Assert.Equal([null, "session-1"], claude.Starts);
+        Assert.Equal([null, "session-1"], _claude.Starts);
     }
 
     [Fact]
     public async Task Switch_WhenTheTargetWasUsedBefore_ThenShowsItsChatsAndResumesItsSession()
     {
         // Arrange
-        await conversation.SendAsync("hej");
-        var folder = new JsonFile<SavedChats>(Path.Combine(directory, "folder.json"), SavedChats.Empty);
+        await _conversation.SendAsync("hej");
+        var folder = Folder();
         folder.Save(new SavedChats("session-folder", [new ChatRecord("mappe", "svar", ChatStatus.Done)]));
 
         // Act
-        conversation.Switch(() => folder);
+        _conversation.Switch(() => folder);
 
         // Assert
-        Assert.Equal(("mappe", "session-folder"), (Assert.Single(conversation.Chats).Prompt, claude.Starts[^1]));
+        Assert.Equal(("mappe", "session-folder"), (Assert.Single(_conversation.Chats).Prompt, _claude.Starts[^1]));
     }
 
     [Fact]
     public async Task Switch_WhenSwitchingBack_ThenTheFirstChatsAndSessionComeBack()
     {
         // Arrange
-        await conversation.SendAsync("hej");
-        conversation.Switch(() => new JsonFile<SavedChats>(Path.Combine(directory, "folder.json"), SavedChats.Empty));
+        await _conversation.SendAsync("hej");
+        _conversation.Switch(Folder);
 
         // Act
-        conversation.Switch(Store);
+        _conversation.Switch(Store);
 
         // Assert
-        Assert.Equal(("hej", "session-1"), (Assert.Single(conversation.Chats).Prompt, claude.Starts[^1]));
+        Assert.Equal(("hej", "session-1"), (Assert.Single(_conversation.Chats).Prompt, _claude.Starts[^1]));
     }
 
     [Fact]
     public async Task Switch_WhenTheChatChangedAfterItsTurn_ThenTheChangeIsKept()
     {
         // Arrange
-        await conversation.SendAsync("hej");
-        conversation.ToolStarted(new ToolUse("toolu_late", "Bash", "dotnet test"));
-        conversation.Switch(() => new JsonFile<SavedChats>(Path.Combine(directory, "folder.json"), SavedChats.Empty));
+        await _conversation.SendAsync("hej");
+        _conversation.ToolStarted(new ToolUse("toolu_late", "Bash", "dotnet test"));
+        _conversation.Switch(Folder);
 
         // Act
-        conversation.Switch(Store);
+        _conversation.Switch(Store);
 
         // Assert
-        Assert.Equal(["Bash: dotnet test"], Assert.Single(conversation.Chats).Commands.Lines);
+        Assert.Equal(["Bash: dotnet test"], Assert.Single(_conversation.Chats).Commands.Lines);
     }
 
     [Fact]
     public async Task Switch_WhenTheTargetIsChosen_ThenTheCurrentChatsAreAlreadySaved()
     {
         // Arrange
-        await conversation.SendAsync("hej");
-        conversation.ToolStarted(new ToolUse("toolu_late", "Bash", "dotnet test"));
+        await _conversation.SendAsync("hej");
+        _conversation.ToolStarted(new ToolUse("toolu_late", "Bash", "dotnet test"));
         IReadOnlyList<string>? saved = null;
 
         // Act
-        conversation.Switch(() =>
+        _conversation.Switch(() =>
         {
             saved = Store().Load().Chats.Single().Commands;
             return null;
@@ -197,44 +204,44 @@ public sealed class ConversationTests : IDisposable
     public async Task Switch_WhenLeavingATemporaryChat_ThenItsChatsAreNotSaved()
     {
         // Arrange
-        await conversation.SendAsync("hej");
-        conversation.Switch(() => null);
-        await conversation.SendAsync("midlertidig");
+        await _conversation.SendAsync("hej");
+        _conversation.Switch(() => null);
+        await _conversation.SendAsync("midlertidig");
 
         // Act
-        conversation.Switch(Store);
+        _conversation.Switch(Store);
 
         // Assert
-        Assert.Equal("hej", Assert.Single(conversation.Chats).Prompt);
+        Assert.Equal("hej", Assert.Single(_conversation.Chats).Prompt);
     }
 
     [Fact]
     public async Task Switch_WhenThePlaceIsOwnedElsewhere_ThenStartsAnEmptyTemporaryChat()
     {
         // Arrange
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Act
-        conversation.Switch(() => null);
+        _conversation.Switch(() => null);
 
         // Assert
-        Assert.Equal((true, 0), (conversation.IsTemporary, conversation.Chats.Count));
-        Assert.Equal([null, null], claude.Starts);
+        Assert.Equal((true, 0), (_conversation.IsTemporary, _conversation.Chats.Count));
+        Assert.Equal([null, null], _claude.Starts);
     }
 
     [Fact]
     public void Switch_WhenTheTargetHasOldUsage_ThenKeepsTheCurrentUsage()
     {
         // Arrange
-        conversation.UsageReported(new Usage(0.5, 0.2));
-        var folder = new JsonFile<SavedChats>(Path.Combine(directory, "folder.json"), SavedChats.Empty);
+        _conversation.UsageReported(new Usage(0.5, 0.2));
+        var folder = Folder();
         folder.Save(SavedChats.Empty with { Usage = new Usage(0.1, 0.1) });
 
         // Act
-        conversation.Switch(() => folder);
+        _conversation.Switch(() => folder);
 
         // Assert
-        Assert.Equal(new Usage(0.5, 0.2), conversation.Usage);
+        Assert.Equal(new Usage(0.5, 0.2), _conversation.Usage);
     }
 
     [Fact]
@@ -242,10 +249,10 @@ public sealed class ConversationTests : IDisposable
     {
         // Arrange
         var started = 0;
-        conversation.Started += () => started++;
+        _conversation.Started += () => started++;
 
         // Act
-        await conversation.StartAsync();
+        await _conversation.StartAsync();
 
         // Assert
         Assert.Equal(1, started);
@@ -256,11 +263,11 @@ public sealed class ConversationTests : IDisposable
     {
         // Arrange
         var started = 0;
-        conversation.Started += () => started++;
+        _conversation.Started += () => started++;
 
         // Act
-        await conversation.SendAsync("hej");
-        await conversation.SendAsync("igen");
+        await _conversation.SendAsync("hej");
+        await _conversation.SendAsync("igen");
 
         // Assert
         Assert.Equal(1, started);
@@ -273,7 +280,7 @@ public sealed class ConversationTests : IDisposable
         var restarted = await RestartedWithWaitingChat();
 
         // Act
-        claude.Listener.ResultReceived(CannotResume);
+        _claude.Listener.ResultReceived(_cannotResume);
 
         // Assert
         Assert.Equal(("No conversation found", ChatStatus.Error), (restarted.Chats[1].Answer, restarted.Chats[1].Status));
@@ -284,27 +291,27 @@ public sealed class ConversationTests : IDisposable
     {
         // Arrange
         var restarted = await RestartedWithWaitingChat();
-        claude.Listener.ResultReceived(CannotResume);
-        claude.IsRunning = false;
-        claude.Reply = Answer;
+        _claude.Listener.ResultReceived(_cannotResume);
+        _claude.IsRunning = false;
+        _claude.Reply = Answer;
 
         // Act
         await restarted.SendAsync("forfra");
 
         // Assert
-        Assert.Equal([null, "session-1", null], claude.Starts);
+        Assert.Equal([null, "session-1", null], _claude.Starts);
     }
 
     [Fact]
     public async Task ResultReceived_WhenClaudeCannotResumeBeforeAnyMessage_ThenAddsNoChat()
     {
         // Arrange
-        await conversation.SendAsync("hej");
-        var restarted = new Conversation(claude, Store());
+        await _conversation.SendAsync("hej");
+        var restarted = new Conversation(_claude, Store());
         await restarted.StartAsync();
 
         // Act
-        claude.Listener.ResultReceived(CannotResume);
+        _claude.Listener.ResultReceived(_cannotResume);
 
         // Assert
         Assert.Single(restarted.Chats);
@@ -314,13 +321,13 @@ public sealed class ConversationTests : IDisposable
     public async Task SendAsync_WhenClaudeFails_ThenChatShowsError()
     {
         // Arrange
-        claude.Reply = (_, _) => throw new IOException("pipe brudt");
+        _claude.Reply = (_, _) => throw new IOException("pipe brudt");
 
         // Act
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Assert
-        var chat = Assert.Single(conversation.Chats);
+        var chat = Assert.Single(_conversation.Chats);
         Assert.Equal(ChatStatus.Error, chat.Status);
         Assert.Contains("pipe brudt", chat.Answer);
     }
@@ -330,20 +337,22 @@ public sealed class ConversationTests : IDisposable
     {
         // Act
         for (var i = 0; i <= Conversation.MaxChats; i++)
-            await conversation.SendAsync($"{i}");
+        {
+            await _conversation.SendAsync($"{i}");
+        }
 
         // Assert
-        Assert.Equal((Conversation.MaxChats, "1"), (conversation.Chats.Count, conversation.Chats[0].Prompt));
+        Assert.Equal((Conversation.MaxChats, "1"), (_conversation.Chats.Count, _conversation.Chats[0].Prompt));
     }
 
     [Fact]
     public async Task Constructor_WhenChatsWereSaved_ThenRestoresChats()
     {
         // Arrange
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Act
-        var restarted = new Conversation(claude, Store());
+        var restarted = new Conversation(_claude, Store());
 
         // Assert
         var chat = Assert.Single(restarted.Chats);
@@ -353,18 +362,11 @@ public sealed class ConversationTests : IDisposable
     [Fact]
     public async Task AskPermissionAsync_WhenAsked_ThenWaitsForUser()
     {
-        // Arrange
-        claude.Reply = (listener, id) =>
-        {
-            listener.TurnStarted(id);
-            _ = listener.AskPermissionAsync(Request(), CancellationToken.None);
-        };
-
         // Act
-        await conversation.SendAsync("hej");
+        await Asking();
 
         // Assert
-        Assert.True(conversation.IsWaitingForUser);
+        Assert.True(_conversation.IsWaitingForUser);
     }
 
     [Theory(Timeout = 5_000)]
@@ -376,7 +378,7 @@ public sealed class ConversationTests : IDisposable
         var asking = await Asking();
 
         // Act
-        conversation.Chats[0].Requests[0].Respond(allowed);
+        _conversation.Chats[0].Requests[0].Respond(allowed);
 
         // Assert
         Assert.Equal(allowed ? PermissionAnswer.Allow : PermissionAnswer.Deny, await asking.WaitAsync(Token));
@@ -389,7 +391,7 @@ public sealed class ConversationTests : IDisposable
         var asking = await Asking();
 
         // Act
-        conversation.Chats[0].Requests[0].RespondAlways();
+        _conversation.Chats[0].Requests[0].RespondAlways();
 
         // Assert
         Assert.Equal(PermissionAnswer.AllowAlways, await asking.WaitAsync(Token));
@@ -404,10 +406,10 @@ public sealed class ConversationTests : IDisposable
         var request = Request() with { Suggestions = JsonNode.Parse(suggestions)!.AsArray() };
 
         // Act
-        _ = conversation.AskPermissionAsync(request, CancellationToken.None);
+        _ = _conversation.AskPermissionAsync(request, CancellationToken.None);
 
         // Assert
-        Assert.Equal(expected, conversation.Chats.Single().Requests.Single().CanAllowAlways);
+        Assert.Equal(expected, _conversation.Chats.Single().Requests.Single().CanAllowAlways);
     }
 
     [Fact(Timeout = 5_000)]
@@ -417,11 +419,11 @@ public sealed class ConversationTests : IDisposable
         var asking = await Asking();
 
         // Act
-        conversation.Chats[0].Requests[0].Respond(false);
+        _conversation.Chats[0].Requests[0].Respond(false);
         await asking.WaitAsync(Token);
 
         // Assert
-        Assert.Equal(["Afvist: Bash"], conversation.Chats[0].Commands.Lines);
+        Assert.Equal(["Afvist: Bash"], _conversation.Chats[0].Commands.Lines);
     }
 
     [Fact(Timeout = 5_000)]
@@ -430,19 +432,19 @@ public sealed class ConversationTests : IDisposable
         // Arrange
         using var withdrawal = new CancellationTokenSource();
         Task<PermissionAnswer>? asking = null;
-        claude.Reply = (listener, id) =>
+        _claude.Reply = (listener, id) =>
         {
             listener.TurnStarted(id);
             asking = listener.AskPermissionAsync(Request(), withdrawal.Token);
         };
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Act
         withdrawal.Cancel();
 
         // Assert
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => asking!).WaitAsync(Token);
-        Assert.Empty(conversation.Chats[0].Requests);
+        Assert.Empty(_conversation.Chats[0].Requests);
     }
 
     [Fact(Timeout = 5_000)]
@@ -452,7 +454,7 @@ public sealed class ConversationTests : IDisposable
         var asking = await Asking();
 
         // Act
-        conversation.Delete(conversation.Chats[0]);
+        _conversation.Delete(_conversation.Chats[0]);
 
         // Assert
         Assert.Equal(PermissionAnswer.Deny, await asking.WaitAsync(Token));
@@ -462,13 +464,13 @@ public sealed class ConversationTests : IDisposable
     public async Task AskPermissionAsync_WhenNoTurnIsRunning_ThenAsksInTheLatestChat()
     {
         // Arrange
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Act
-        _ = conversation.AskPermissionAsync(Request(), CancellationToken.None);
+        _ = _conversation.AskPermissionAsync(Request(), CancellationToken.None);
 
         // Assert
-        Assert.Single(conversation.Chats[0].Requests);
+        Assert.Single(_conversation.Chats[0].Requests);
     }
 
     [Fact]
@@ -478,10 +480,10 @@ public sealed class ConversationTests : IDisposable
         await StartedSubagent();
 
         // Act
-        claude.Listener.ToolStarted(new ToolUse("toolu_2", "Bash", "dir", ParentId: "toolu_agent"));
+        _claude.Listener.ToolStarted(new ToolUse("toolu_2", "Bash", "dir", ParentId: "toolu_agent"));
 
         // Assert
-        Assert.Equal(["Agent: Undersøg", "Bash: dir"], conversation.Chats[0].Commands.Lines);
+        Assert.Equal(["Agent: Undersøg", "Bash: dir"], _conversation.Chats[0].Commands.Lines);
     }
 
     [Fact]
@@ -489,13 +491,13 @@ public sealed class ConversationTests : IDisposable
     {
         // Arrange
         await StartedSubagent();
-        claude.Listener.ToolStarted(new ToolUse("toolu_2", "Bash", "dir", ParentId: "toolu_agent"));
+        _claude.Listener.ToolStarted(new ToolUse("toolu_2", "Bash", "dir", ParentId: "toolu_agent"));
 
         // Act
-        _ = conversation.AskPermissionAsync(Request() with { ToolUseId = "toolu_2" }, CancellationToken.None);
+        _ = _conversation.AskPermissionAsync(Request() with { ToolUseId = "toolu_2" }, CancellationToken.None);
 
         // Assert
-        Assert.Equal((1, 0), (conversation.Chats[0].Requests.Count, conversation.Chats[1].Requests.Count));
+        Assert.Equal((1, 0), (_conversation.Chats[0].Requests.Count, _conversation.Chats[1].Requests.Count));
     }
 
     [Fact]
@@ -503,27 +505,27 @@ public sealed class ConversationTests : IDisposable
     {
         // Arrange
         await StartedSubagent();
-        conversation.Delete(conversation.Chats[0]);
+        _conversation.Delete(_conversation.Chats[0]);
 
         // Act
-        _ = conversation.AskPermissionAsync(Request() with { ToolUseId = "toolu_agent" }, CancellationToken.None);
+        _ = _conversation.AskPermissionAsync(Request() with { ToolUseId = "toolu_agent" }, CancellationToken.None);
 
         // Assert
-        Assert.Single(conversation.Chats[0].Requests);
+        Assert.Single(_conversation.Chats[0].Requests);
     }
 
     [Fact]
     public async Task ResultReceived_WhenBackgroundTaskFinishes_ThenShowsTheAnswerInANewChat()
     {
         // Arrange
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Act
-        claude.Listener.TurnStarted(null);
-        claude.Listener.ResultReceived(new ClaudeResult("session-1", "Opgaven er færdig.", IsError: false));
+        _claude.Listener.TurnStarted(null);
+        _claude.Listener.ResultReceived(new ClaudeResult("session-1", "Opgaven er færdig.", IsError: false));
 
         // Assert
-        var chat = conversation.Chats[^1];
+        var chat = _conversation.Chats[^1];
         Assert.Equal((Conversation.BackgroundPrompt, "Opgaven er færdig.", ChatStatus.Done), (chat.Prompt, chat.Answer, chat.Status));
     }
 
@@ -531,114 +533,114 @@ public sealed class ConversationTests : IDisposable
     public async Task ToolStarted_WhenBackgroundTurnWorks_ThenItsChatShowsTheCommands()
     {
         // Arrange
-        await conversation.SendAsync("hej");
-        claude.Listener.TurnStarted(null);
+        await _conversation.SendAsync("hej");
+        _claude.Listener.TurnStarted(null);
 
         // Act
-        claude.Listener.ToolStarted(new ToolUse("toolu_2", "Bash", "dir"));
+        _claude.Listener.ToolStarted(new ToolUse("toolu_2", "Bash", "dir"));
 
         // Assert
-        Assert.Equal(Conversation.BackgroundPrompt, conversation.Chats[^1].Prompt);
-        Assert.Equal(["Bash: dir"], conversation.Chats[^1].Commands.Lines);
+        Assert.Equal(Conversation.BackgroundPrompt, _conversation.Chats[^1].Prompt);
+        Assert.Equal(["Bash: dir"], _conversation.Chats[^1].Commands.Lines);
     }
 
     [Fact]
     public async Task ToolStarted_WhenABackgroundTurnHasEnded_ThenAddsNoChat()
     {
         // Arrange
-        await conversation.SendAsync("hej");
-        claude.Listener.TurnStarted(null);
-        claude.Listener.ResultReceived(new ClaudeResult("session-1", "Opgaven er færdig.", IsError: false));
+        await _conversation.SendAsync("hej");
+        _claude.Listener.TurnStarted(null);
+        _claude.Listener.ResultReceived(new ClaudeResult("session-1", "Opgaven er færdig.", IsError: false));
 
         // Act
-        claude.Listener.ToolStarted(new ToolUse("toolu_9", "Read", "a.cs"));
+        _claude.Listener.ToolStarted(new ToolUse("toolu_9", "Read", "a.cs"));
 
         // Assert
-        Assert.Equal(2, conversation.Chats.Count);
+        Assert.Equal(2, _conversation.Chats.Count);
     }
 
     [Fact]
     public async Task ResultReceived_WhenMessagesWereAnsweredTogether_ThenTheFirstGetsTheAnswer()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("første");
-        await conversation.SendAsync("anden");
+        _claude.Reply = Started;
+        await _conversation.SendAsync("første");
+        await _conversation.SendAsync("anden");
 
         // Act
-        claude.Listener.ResultReceived(Answered with { Answers = [.. claude.Ids] });
+        _claude.Listener.ResultReceived(_answered with { Answers = [.. _claude.Ids] });
 
         // Assert
-        Assert.Equal(["Svar", Conversation.AnsweredAbove], conversation.Chats.Select(chat => chat.Answer));
-        Assert.False(conversation.IsBusy);
+        Assert.Equal(["Svar", Conversation.AnsweredAbove], _conversation.Chats.Select(chat => chat.Answer));
+        Assert.False(_conversation.IsBusy);
     }
 
     [Fact]
     public async Task Reset_WhenCalled_ThenForgetsChatsAndStartsANewSession()
     {
         // Arrange
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Act
-        conversation.Reset();
+        _conversation.Reset();
 
         // Assert
-        Assert.Equal([null, null], claude.Starts);
-        Assert.Empty(conversation.Chats);
+        Assert.Equal([null, null], _claude.Starts);
+        Assert.Empty(_conversation.Chats);
     }
 
     [Fact]
     public async Task SendAsync_WhenClear_ThenStartsANewSessionWithoutSendingIt()
     {
         // Arrange
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Act
-        await conversation.SendAsync("/clear");
+        await _conversation.SendAsync("/clear");
 
         // Assert
-        Assert.Equal([null, null], claude.Starts);
-        Assert.Single(claude.Ids);
-        Assert.Empty(conversation.Chats);
+        Assert.Equal([null, null], _claude.Starts);
+        Assert.Single(_claude.Ids);
+        Assert.Empty(_conversation.Chats);
     }
 
     [Fact]
     public async Task Reset_WhenRunning_ThenIsNoLongerBusy()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("hej");
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
 
         // Act
-        conversation.Reset();
+        _conversation.Reset();
 
         // Assert
-        Assert.False(conversation.IsBusy);
+        Assert.False(_conversation.IsBusy);
     }
 
     [Fact]
     public async Task Reset_WhenCalled_ThenCostIsZero()
     {
         // Arrange
-        claude.Reply = Answering(Answered with { Cost = 0.36m });
-        await conversation.SendAsync("hej");
+        _claude.Reply = Answering(_answered with { Cost = 0.36m });
+        await _conversation.SendAsync("hej");
 
         // Act
-        conversation.Reset();
+        _conversation.Reset();
 
         // Assert
-        Assert.Equal(0m, conversation.Cost);
+        Assert.Equal(0m, _conversation.Cost);
     }
 
     [Fact]
     public async Task IsCurrent_WhenChatIsRunning_ThenTrue()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("hej");
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
 
         // Act
-        var current = conversation.IsCurrent(conversation.Chats[0], DateTime.UtcNow);
+        var current = _conversation.IsCurrent(_conversation.Chats[0], DateTime.UtcNow);
 
         // Assert
         Assert.True(current);
@@ -648,11 +650,11 @@ public sealed class ConversationTests : IDisposable
     public async Task IsCurrent_WhenChatAsksPermission_ThenTrueAfterTheChatsWereHidden()
     {
         // Arrange
-        await conversation.SendAsync("hej");
-        _ = conversation.AskPermissionAsync(Request(), CancellationToken.None);
+        await _conversation.SendAsync("hej");
+        _ = _conversation.AskPermissionAsync(Request(), CancellationToken.None);
 
         // Act
-        var current = conversation.IsCurrent(conversation.Chats[0], DateTime.UtcNow.AddMinutes(1));
+        var current = _conversation.IsCurrent(_conversation.Chats[0], DateTime.UtcNow.AddMinutes(1));
 
         // Assert
         Assert.True(current);
@@ -664,10 +666,10 @@ public sealed class ConversationTests : IDisposable
     public async Task IsCurrent_WhenAnswered_ThenTrueUntilTheChatsAreHidden(int hiddenSecondsLater, bool expected)
     {
         // Arrange
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Act
-        var current = conversation.IsCurrent(conversation.Chats[0], DateTime.UtcNow.AddSeconds(hiddenSecondsLater));
+        var current = _conversation.IsCurrent(_conversation.Chats[0], DateTime.UtcNow.AddSeconds(hiddenSecondsLater));
 
         // Assert
         Assert.Equal(expected, current);
@@ -677,11 +679,11 @@ public sealed class ConversationTests : IDisposable
     public async Task IsCurrent_WhenANewerChatWasAnswered_ThenOlderChatIsHidden()
     {
         // Arrange
-        await conversation.SendAsync("første");
-        await conversation.SendAsync("anden");
+        await _conversation.SendAsync("første");
+        await _conversation.SendAsync("anden");
 
         // Act
-        var current = conversation.IsCurrent(conversation.Chats[0], DateTime.MinValue);
+        var current = _conversation.IsCurrent(_conversation.Chats[0], DateTime.MinValue);
 
         // Assert
         Assert.False(current);
@@ -693,10 +695,10 @@ public sealed class ConversationTests : IDisposable
     public async Task AnsweredWithin_WhenAnswered_ThenTrueOnlyWithinTheTime(int secondsLater, bool expected)
     {
         // Arrange
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Act
-        var answered = conversation.AnsweredWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow.AddSeconds(secondsLater));
+        var answered = _conversation.AnsweredWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow.AddSeconds(secondsLater));
 
         // Assert
         Assert.Equal(expected, answered);
@@ -706,11 +708,11 @@ public sealed class ConversationTests : IDisposable
     public async Task AnsweredWithin_WhenClaudeFailed_ThenFalse()
     {
         // Arrange
-        claude.Reply = Answering(new ClaudeResult("session-1", "Fejl", IsError: true));
-        await conversation.SendAsync("hej");
+        _claude.Reply = Answering(new ClaudeResult("session-1", "Fejl", IsError: true));
+        await _conversation.SendAsync("hej");
 
         // Act
-        var answered = conversation.AnsweredWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow);
+        var answered = _conversation.AnsweredWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow);
 
         // Assert
         Assert.False(answered);
@@ -720,41 +722,41 @@ public sealed class ConversationTests : IDisposable
     public async Task SendAsync_WhenClaudeReportsCost_ThenCostIsTheSessionTotal()
     {
         // Arrange
-        claude.Reply = Answering(Answered with { Cost = 0.36m });
-        await conversation.SendAsync("hej");
-        claude.Reply = Answering(Answered with { Cost = 0.5m });
+        _claude.Reply = Answering(_answered with { Cost = 0.36m });
+        await _conversation.SendAsync("hej");
+        _claude.Reply = Answering(_answered with { Cost = 0.5m });
 
         // Act
-        await conversation.SendAsync("igen");
+        await _conversation.SendAsync("igen");
 
         // Assert
-        Assert.Equal(0.5m, conversation.Cost);
+        Assert.Equal(0.5m, _conversation.Cost);
     }
 
     [Fact]
     public async Task ResultReceived_WhenTheSameSessionReportsLess_ThenKeepsTheHigherCost()
     {
         // Arrange
-        claude.Reply = Answering(Answered with { Cost = 0.5m });
-        await conversation.SendAsync("hej");
-        claude.Reply = Answering(Answered with { Cost = 0.3m });
+        _claude.Reply = Answering(_answered with { Cost = 0.5m });
+        await _conversation.SendAsync("hej");
+        _claude.Reply = Answering(_answered with { Cost = 0.3m });
 
         // Act
-        await conversation.SendAsync("igen");
+        await _conversation.SendAsync("igen");
 
         // Assert
-        Assert.Equal(0.5m, conversation.Cost);
+        Assert.Equal(0.5m, _conversation.Cost);
     }
 
     [Fact]
     public async Task Constructor_WhenCostWasSaved_ThenRestoresCost()
     {
         // Arrange
-        claude.Reply = Answering(Answered with { Cost = 0.36m });
-        await conversation.SendAsync("hej");
+        _claude.Reply = Answering(_answered with { Cost = 0.36m });
+        await _conversation.SendAsync("hej");
 
         // Act
-        var restarted = new Conversation(claude, Store());
+        var restarted = new Conversation(_claude, Store());
 
         // Assert
         Assert.Equal(0.36m, restarted.Cost);
@@ -764,73 +766,73 @@ public sealed class ConversationTests : IDisposable
     public async Task Delete_WhenCalled_ThenChatIsGoneAfterRestart()
     {
         // Arrange
-        await conversation.SendAsync("slet mig");
-        await conversation.SendAsync("behold mig");
+        await _conversation.SendAsync("slet mig");
+        await _conversation.SendAsync("behold mig");
 
         // Act
-        conversation.Delete(conversation.Chats[0]);
+        _conversation.Delete(_conversation.Chats[0]);
 
         // Assert
-        Assert.Equal(["behold mig"], new Conversation(claude, Store()).Chats.Select(chat => chat.Prompt));
+        Assert.Equal(["behold mig"], new Conversation(_claude, Store()).Chats.Select(chat => chat.Prompt));
     }
 
     [Fact]
     public async Task Delete_WhenChatIsRunning_ThenInterruptsClaude()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("hej");
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
 
         // Act
-        conversation.Delete(conversation.Chats[0]);
+        _conversation.Delete(_conversation.Chats[0]);
 
         // Assert
-        Assert.Equal((1, 0), (claude.Interrupts, conversation.Chats.Count));
+        Assert.Equal((1, 0), (_claude.Interrupts, _conversation.Chats.Count));
     }
 
     [Fact]
     public async Task Delete_WhenChatWaitsForItsTurn_ThenWithdrawsItFromClaude()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("første");
-        await conversation.SendAsync("anden");
+        _claude.Reply = Started;
+        await _conversation.SendAsync("første");
+        await _conversation.SendAsync("anden");
 
         // Act
-        conversation.Delete(conversation.Chats[1]);
+        _conversation.Delete(_conversation.Chats[1]);
 
         // Assert
-        Assert.Equal([claude.Ids[1]], claude.Withdrawn);
-        Assert.Equal(0, claude.Interrupts);
+        Assert.Equal([_claude.Ids[1]], _claude.Withdrawn);
+        Assert.Equal(0, _claude.Interrupts);
     }
 
     [Fact]
     public async Task ResultReceived_WhenAReminderFires_ThenShowsItInANewChat()
     {
         // Arrange
-        await conversation.SendAsync("hej");
-        claude.Listener.TurnStarted("reminder-id");
+        await _conversation.SendAsync("hej");
+        _claude.Listener.TurnStarted("reminder-id");
 
         // Act
-        claude.Listener.ResultReceived(new ClaudeResult("session-1", "Husk at drikke vand!", IsError: false));
+        _claude.Listener.ResultReceived(new ClaudeResult("session-1", "Husk at drikke vand!", IsError: false));
 
         // Assert
-        Assert.Equal((Conversation.BackgroundPrompt, "Husk at drikke vand!"), (conversation.Chats[^1].Prompt, conversation.Chats[^1].Answer));
+        Assert.Equal((Conversation.BackgroundPrompt, "Husk at drikke vand!"), (_conversation.Chats[^1].Prompt, _conversation.Chats[^1].Answer));
     }
 
     [Fact]
     public async Task Delete_WhenAnotherChatIsRunning_ThenRunningChatIsNotSaved()
     {
         // Arrange
-        await conversation.SendAsync("færdig");
-        claude.Reply = Started;
-        await conversation.SendAsync("kører");
+        await _conversation.SendAsync("færdig");
+        _claude.Reply = Started;
+        await _conversation.SendAsync("kører");
 
         // Act
-        conversation.Delete(conversation.Chats[0]);
+        _conversation.Delete(_conversation.Chats[0]);
 
         // Assert
-        Assert.Empty(new Conversation(claude, Store()).Chats);
+        Assert.Empty(new Conversation(_claude, Store()).Chats);
     }
 
     [Fact]
@@ -838,26 +840,26 @@ public sealed class ConversationTests : IDisposable
     {
         // Arrange
         var browsing = false;
-        claude.Reply = (listener, id) =>
+        _claude.Reply = (listener, id) =>
         {
             listener.TurnStarted(id);
             listener.ToolStarted(new ToolUse("toolu_1", "WebSearch"));
-            browsing = conversation.IsBrowsingWeb;
-            listener.ResultReceived(Answered with { Answers = [id] });
+            browsing = _conversation.IsBrowsingWeb;
+            listener.ResultReceived(_answered with { Answers = [id] });
         };
 
         // Act
-        await conversation.SendAsync("søg");
+        await _conversation.SendAsync("søg");
 
         // Assert
-        Assert.Equal((true, false), (browsing, conversation.IsBrowsingWeb));
+        Assert.Equal((true, false), (browsing, _conversation.IsBrowsingWeb));
     }
 
     [Fact]
     public async Task ToolStarted_WhenRunning_ThenChatShowsCommandsAndSources()
     {
         // Arrange
-        claude.Reply = (listener, id) =>
+        _claude.Reply = (listener, id) =>
         {
             listener.TurnStarted(id);
             listener.ToolStarted(new ToolUse("toolu_1", "Read", "Mood.cs"));
@@ -866,39 +868,39 @@ public sealed class ConversationTests : IDisposable
         };
 
         // Act
-        await conversation.SendAsync("hvad er nyt?");
+        await _conversation.SendAsync("hvad er nyt?");
 
         // Assert
-        Assert.Equal(["Read: Mood.cs", "Bash: git log"], conversation.Chats[0].Commands.Lines);
-        Assert.Equal(["WebSearch: hamstere"], conversation.Chats[0].Sources.Lines);
+        Assert.Equal(["Read: Mood.cs", "Bash: git log"], _conversation.Chats[0].Commands.Lines);
+        Assert.Equal(["WebSearch: hamstere"], _conversation.Chats[0].Sources.Lines);
     }
 
     [Fact]
     public async Task SendAsync_WhenNotLoggedIn_ThenChatOffersLogin()
     {
         // Arrange
-        claude.Reply = Answering(new ClaudeResult("session-1", "Not logged in · Please run /login", IsError: true));
+        _claude.Reply = Answering(new ClaudeResult("session-1", "Not logged in · Please run /login", IsError: true));
 
         // Act
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Assert
-        Assert.Equal((true, "Du er ikke logget ind i claude."), (conversation.Chats[0].NeedsLogin, conversation.Chats[0].Answer));
+        Assert.Equal((true, "Du er ikke logget ind i claude."), (_conversation.Chats[0].NeedsLogin, _conversation.Chats[0].Answer));
     }
 
     [Fact]
     public async Task Constructor_WhenUsageWasSaved_ThenRestoresUsage()
     {
         // Arrange
-        claude.Reply = (listener, id) =>
+        _claude.Reply = (listener, id) =>
         {
             listener.UsageReported(new Usage(0.03, 0.59));
             Answer(listener, id);
         };
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Act
-        var restarted = new Conversation(claude, Store());
+        var restarted = new Conversation(_claude, Store());
 
         // Assert
         Assert.Equal(new Usage(0.03, 0.59), restarted.Usage);
@@ -908,111 +910,111 @@ public sealed class ConversationTests : IDisposable
     public async Task Cancel_WhenRunning_ThenChatIsInterruptedAndKeepsTheCost()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("hej");
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
 
         // Act
-        conversation.Cancel();
-        claude.Listener.ResultReceived(Stopped with { Answers = [claude.Ids[0]] });
+        _conversation.Cancel();
+        _claude.Listener.ResultReceived(_stopped with { Answers = [_claude.Ids[0]] });
 
         // Assert
-        var chat = Assert.Single(conversation.Chats);
-        Assert.Equal((1, "Afbrudt.", ChatStatus.Error, 0.2m), (claude.Interrupts, chat.Answer, chat.Status, conversation.Cost));
+        var chat = Assert.Single(_conversation.Chats);
+        Assert.Equal((1, "Afbrudt.", ChatStatus.Error, 0.2m), (_claude.Interrupts, chat.Answer, chat.Status, _conversation.Cost));
     }
 
     [Fact]
     public async Task Cancel_WhenNothingRuns_ThenDoesNotInterrupt()
     {
         // Arrange
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Act
-        conversation.Cancel();
+        _conversation.Cancel();
 
         // Assert
-        Assert.Equal(0, claude.Interrupts);
+        Assert.Equal(0, _claude.Interrupts);
     }
 
     [Fact]
     public async Task Cancel_WhenAnswerAlreadyArrived_ThenKeepsTheAnswer()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("hej");
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
 
         // Act
-        conversation.Cancel();
-        claude.Listener.ResultReceived(Answered with { Answers = [claude.Ids[0]] });
+        _conversation.Cancel();
+        _claude.Listener.ResultReceived(_answered with { Answers = [_claude.Ids[0]] });
 
         // Assert
-        Assert.Equal(("Svar", ChatStatus.Done), (conversation.Chats[0].Answer, conversation.Chats[0].Status));
+        Assert.Equal(("Svar", ChatStatus.Done), (_conversation.Chats[0].Answer, _conversation.Chats[0].Status));
     }
 
     [Fact]
     public async Task Exited_WhenClaudeDies_ThenWaitingChatShowsWhy()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("hej");
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
 
         // Act
-        claude.Listener.Exited("claude stoppede uventet");
+        _claude.Listener.Exited("claude stoppede uventet");
 
         // Assert
-        Assert.Equal(("claude stoppede uventet", ChatStatus.Error), (conversation.Chats[0].Answer, conversation.Chats[0].Status));
+        Assert.Equal(("claude stoppede uventet", ChatStatus.Error), (_conversation.Chats[0].Answer, _conversation.Chats[0].Status));
     }
 
     [Fact]
     public async Task SendAsync_WhenClaudeHasExited_ThenResumesTheSession()
     {
         // Arrange
-        await conversation.SendAsync("hej");
-        claude.IsRunning = false;
-        claude.Listener.Exited("claude stoppede uventet");
+        await _conversation.SendAsync("hej");
+        _claude.IsRunning = false;
+        _claude.Listener.Exited("claude stoppede uventet");
 
         // Act
-        await conversation.SendAsync("igen");
+        await _conversation.SendAsync("igen");
 
         // Assert
-        Assert.Equal([null, "session-1"], claude.Starts);
+        Assert.Equal([null, "session-1"], _claude.Starts);
     }
 
     [Fact]
     public async Task Exited_WhenClaudeWasKilledAfterStop_ThenChatSaysInterrupted()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("hej");
-        conversation.Cancel();
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
+        _conversation.Cancel();
 
         // Act
-        claude.Listener.Exited("killed");
+        _claude.Listener.Exited("killed");
 
         // Assert
-        Assert.Equal("Afbrudt.", conversation.Chats[0].Answer);
+        Assert.Equal("Afbrudt.", _conversation.Chats[0].Answer);
     }
 
     [Fact]
     public void BackgroundTasksChanged_WhenTasksRun_ThenCountsThem()
     {
         // Act
-        conversation.BackgroundTasksChanged(2);
+        _conversation.BackgroundTasksChanged(2);
 
         // Assert
-        Assert.Equal(2, conversation.BackgroundTasks);
+        Assert.Equal(2, _conversation.BackgroundTasks);
     }
 
     [Fact]
     public void Exited_WhenBackgroundTasksRan_ThenNoneRunAnymore()
     {
         // Arrange
-        conversation.BackgroundTasksChanged(2);
+        _conversation.BackgroundTasksChanged(2);
 
         // Act
-        conversation.Exited("claude stoppede uventet");
+        _conversation.Exited("claude stoppede uventet");
 
         // Assert
-        Assert.Equal(0, conversation.BackgroundTasks);
+        Assert.Equal(0, _conversation.BackgroundTasks);
     }
 
     [Theory]
@@ -1021,11 +1023,11 @@ public sealed class ConversationTests : IDisposable
     public async Task FailedWithin_WhenAnswered_ThenTrueOnlyForErrors(bool isError, bool expected)
     {
         // Arrange
-        claude.Reply = Answering(new ClaudeResult("session-1", "Svar", isError));
-        await conversation.SendAsync("hej");
+        _claude.Reply = Answering(new ClaudeResult("session-1", "Svar", isError));
+        await _conversation.SendAsync("hej");
 
         // Act
-        var failed = conversation.FailedWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow);
+        var failed = _conversation.FailedWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow);
 
         // Assert
         Assert.Equal(expected, failed);
@@ -1035,14 +1037,14 @@ public sealed class ConversationTests : IDisposable
     public async Task ResultReceived_WhenNoChatGetsTheAnswer_ThenAnsweredAtStays()
     {
         // Arrange
-        await conversation.SendAsync("hej");
-        var answeredAt = conversation.AnsweredAt;
+        await _conversation.SendAsync("hej");
+        var answeredAt = _conversation.AnsweredAt;
 
         // Act
-        claude.Listener.ResultReceived(new ClaudeResult("session-1", "", IsError: false));
+        _claude.Listener.ResultReceived(new ClaudeResult("session-1", "", IsError: false));
 
         // Assert
-        Assert.Equal(answeredAt, conversation.AnsweredAt);
+        Assert.Equal(answeredAt, _conversation.AnsweredAt);
     }
 
     [Fact]
@@ -1050,10 +1052,10 @@ public sealed class ConversationTests : IDisposable
     {
         // Arrange
         var changed = false;
-        conversation.Changed += () => changed = true;
+        _conversation.Changed += () => changed = true;
 
         // Act
-        conversation.BackgroundTasksChanged(1);
+        _conversation.BackgroundTasksChanged(1);
 
         // Assert
         Assert.True(changed);
@@ -1063,141 +1065,141 @@ public sealed class ConversationTests : IDisposable
     public void Reset_WhenBackgroundTasksRan_ThenNoneRunAnymore()
     {
         // Arrange
-        conversation.BackgroundTasksChanged(2);
+        _conversation.BackgroundTasksChanged(2);
 
         // Act
-        conversation.Reset();
+        _conversation.Reset();
 
         // Assert
-        Assert.Equal(0, conversation.BackgroundTasks);
+        Assert.Equal(0, _conversation.BackgroundTasks);
     }
 
     [Fact]
     public async Task Reset_WhenAnswered_ThenNothingIsNew()
     {
         // Arrange
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Act
-        conversation.Reset();
+        _conversation.Reset();
 
         // Assert
-        Assert.Equal(default(DateTime), conversation.AnsweredAt);
+        Assert.Equal(default(DateTime), _conversation.AnsweredAt);
     }
 
     [Fact]
     public async Task Delete_WhenTheAnsweredChatIsDeleted_ThenNothingIsNew()
     {
         // Arrange
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Act
-        conversation.Delete(conversation.Chats[0]);
+        _conversation.Delete(_conversation.Chats[0]);
 
         // Assert
-        Assert.Equal(default(DateTime), conversation.AnsweredAt);
+        Assert.Equal(default(DateTime), _conversation.AnsweredAt);
     }
 
     [Fact]
     public async Task ResultReceived_WhenUserStopped_ThenIsNeitherSadNorNew()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("hej");
-        conversation.Cancel();
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
+        _conversation.Cancel();
 
         // Act
-        claude.Listener.ResultReceived(Stopped with { Answers = [claude.Ids[0]] });
+        _claude.Listener.ResultReceived(_stopped with { Answers = [_claude.Ids[0]] });
 
         // Assert
-        Assert.Equal((false, default(DateTime)), (conversation.FailedWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow), conversation.AnsweredAt));
+        Assert.Equal((false, default(DateTime)), (_conversation.FailedWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow), _conversation.AnsweredAt));
     }
 
     [Fact]
     public async Task Delete_WhenAnotherChatIsDeleted_ThenTheAnswerStaysNew()
     {
         // Arrange
-        await conversation.SendAsync("første");
-        await conversation.SendAsync("anden");
-        var answeredAt = conversation.AnsweredAt;
+        await _conversation.SendAsync("første");
+        await _conversation.SendAsync("anden");
+        var answeredAt = _conversation.AnsweredAt;
 
         // Act
-        conversation.Delete(conversation.Chats[0]);
+        _conversation.Delete(_conversation.Chats[0]);
 
         // Assert
-        Assert.Equal(answeredAt, conversation.AnsweredAt);
+        Assert.Equal(answeredAt, _conversation.AnsweredAt);
     }
 
     [Fact]
     public async Task ResultReceived_WhenTheRunningChatWasDeleted_ThenNothingIsNew()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("hej");
-        conversation.Delete(conversation.Chats[0]);
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
+        _conversation.Delete(_conversation.Chats[0]);
 
         // Act
-        claude.Listener.ResultReceived(Answered with { Answers = [claude.Ids[0]] });
+        _claude.Listener.ResultReceived(_answered with { Answers = [_claude.Ids[0]] });
 
         // Assert
-        Assert.Equal(default(DateTime), conversation.AnsweredAt);
+        Assert.Equal(default(DateTime), _conversation.AnsweredAt);
     }
 
     [Fact]
     public async Task Exited_WhenClaudeWasKilledAfterStop_ThenIsNeitherSadNorNew()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("hej");
-        conversation.Cancel();
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
+        _conversation.Cancel();
 
         // Act
-        claude.Listener.Exited("killed");
+        _claude.Listener.Exited("killed");
 
         // Assert
-        Assert.Equal((false, default(DateTime)), (conversation.FailedWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow), conversation.AnsweredAt));
+        Assert.Equal((false, default(DateTime)), (_conversation.FailedWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow), _conversation.AnsweredAt));
     }
 
     [Fact]
     public async Task Exited_WhenMessagesWait_ThenTheRunningChatIsTheOneShown()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("kører");
-        await conversation.SendAsync("venter");
+        _claude.Reply = Started;
+        await _conversation.SendAsync("kører");
+        await _conversation.SendAsync("venter");
 
         // Act
-        claude.Listener.Exited("claude stoppede uventet");
+        _claude.Listener.Exited("claude stoppede uventet");
 
         // Assert
-        Assert.Equal((true, false), (conversation.IsCurrent(conversation.Chats[0], DateTime.MinValue), conversation.IsCurrent(conversation.Chats[1], DateTime.MinValue)));
+        Assert.Equal((true, false), (_conversation.IsCurrent(_conversation.Chats[0], DateTime.MinValue), _conversation.IsCurrent(_conversation.Chats[1], DateTime.MinValue)));
     }
 
     [Fact]
     public async Task Exited_WhenClaudeDies_ThenIsSad()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("hej");
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
 
         // Act
-        claude.Listener.Exited("claude stoppede uventet");
+        _claude.Listener.Exited("claude stoppede uventet");
 
         // Assert
-        Assert.True(conversation.FailedWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow));
+        Assert.True(_conversation.FailedWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow));
     }
 
     [Fact]
     public async Task SendAsync_WhenClaudeFails_ThenIsSad()
     {
         // Arrange
-        claude.Reply = (_, _) => throw new IOException("pipe brudt");
+        _claude.Reply = (_, _) => throw new IOException("pipe brudt");
 
         // Act
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Assert
-        Assert.True(conversation.FailedWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow));
+        Assert.True(_conversation.FailedWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow));
     }
 
     [Theory]
@@ -1207,11 +1209,11 @@ public sealed class ConversationTests : IDisposable
     public async Task FailedSince_WhenAnswered_ThenTrueOnlyForErrorsNotSeenYet(bool isError, int seenSecondsLater, bool expected)
     {
         // Arrange
-        claude.Reply = Answering(new ClaudeResult("session-1", "Svar", isError));
-        await conversation.SendAsync("hej");
+        _claude.Reply = Answering(new ClaudeResult("session-1", "Svar", isError));
+        await _conversation.SendAsync("hej");
 
         // Act
-        var failed = conversation.FailedSince(DateTime.UtcNow.AddSeconds(seenSecondsLater));
+        var failed = _conversation.FailedSince(DateTime.UtcNow.AddSeconds(seenSecondsLater));
 
         // Assert
         Assert.Equal(expected, failed);
@@ -1221,11 +1223,11 @@ public sealed class ConversationTests : IDisposable
     public async Task FailedWithin_WhenTheTimeHasPassed_ThenFalse()
     {
         // Arrange
-        claude.Reply = Answering(new ClaudeResult("session-1", "Fejl", IsError: true));
-        await conversation.SendAsync("hej");
+        _claude.Reply = Answering(new ClaudeResult("session-1", "Fejl", IsError: true));
+        await _conversation.SendAsync("hej");
 
         // Act
-        var failed = conversation.FailedWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow.AddSeconds(5));
+        var failed = _conversation.FailedWithin(TimeSpan.FromSeconds(4), DateTime.UtcNow.AddSeconds(5));
 
         // Assert
         Assert.False(failed);
@@ -1236,10 +1238,10 @@ public sealed class ConversationTests : IDisposable
     {
         // Arrange
         string? mode = null;
-        conversation.PermissionModeChanged += changed => mode = changed;
+        _conversation.PermissionModeChanged += changed => mode = changed;
 
         // Act
-        conversation.ModeChanged("plan");
+        _conversation.ModeChanged("plan");
 
         // Assert
         Assert.Equal("plan", mode);
@@ -1284,145 +1286,139 @@ public sealed class ConversationTests : IDisposable
         ImageAttachment image = new("screenshot.png", "image/png", [1, 2, 3]);
 
         // Act
-        await conversation.SendAsync("Hvad ser du?", [image]);
+        await _conversation.SendAsync("Hvad ser du?", [image]);
 
         // Assert
-        Assert.Equal([image], claude.Images);
-    }
-
-    async Task<Task<PermissionAnswer>> Asking()
-    {
-        Task<PermissionAnswer>? asking = null;
-        claude.Reply = (listener, id) =>
-        {
-            listener.TurnStarted(id);
-            asking = listener.AskPermissionAsync(Request(), CancellationToken.None);
-        };
-        await conversation.SendAsync("hej");
-        return asking!;
-    }
-
-    async Task<Conversation> RestartedWithWaitingChat()
-    {
-        await conversation.SendAsync("hej");
-        var restarted = new Conversation(claude, Store());
-        claude.IsRunning = false;
-        claude.Reply = Silent;
-        await restarted.SendAsync("igen");
-        return restarted;
-    }
-
-    async Task StartedSubagent()
-    {
-        claude.Reply = (listener, id) =>
-        {
-            listener.TurnStarted(id);
-            listener.ToolStarted(new ToolUse("toolu_agent", "Agent", "Undersøg"));
-            listener.ResultReceived(Answered with { Answers = [id] });
-        };
-        await conversation.SendAsync("første");
-        claude.Reply = Answer;
-        await conversation.SendAsync("anden");
+        Assert.Equal([image], _claude.Images);
     }
 
     [Fact]
     public async Task Restart_WhenIdle_ThenStartsClaudeAgainWithTheSession()
     {
         // Arrange
-        await conversation.SendAsync("hej");
+        await _conversation.SendAsync("hej");
 
         // Act
-        conversation.Restart();
+        _conversation.Restart();
 
         // Assert
-        Assert.Equal([null, "session-1"], claude.Starts);
+        Assert.Equal([null, "session-1"], _claude.Starts);
     }
 
     [Fact]
     public async Task Restart_WhenBusy_ThenKeepsClaudeRunningWhenTheTurnEnds()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("hej");
-        conversation.Restart();
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
+        _conversation.Restart();
 
         // Act
-        claude.Listener.ResultReceived(Answered with { Answers = [claude.Ids[0]] });
+        _claude.Listener.ResultReceived(_answered with { Answers = [_claude.Ids[0]] });
 
         // Assert
-        Assert.Equal([null], claude.Starts);
+        Assert.Equal([null], _claude.Starts);
     }
 
     [Fact]
     public async Task Restart_WhenBackgroundTasksRun_ThenKeepsClaudeRunning()
     {
         // Arrange
-        await conversation.SendAsync("hej");
-        conversation.BackgroundTasksChanged(1);
+        await _conversation.SendAsync("hej");
+        _conversation.BackgroundTasksChanged(1);
 
         // Act
-        conversation.Restart();
+        _conversation.Restart();
 
         // Assert
-        Assert.Equal([null], claude.Starts);
+        Assert.Equal([null], _claude.Starts);
     }
 
     [Fact]
     public async Task SendAsync_WhenARestartWaitsWhileBusy_ThenDoesNotRestart()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("hej");
-        conversation.Restart();
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
+        _conversation.Restart();
 
         // Act
-        await conversation.SendAsync("igen");
+        await _conversation.SendAsync("igen");
 
         // Assert
-        Assert.Equal([null], claude.Starts);
+        Assert.Equal([null], _claude.Starts);
     }
 
     [Fact]
     public async Task SendAsync_WhenTheWaitingRestartIsDone_ThenDoesNotRestartAgain()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("hej");
-        conversation.Restart();
-        claude.Listener.ResultReceived(Answered with { Answers = [claude.Ids[0]] });
-        claude.Reply = Answer;
-        await conversation.SendAsync("igen");
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
+        _conversation.Restart();
+        _claude.Listener.ResultReceived(_answered with { Answers = [_claude.Ids[0]] });
+        _claude.Reply = Answer;
+        await _conversation.SendAsync("igen");
 
         // Act
-        await conversation.SendAsync("tredje");
+        await _conversation.SendAsync("tredje");
 
         // Assert
-        Assert.Equal([null, "session-1"], claude.Starts);
+        Assert.Equal([null, "session-1"], _claude.Starts);
     }
 
     [Fact]
     public async Task SendAsync_WhenARestartWaits_ThenStartsClaudeAgain()
     {
         // Arrange
-        claude.Reply = Started;
-        await conversation.SendAsync("hej");
-        conversation.Restart();
-        claude.Listener.ResultReceived(Answered with { Answers = [claude.Ids[0]] });
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
+        _conversation.Restart();
+        _claude.Listener.ResultReceived(_answered with { Answers = [_claude.Ids[0]] });
 
         // Act
-        await conversation.SendAsync("igen");
+        await _conversation.SendAsync("igen");
 
         // Assert
-        Assert.Equal([null, "session-1"], claude.Starts);
+        Assert.Equal([null, "session-1"], _claude.Starts);
+    }
+
+    async Task<Task<PermissionAnswer>> Asking()
+    {
+        Task<PermissionAnswer>? asking = null;
+        _claude.Reply = (listener, id) =>
+        {
+            listener.TurnStarted(id);
+            asking = listener.AskPermissionAsync(Request(), CancellationToken.None);
+        };
+        await _conversation.SendAsync("hej");
+        return asking!;
+    }
+
+    async Task<Conversation> RestartedWithWaitingChat()
+    {
+        await _conversation.SendAsync("hej");
+        var restarted = new Conversation(_claude, Store());
+        _claude.IsRunning = false;
+        _claude.Reply = Silent;
+        await restarted.SendAsync("igen");
+        return restarted;
+    }
+
+    async Task StartedSubagent()
+    {
+        _claude.Reply = (listener, id) =>
+        {
+            listener.TurnStarted(id);
+            listener.ToolStarted(new ToolUse("toolu_agent", "Agent", "Undersøg"));
+            listener.ResultReceived(_answered with { Answers = [id] });
+        };
+        await _conversation.SendAsync("første");
+        _claude.Reply = Answer;
+        await _conversation.SendAsync("anden");
     }
 
     static PermissionRequest Request() => new("req-1", "Bash", new JsonObject { ["command"] = "dir" });
-
-    static readonly ClaudeResult Answered = new("session-1", "Svar", IsError: false);
-
-    static readonly ClaudeResult Stopped = new("session-1", "error_during_execution", IsError: true, Cost: 0.2m);
-
-    static readonly ClaudeResult CannotResume = new("session-1", "No conversation found", IsError: true);
 
     static Action<IClaudeListener, string> Answering(ClaudeResult result) => (listener, id) =>
     {
@@ -1430,7 +1426,7 @@ public sealed class ConversationTests : IDisposable
         listener.ResultReceived(result with { Answers = [id] });
     };
 
-    static void Answer(IClaudeListener listener, string id) => Answering(Answered)(listener, id);
+    static void Answer(IClaudeListener listener, string id) => Answering(_answered)(listener, id);
 
     static void Started(IClaudeListener listener, string id) => listener.TurnStarted(id);
 

@@ -17,8 +17,10 @@ public sealed record FeedItem(string Source, string Group, string Id, string Tit
 
     public IssueRef Ref => new(Id, Title, Kind, Url);
 
-    public string DetailAt(DateTimeOffset now) =>
-        string.Join(" · ", new[] { Repository, Draft ? Strings.Of("Tasks.Draft") : "", Updated is { } updated ? Ago(now - updated) : "" }.Where(part => part.Length > 0));
+    public string DetailAt(DateTimeOffset now)
+    {
+        return string.Join(" · ", new[] { Repository, Draft ? Strings.Of("Tasks.Draft") : "", Updated is { } updated ? Ago(now - updated) : "" }.Where(part => part.Length > 0));
+    }
 
     public static string Ago(TimeSpan elapsed) => elapsed switch
     {

@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -10,7 +9,6 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using Hamster.Core.Chats;
@@ -18,7 +16,6 @@ using Hamster.Core.Claude;
 using Hamster.Core.Connections;
 using Hamster.Core.Feeds;
 using Hamster.Core.Languages;
-using Hamster.Core.Music;
 using Hamster.Core.Pet;
 using Hamster.Core.Prompts;
 using Hamster.Core.Storage;
@@ -30,78 +27,75 @@ namespace Hamster.Views;
 
 public partial class MainWindow : Window
 {
-    const double DefaultWidth = 396;
-    const double DefaultChatHeight = 900;
-    const double MinChatHeight = 120;
-    const double PetWidth = 160;
-    const double PetHeight = 144;
-    static readonly TimeSpan GiggleTime = TimeSpan.FromSeconds(1.5);
-    static readonly TimeSpan HappyTime = TimeSpan.FromSeconds(4);
-    static readonly TimeSpan SadTime = TimeSpan.FromSeconds(4);
-    const double TiredUsage = 0.9;
-    static readonly TimeSpan AwakeTime = TimeSpan.FromMinutes(1);
-    static readonly TimeSpan MovingTime = TimeSpan.FromMilliseconds(200);
-    static readonly TimeSpan ClickTime = TimeSpan.FromMilliseconds(300);
-    const string CollapseIcon = "\uE70D";
-    const string ExpandIcon = "\uE70E";
-    const string PlayIcon = "\uE768";
-    const string PauseIcon = "\uE769";
+    const double _defaultWidth = 396;
+    const double _defaultChatHeight = 900;
+    const double _minChatHeight = 120;
+    const double _petWidth = 160;
+    const double _petHeight = 144;
+    static readonly TimeSpan _giggleTime = TimeSpan.FromSeconds(1.5);
+    static readonly TimeSpan _happyTime = TimeSpan.FromSeconds(4);
+    static readonly TimeSpan _sadTime = TimeSpan.FromSeconds(4);
+    const double _tiredUsage = 0.9;
+    static readonly TimeSpan _awakeTime = TimeSpan.FromMinutes(1);
+    static readonly TimeSpan _movingTime = TimeSpan.FromMilliseconds(200);
+    static readonly TimeSpan _clickTime = TimeSpan.FromMilliseconds(300);
+    const string _collapseIcon = "\uE70D";
+    const string _expandIcon = "\uE70E";
 
-    readonly ClaudeClient claude;
-    readonly Conversation conversation;
-    readonly JsonFile<Placement> placementFile;
-    readonly JsonFile<WindowSize?> settingsSize;
-    readonly JsonFile<WindowSize?> feedSize;
-    readonly string instructionsFile;
-    readonly string data;
-    readonly ChatOwner owner = new();
-    readonly ChatOwner settingsOwner = new();
-    readonly bool chatOnly;
-    readonly List<string> attachedFiles = [];
-    readonly List<ImageAttachment> attachedImages = [];
-    readonly CharacterLibrary characters;
-    readonly PromptLibrary prompts;
-    readonly ThemeLibrary themes;
-    readonly JsonFile<PetSettings> petFile;
-    readonly Connectors connectors;
-    readonly Subscriptions subscriptions;
-    readonly WebSession web;
-    readonly Feed feed;
-    readonly DispatcherTimer timer = new();
-    readonly DispatcherTimer clock = new() { Interval = TimeSpan.FromSeconds(1) };
-    readonly DispatcherTimer feedTimer = new() { Interval = Subscriptions.Interval };
-    readonly HashSet<ConnectorProblem> dismissedProblems = [];
-    readonly Window petWindow;
+    readonly DataFiles _files;
+    readonly ClaudeClient _claude;
+    readonly Conversation _conversation;
+    readonly JsonFile<Placement> _placementFile;
+    readonly JsonFile<WindowSize?> _settingsSize;
+    readonly JsonFile<WindowSize?> _feedSize;
+    readonly bool _chatOnly;
+    readonly List<string> _attachedFiles = [];
+    readonly List<ImageAttachment> _attachedImages = [];
+    readonly CharacterLibrary _characters;
+    readonly PromptLibrary _prompts;
+    readonly ThemeLibrary _themes;
+    readonly JsonFile<PetSettings> _petFile;
+    readonly Connectors _connectors;
+    readonly Subscriptions _subscriptions;
+    readonly WebSession _web;
+    readonly Feed _feed;
+    readonly DispatcherTimer _timer = new();
+    readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromSeconds(1) };
+    readonly DispatcherTimer _feedTimer = new() { Interval = Subscriptions.Interval };
+    readonly HashSet<ConnectorProblem> _dismissedProblems = [];
+    readonly Window _petWindow;
 
-    IReadOnlyList<ConnectorProblem> problems = [];
-    string lastPrompt = "";
-    Task attaching = Task.CompletedTask;
-    DateTime feedNewsAt;
-    MusicPlayer? music;
-    Character character = Character.Hamster;
-    Dictionary<Mood, BitmapSource[]> images = [];
-    SettingsWindow? settings;
-    FeedWindow? feedWindow;
-    Mood mood;
-    int frame;
-    bool feedFetched, resizeQueued, pressed, dragging, chatsExpanded, shown = true;
-    Point dragStart;
-    DateTime pressedAt, giggleUntil, lastMove, lastActivity = DateTime.UtcNow, newsSeenAt = DateTime.UtcNow;
-    Placement placement;
-    Placement? beforeFullScreen;
-    (Point Mouse, double Width, double ChatHeight) resizeStart;
-    (DateTime AnsweredAt, bool Waiting) poppedUp;
-    TimeSpan hideTime;
-    DateTime hiddenAt;
-    DateTime frontAt;
-    double? readingOffset;
-    Button? closedByItsButton;
+    IReadOnlyList<ConnectorProblem> _problems = [];
+    string _lastPrompt = "";
+    Task _attaching = Task.CompletedTask;
+    DateTime _feedNewsAt;
+    Character _character = Character.Hamster;
+    Dictionary<Mood, BitmapSource[]> _images = [];
+    SettingsWindow? _settingsWindow;
+    FeedWindow? _feedWindow;
+    Mood _mood;
+    int _frame;
+    bool _feedFetched, _resizeQueued, _pressed, _dragging, _chatsExpanded, _shown = true;
+    Point _dragStart;
+    DateTime _pressedAt, _giggleUntil, _lastMove, _lastActivity = DateTime.UtcNow, _newsSeenAt = DateTime.UtcNow;
+    Placement _placement;
+    Placement? _beforeFullScreen;
+    (Point Mouse, double Width, double ChatHeight) _resizeStart;
+    (DateTime AnsweredAt, bool Waiting) _poppedUp;
+    TimeSpan _hideTime;
+    DateTime _hiddenAt;
+    DateTime _frontAt;
+    double? _readingOffset;
+    Button? _closedByItsButton;
 
-    public MainWindow()
+    public MainWindow(DataFiles files, ClaudeClient claude, Conversation conversation, Connectors connectors, Subscriptions subscriptions, Feed feed,
+        WebSession web, CharacterLibrary characters, PromptLibrary prompts, ThemeLibrary themes)
     {
+        (_files, _claude, _conversation, _connectors, _subscriptions) = (files, claude, conversation, connectors, subscriptions);
+        (_feed, _web, _characters, _prompts, _themes) = (feed, web, characters, prompts, themes);
         InitializeComponent();
         PetArea.Children.Remove(Pet);
-        petWindow = new Window
+        _petWindow = new Window
         {
             WindowStyle = WindowStyle.None,
             AllowsTransparency = true,
@@ -114,88 +108,85 @@ public partial class MainWindow : Window
             AllowDrop = true,
             Content = Pet,
         };
-        petWindow.DragOver += Window_DragOver;
-        petWindow.Drop += Window_Drop;
-        petWindow.Closed += (_, _) => Dispatcher.BeginInvoke(Close);
+        _petWindow.DragOver += Window_DragOver;
+        _petWindow.Drop += Window_Drop;
+        _petWindow.Closed += (_, _) => Dispatcher.BeginInvoke(Close);
         (Width, Height) = (SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
-        data = DataFolder.Current;
-        var settingsFile = Path.Combine(data, "settings.json");
-        chatOnly = !settingsOwner.TryOwn(settingsFile);
-        petFile = new JsonFile<PetSettings>(Path.Combine(data, "pet.json"), PetSettings.Default, chatOnly);
-        var pet = petFile.Load();
+        _chatOnly = files.ChatOnly;
+        _petFile = files.Pet;
+        var pet = _petFile.Load();
         SizeSlider.Value = pet.SizePercent;
         ShowSize();
         SizeSlider.ValueChanged += SizeSlider_ValueChanged;
         AutoHideItem.IsChecked = pet.AutoHide;
         MarkdownConverter.ShowWebImages = pet.ShowWebImages;
-        chatsExpanded = pet.ChatsExpanded;
-        ((App)Application.Current).Use(Translation.All.FirstOrDefault(translation => translation.Name == pet.LanguageName) ?? Translation.Danish);
-        instructionsFile = Path.Combine(data, "instructions.txt");
-        claude = new ClaudeClient(Path.Combine(data, "workspace"), instructionsFile,
-            new JsonFile<ClaudeSettings>(settingsFile, ClaudeSettings.Default, chatOnly));
-        if (!chatOnly)
-            SavedChats.Migrate(data, claude.Settings.WorkingDirectory);
-        conversation = new Conversation(claude, StoreFor(claude.Settings.WorkingDirectory));
-        hideTime = TimeSpan.FromSeconds(pet.HideSeconds);
-        placementFile = new JsonFile<Placement>(Path.Combine(data, "placement.json"), DefaultPlacement, chatOnly);
-        placement = placementFile.Load();
-        if (chatOnly)
-            placement = placement.CenteredIn(SystemParameters.WorkArea, new Size(PetArea.Width, PetArea.Height));
-        settingsSize = new JsonFile<WindowSize?>(Path.Combine(data, "settings-window.json"), null, chatOnly);
-        feedSize = new JsonFile<WindowSize?>(Path.Combine(data, "feed-window.json"), null, chatOnly);
-        characters = new CharacterLibrary(Path.Combine(data, "Characters"));
-        prompts = new PromptLibrary(Path.Combine(data, "Prompts"));
-        themes = new ThemeLibrary(Path.Combine(data, "Themes"));
-        connectors = new Connectors(claude, conversation.Restart, () => conversation.RestartPending);
-        web = new WebSession(Path.Combine(data, "WebLogin"));
-        subscriptions = new Subscriptions(connectors, new ClaudeFetcher(Path.Combine(data, "workspace")), web,
-            new JsonFile<SubscriptionSettings>(Path.Combine(data, "subscriptions.json"), SubscriptionSettings.Empty, chatOnly));
-        feed = new Feed([(Subscriptions.JiraSource, subscriptions.FetchJiraAsync), (Subscriptions.GitHubSource, subscriptions.FetchGitHubAsync)]);
+        _chatsExpanded = pet.ChatsExpanded;
+        _hideTime = TimeSpan.FromSeconds(pet.HideSeconds);
+        _placementFile = files.Store("placement.json", DefaultPlacement);
+        _placement = _placementFile.Load();
+        if (_chatOnly)
+        {
+            _placement = _placement.CenteredIn(SystemParameters.WorkArea, new Size(PetArea.Width, PetArea.Height));
+        }
+        _settingsSize = files.Store<WindowSize?>("settings-window.json", null);
+        _feedSize = files.Store<WindowSize?>("feed-window.json", null);
         feed.Changed += news =>
         {
             if (news)
-                feedNewsAt = DateTime.UtcNow;
+            {
+                _feedNewsAt = DateTime.UtcNow;
+            }
             ShowFeed();
         };
         subscriptions.Changed += () => _ = feed.RefreshAsync(subscriptionsChanged: true);
-        feedTimer.Tick += (_, _) => _ = feed.RefreshAsync();
+        _feedTimer.Tick += (_, _) => _ = feed.RefreshAsync();
         if (!ModeButton.ContextMenu.Items.OfType<MenuItem>().Any(item => (string)item.Tag == claude.Settings.PermissionMode))
+        {
             claude.Settings = claude.Settings with { PermissionMode = ClaudeSettings.Default.PermissionMode };
+        }
         Choose(ModelButton, claude.Settings.Model);
         Choose(EffortButton, claude.Settings.Effort);
         Choose(ModeButton, claude.Settings.PermissionMode);
-        ToggleChats.Content = chatsExpanded ? CollapseIcon : ExpandIcon;
+        ToggleChats.Content = _chatsExpanded ? _collapseIcon : _expandIcon;
+        Root.Width = RootWidth();
         ShowChatOnly();
         ShowFolder();
-        ChatList.ItemsSource = conversation.Chats;
+        Chats.Show(conversation);
         UpdateChatList();
         conversation.Changed += Conversation_Changed;
         conversation.Started += () =>
         {
-            if (chatOnly)
+            if (_chatOnly)
+            {
                 return;
+            }
             _ = CheckConnectorsAsync();
-            if (feedFetched)
+            if (_feedFetched)
+            {
                 return;
-            feedFetched = true;
+            }
+            _feedFetched = true;
             _ = feed.RefreshAsync();
         };
         conversation.PermissionModeChanged += mode => claude.Settings = claude.Settings with { PermissionMode = Choose(ModeButton, mode) };
-        timer.Tick += (_, _) =>
+        _timer.Tick += (_, _) =>
         {
             FadeWhenIdle();
             Animate();
         };
-        clock.Tick += (_, _) =>
+        _clock.Tick += (_, _) =>
         {
             foreach (var chat in conversation.Chats)
+            {
                 chat.RefreshElapsed();
+            }
         };
+        Music.Changed += AnimateIfMoodChanged;
         Strings.Changed += () =>
         {
             ShowChatOnly();
             UpdateToolbar();
-            ShowMusic();
+            Music.Show();
             UpdateAttachments();
             ShowProblems();
             _ = feed.RefreshAsync();
@@ -206,44 +197,54 @@ public partial class MainWindow : Window
 
     static string SwitchWhenIdle => Strings.Of("Main.SwitchWhenIdle");
 
-    static Placement DefaultPlacement => new(SystemParameters.WorkArea.Right, SystemParameters.WorkArea.Bottom, DefaultWidth, DefaultChatHeight);
+    static Placement DefaultPlacement => new(SystemParameters.WorkArea.Right, SystemParameters.WorkArea.Bottom, _defaultWidth, _defaultChatHeight);
 
     PetStatus Status => new(
-        Pressed: pressed,
-        Moving: DateTime.UtcNow - lastMove < MovingTime,
-        Giggling: DateTime.UtcNow < giggleUntil,
-        WaitingForUser: conversation.IsWaitingForUser,
-        BrowsingWeb: conversation.IsBrowsingWeb,
-        Busy: conversation.IsBusy,
-        Celebrating: conversation.AnsweredWithin(HappyTime, DateTime.UtcNow),
-        Failed: conversation.FailedWithin(SadTime, DateTime.UtcNow) || conversation.FailedSince(AnswerSeenAt),
+        Pressed: _pressed,
+        Moving: DateTime.UtcNow - _lastMove < _movingTime,
+        Giggling: DateTime.UtcNow < _giggleUntil,
+        WaitingForUser: _conversation.IsWaitingForUser,
+        BrowsingWeb: _conversation.IsBrowsingWeb,
+        Busy: _conversation.IsBusy,
+        Celebrating: _conversation.AnsweredWithin(_happyTime, DateTime.UtcNow),
+        Failed: _conversation.FailedWithin(_sadTime, DateTime.UtcNow) || _conversation.FailedSince(AnswerSeenAt),
         Typing: Input.IsKeyboardFocused && Input.Text.Length > 0,
-        HasNews: conversation.AnsweredAt > AnswerSeenAt,
-        HasTaskNews: feedNewsAt > newsSeenAt,
-        BackgroundWork: conversation.BackgroundTasks > 0,
-        Music: music?.Track?.Playing == true,
-        Tired: conversation.Usage?.HighestAt(DateTimeOffset.UtcNow) >= TiredUsage,
+        HasNews: _conversation.AnsweredAt > AnswerSeenAt,
+        HasTaskNews: _feedNewsAt > _newsSeenAt,
+        BackgroundWork: _conversation.BackgroundTasks > 0,
+        Music: Music.Playing,
+        Tired: _conversation.Usage?.HighestAt(DateTimeOffset.UtcNow) >= _tiredUsage,
         Hovered: Pet.IsMouseOver,
-        Awake: Input.IsKeyboardFocused || DateTime.UtcNow - lastActivity < AwakeTime);
+        Awake: Input.IsKeyboardFocused || DateTime.UtcNow - _lastActivity < _awakeTime);
 
     void Animate()
     {
-        var next = MoodTransition.Next(mood, frame, Status.Mood, character.Animations[Mood.Spin].Length);
-        if (next != mood)
-            (mood, frame) = (next, 0);
-        var frames = character.Animations[mood];
-        var index = frame++ % frames.Length;
-        Pet.Source = images[mood][index];
-        timer.Stop();
-        timer.Interval = TimeSpan.FromMilliseconds(frames[index].Milliseconds);
-        timer.Start();
+        var next = MoodTransition.Next(_mood, _frame, Status.Mood, _character.Animations[Mood.Spin].Length);
+        if (next != _mood)
+        {
+            (_mood, _frame) = (next, 0);
+        }
+        var frames = _character.Animations[_mood];
+        var index = _frame++ % frames.Length;
+        Pet.Source = _images[_mood][index];
+        _timer.Stop();
+        _timer.Interval = TimeSpan.FromMilliseconds(frames[index].Milliseconds);
+        _timer.Start();
+    }
+
+    void AnimateIfMoodChanged()
+    {
+        if (Status.Mood != _mood)
+        {
+            Animate();
+        }
     }
 
     Character LoadCharacter(string name)
     {
         try
         {
-            return characters.Load(name);
+            return _characters.Load(name);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
         {
@@ -253,36 +254,44 @@ public partial class MainWindow : Window
 
     void UseCharacter(Character next)
     {
-        character = next;
-        images = next.Animations.ToDictionary(animation => animation.Key, animation => animation.Value.Select(frame => SpriteRenderer.Render(frame.Rows, next.Palette)).ToArray());
-        frame = 0;
+        _character = next;
+        _images = next.Animations.ToDictionary(animation => animation.Key, animation => animation.Value.Select(frame => SpriteRenderer.Render(frame.Rows, next.Palette)).ToArray());
+        _frame = 0;
         Animate();
     }
 
     void ShowChatOnly()
     {
-        if (chatOnly)
+        if (_chatOnly)
+        {
             foreach (var button in new[] { MoreButton, FeedButton })
+            {
                 (button.IsEnabled, button.ToolTip, button.Opacity) = (false, Strings.Of("Main.OnlyInFirstHamster"), 0.4);
+            }
+        }
     }
 
     void Settings_Click(object sender, RoutedEventArgs e)
     {
-        if (settings is { IsVisible: true })
-            settings.Close();
+        if (_settingsWindow is { IsVisible: true })
+        {
+            _settingsWindow.Close();
+        }
         else
+        {
             ShowSettings();
+        }
     }
 
     void ShowSettings()
     {
-        if (settings is { IsVisible: true })
+        if (_settingsWindow is { IsVisible: true })
         {
-            settings.Activate();
+            _settingsWindow.Activate();
             return;
         }
-        var window = settings = new SettingsWindow(ChooseLanguage, (int)hideTime.TotalSeconds, ChooseHideSeconds, MarkdownConverter.ShowWebImages, ChooseWebImages, themes, petFile.Load().ThemeName, ChooseTheme, characters, character.Name, ChooseCharacter, connectors, subscriptions, web);
-        RememberSize(window, settingsSize);
+        var window = _settingsWindow = new SettingsWindow(ChooseLanguage, (int)_hideTime.TotalSeconds, ChooseHideSeconds, MarkdownConverter.ShowWebImages, ChooseWebImages, _themes, _petFile.Load().ThemeName, ChooseTheme, _characters, _character.Name, ChooseCharacter, _connectors, _subscriptions, _web);
+        RememberSize(window, _settingsSize);
         window.Closed += (_, _) => _ = CheckConnectorsAsync();
         window.Show();
     }
@@ -292,11 +301,15 @@ public partial class MainWindow : Window
         var size = (file.Load() ?? new WindowSize(window.Width, window.Height)).FitIn(ScreenArea.Of(PetArea));
         window.Width = size.Width;
         if (!double.IsNaN(size.Height))
+        {
             (window.SizeToContent, window.MaxHeight, window.Height) = (SizeToContent.Manual, double.PositiveInfinity, size.Height);
+        }
         window.Closed += (_, _) =>
         {
             if (window.WindowState == WindowState.Normal)
+            {
                 file.Save(new WindowSize(window.ActualWidth, window.ActualHeight));
+            }
         };
     }
 
@@ -304,7 +317,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            problems = await connectors.ProblemsAsync(Connectors.StatusInterval);
+            _problems = await _connectors.ProblemsAsync(Connectors.StatusInterval);
         }
         catch (Exception exception) when (exception is InvalidOperationException or OperationCanceledException or IOException or ObjectDisposedException)
         {
@@ -315,136 +328,119 @@ public partial class MainWindow : Window
 
     void ShowProblems()
     {
-        dismissedProblems.IntersectWith(problems);
-        ProblemList.ItemsSource = problems.Except(dismissedProblems).ToArray();
+        _dismissedProblems.IntersectWith(_problems);
+        ProblemList.ItemsSource = _problems.Except(_dismissedProblems).ToArray();
     }
 
     void Problem_Click(object sender, MouseButtonEventArgs e) => ShowSettings();
 
     void DismissProblem_Click(object sender, RoutedEventArgs e)
     {
-        dismissedProblems.Add((ConnectorProblem)((FrameworkElement)sender).DataContext);
+        _dismissedProblems.Add((ConnectorProblem)((FrameworkElement)sender).DataContext);
         ShowProblems();
     }
 
     void ShowFeed()
     {
-        var any = feed.Items.Count > 0;
-        FeedCount.Text = feed.Items.Count.ToString(CultureInfo.CurrentCulture);
+        var any = _feed.Items.Count > 0;
+        FeedCount.Text = _feed.Items.Count.ToString(CultureInfo.CurrentCulture);
         FeedBadge.SetResourceReference(Border.BackgroundProperty, any ? "Attention" : "Muted");
         FeedButton.SetResourceReference(ForegroundProperty, any ? "Attention" : "Muted");
         FeedCount.SetResourceReference(TextBlock.ForegroundProperty, any ? "OnAttention" : "Surface");
         if (any)
+        {
             FeedButton.SetResourceReference(BackgroundProperty, "AttentionSoft");
+        }
         else
+        {
             FeedButton.ClearValue(BackgroundProperty);
-        feedWindow?.ShowFeed();
-        if (Status.Mood != mood)
-            Animate();
+        }
+        _feedWindow?.ShowFeed();
+        AnimateIfMoodChanged();
     }
 
     void Feed_Click(object sender, RoutedEventArgs e)
     {
-        if (feedWindow is { IsVisible: true })
+        if (_feedWindow is { IsVisible: true })
         {
-            feedWindow.Close();
+            _feedWindow.Close();
             return;
         }
-        feedWindow = new FeedWindow(feed, subscriptions);
-        RememberSize(feedWindow, feedSize);
-        feedWindow.Closed += (_, _) => feedWindow = null;
-        feedWindow.Show();
+        _feedWindow = new FeedWindow(_feed, _subscriptions);
+        RememberSize(_feedWindow, _feedSize);
+        _feedWindow.Closed += (_, _) => _feedWindow = null;
+        _feedWindow.Show();
     }
-
-    async Task StartMusicAsync()
-    {
-        try
-        {
-            music = await MusicPlayer.StartAsync();
-        }
-        catch (COMException)
-        {
-            return;
-        }
-        music.Changed += ShowMusic;
-        ShowMusic();
-    }
-
-    void ShowMusic()
-    {
-        var track = music?.Track;
-        MusicBubble.Visibility = track is null ? Visibility.Collapsed : Visibility.Visible;
-        (TrackText.Text, MusicBubble.ToolTip) = (track?.Text, track?.Text);
-        (PlayPauseButton.Content, PlayPauseButton.ToolTip) = track?.Playing == true ? (PauseIcon, Strings.Of("Main.Pause")) : (PlayIcon, Strings.Of("Main.Play"));
-        if (Status.Mood != mood)
-            Animate();
-    }
-
-    async void PlayPause_Click(object sender, RoutedEventArgs e) => await (music?.PlayPauseAsync() ?? Task.CompletedTask);
-
-    async void NextTrack_Click(object sender, RoutedEventArgs e) => await (music?.NextAsync() ?? Task.CompletedTask);
-
-    async void PreviousTrack_Click(object sender, RoutedEventArgs e) => await (music?.PreviousAsync() ?? Task.CompletedTask);
 
     void ChooseHideSeconds(int seconds)
     {
-        petFile.Save(petFile.Load() with { HideSeconds = seconds });
-        hideTime = TimeSpan.FromSeconds(seconds);
+        _petFile.Save(_petFile.Load() with { HideSeconds = seconds });
+        _hideTime = TimeSpan.FromSeconds(seconds);
         FadeWhenIdle();
     }
 
     void ChooseWebImages(bool show)
     {
-        petFile.Save(petFile.Load() with { ShowWebImages = show });
+        _petFile.Save(_petFile.Load() with { ShowWebImages = show });
         MarkdownConverter.ShowWebImages = show;
-        ChatList.Items.Refresh();
+        Chats.ChatList.Items.Refresh();
     }
 
     void ChooseCharacter(Character chosen)
     {
-        petFile.Save(petFile.Load() with { CharacterName = chosen.Name });
+        _petFile.Save(_petFile.Load() with { CharacterName = chosen.Name });
         UseCharacter(chosen);
     }
 
     void ChooseLanguage(Translation chosen)
     {
         if (chosen == Strings.Current)
+        {
             return;
-        petFile.Save(petFile.Load() with { LanguageName = chosen.Name });
+        }
+        _petFile.Save(_petFile.Load() with { LanguageName = chosen.Name });
         ((App)Application.Current).Use(chosen);
     }
 
     void ChooseTheme(Theme chosen)
     {
-        petFile.Save(petFile.Load() with { ThemeName = chosen.Name });
+        _petFile.Save(_petFile.Load() with { ThemeName = chosen.Name });
         ((App)Application.Current).Use(chosen);
     }
 
     void Touch()
     {
-        lastActivity = DateTime.UtcNow;
+        _lastActivity = DateTime.UtcNow;
         FadeWhenIdle();
     }
 
-    DateTime AnswerSeenAt => newsSeenAt > frontAt ? newsSeenAt : frontAt;
+    DateTime AnswerSeenAt => _newsSeenAt > _frontAt ? _newsSeenAt : _frontAt;
 
     void FadeWhenIdle()
     {
         var now = DateTime.UtcNow;
         if (ForegroundWindow.IsThisApp())
-            frontAt = now;
-        var show = !AutoHideItem.IsChecked || Input.Text.Length > 0 || IsMouseOver || shown && Pet.IsMouseOver
-            || conversation.IsWaitingForUser || conversation.AnsweredAt > AnswerSeenAt || now - lastActivity < hideTime || now - frontAt < hideTime;
-        if (show == shown)
+        {
+            _frontAt = now;
+        }
+        var show = !AutoHideItem.IsChecked || Input.Text.Length > 0 || IsMouseOver || _shown && Pet.IsMouseOver
+            || _conversation.IsWaitingForUser || _conversation.AnsweredAt > AnswerSeenAt || now - _lastActivity < _hideTime || now - _frontAt < _hideTime;
+        if (show == _shown)
+        {
             return;
-        shown = show;
-        if (shown)
+        }
+        _shown = show;
+        if (_shown)
+        {
             UpdateChatList();
+        }
         else
-            hiddenAt = now;
-        Fade(ChatArea, shown);
-        Fade(TemporaryBanner, shown);
-        Fade(ToolbarArea, shown);
+        {
+            _hiddenAt = now;
+        }
+        Fade(ChatArea, _shown);
+        Fade(TemporaryBanner, _shown);
+        Fade(ToolbarArea, _shown);
     }
 
     static TimeSpan FadeTime(bool show) => TimeSpan.FromMilliseconds(show ? 150 : 300);
@@ -455,14 +451,16 @@ public partial class MainWindow : Window
     {
         Apply(OnScreen());
         FitToScreen();
-        petWindow.Show();
+        _petWindow.Show();
         SystemEvents.DisplaySettingsChanged += Display_Changed;
         UpdateToolbar();
-        ScrollToNewest();
-        _ = conversation.StartAsync();
-        _ = StartMusicAsync();
-        if (!chatOnly)
-            feedTimer.Start();
+        Chats.ScrollToNewest();
+        _ = _conversation.StartAsync();
+        _ = Music.StartAsync();
+        if (!_chatOnly)
+        {
+            _feedTimer.Start();
+        }
     }
 
     Placement OnScreen()
@@ -472,25 +470,27 @@ public partial class MainWindow : Window
         var pet = PetArea.TranslatePoint(new Point(), this);
         var (petLeftToRight, petTopToBottom) = (ActualWidth - pet.X, ActualHeight - pet.Y);
         var corners = new Rect(screen.Left + petLeftToRight, screen.Top + petTopToBottom, screen.Width - PetArea.ActualWidth, screen.Height - petTopToBottom);
-        return placement.ClampedTo(corners);
+        return _placement.ClampedTo(corners);
     }
 
-    Placement PlacementAtPet => placement with { Right = petWindow.Left + PetArea.Width + PetArea.Margin.Right, Bottom = petWindow.Top + PetArea.Height };
+    Placement PlacementAtPet => _placement with { Right = _petWindow.Left + PetArea.Width + PetArea.Margin.Right, Bottom = _petWindow.Top + PetArea.Height };
 
     void Display_Changed(object? sender, EventArgs e) => Dispatcher.BeginInvoke(() =>
     {
-        placement = PlacementAtPet;
+        _placement = PlacementAtPet;
         Apply(OnScreen());
         FitToScreen();
     });
 
     void Apply(Placement next)
     {
-        placement = next with { ChatHeight = Math.Max(next.ChatHeight, MinChatHeight) };
-        Root.Width = Math.Min(Math.Max(placement.Width, NarrowestWidth()), Width);
+        _placement = next with { ChatHeight = Math.Max(next.ChatHeight, _minChatHeight) };
+        Root.Width = RootWidth();
         Place();
         FitChatHeight();
     }
+
+    double RootWidth() => Math.Min(Math.Max(_placement.Width, NarrowestWidth()), Width);
 
     double NarrowestWidth()
     {
@@ -501,23 +501,24 @@ public partial class MainWindow : Window
 
     void Place()
     {
-        Left = placement.Right - Width;
-        Top = placement.Bottom - Height;
-        (petWindow.Left, petWindow.Top) = (placement.Right - PetArea.Margin.Right - PetArea.Width, placement.Bottom - PetArea.Height);
+        Left = _placement.Right - Width;
+        Top = _placement.Bottom - Height;
+        (_petWindow.Left, _petWindow.Top) = (_placement.Right - PetArea.Margin.Right - PetArea.Width, _placement.Bottom - PetArea.Height);
     }
 
     void FitToScreen()
     {
         var screen = ScreenArea.Of(PetArea);
         (Width, Height) = (screen.Width, screen.Height);
-        Apply(placement);
+        Apply(_placement);
     }
 
     void Root_SizeChanged(object sender, SizeChangedEventArgs e) => FitChatHeight();
 
-    void FitChatHeight() =>
-        ChatScroll.Height = Math.Clamp(Math.Min(placement.Bottom - ScreenArea.Of(PetArea).Top, Height) - (Root.ActualHeight - ChatScroll.ActualHeight),
-            0, placement.ChatHeight);
+    void FitChatHeight()
+    {
+        Chats.ChatScroll.Height = Math.Clamp(Math.Min(_placement.Bottom - ScreenArea.Of(PetArea).Top, Height) - (Root.ActualHeight - Chats.ChatScroll.ActualHeight), 0, _placement.ChatHeight);
+    }
 
     static void BringToFront(Window window)
     {
@@ -530,47 +531,47 @@ public partial class MainWindow : Window
     void Window_Closed(object sender, EventArgs e)
     {
         SystemEvents.DisplaySettingsChanged -= Display_Changed;
-        conversation.Save();
-        settings?.Close();
-        feedWindow?.Close();
-        petWindow.Close();
-        owner.Dispose();
-        settingsOwner.Dispose();
-        claude.End();
+        _conversation.Save();
+        _settingsWindow?.Close();
+        _feedWindow?.Close();
+        _petWindow.Close();
+        _claude.End();
     }
 
     void Window_MouseMove(object sender, MouseEventArgs e)
     {
         UpdateNews();
         Touch();
-        if (Status.Mood != mood)
-            Animate();
+        AnimateIfMoodChanged();
     }
 
     void Conversation_Changed()
     {
-        if (conversation.AnsweredAt > poppedUp.AnsweredAt || conversation.IsWaitingForUser && !poppedUp.Waiting)
+        if (_conversation.AnsweredAt > _poppedUp.AnsweredAt || _conversation.IsWaitingForUser && !_poppedUp.Waiting)
+        {
             BringToFront(this);
-        poppedUp = (conversation.AnsweredAt, conversation.IsWaitingForUser);
-        lastActivity = DateTime.UtcNow;
+        }
+        _poppedUp = (_conversation.AnsweredAt, _conversation.IsWaitingForUser);
         FadeWhenIdle();
-        var following = IsAtBottom;
+        var following = Chats.IsAtBottom;
         UpdateToolbar();
         UpdateNews();
         UpdateChatList();
         if (following)
-            ScrollToNewest();
+        {
+            Chats.ScrollToNewest();
+        }
         Animate();
     }
 
     void UpdateToolbar()
     {
-        CostText.Text = conversation.Cost.ToString("$0.00", CultureInfo.InvariantCulture);
-        StopButton.Visibility = conversation.IsBusy ? Visibility.Visible : Visibility.Collapsed;
-        TasksText.Text = Strings.Format("Main.TasksRunning", conversation.BackgroundTasks);
-        TasksText.Visibility = conversation.BackgroundTasks > 0 && !conversation.IsBusy ? Visibility.Visible : Visibility.Collapsed;
+        CostText.Text = _conversation.Cost.ToString("$0.00", CultureInfo.InvariantCulture);
+        StopButton.Visibility = _conversation.IsBusy ? Visibility.Visible : Visibility.Collapsed;
+        TasksText.Text = Strings.Format("Main.TasksRunning", _conversation.BackgroundTasks);
+        TasksText.Visibility = _conversation.BackgroundTasks > 0 && !_conversation.IsBusy ? Visibility.Visible : Visibility.Collapsed;
         PromptsButton.Visibility = StopButton.Visibility == Visibility.Collapsed && TasksText.Visibility == Visibility.Collapsed ? Visibility.Visible : Visibility.Collapsed;
-        clock.IsEnabled = conversation.IsBusy;
+        _clock.IsEnabled = _conversation.IsBusy;
         ShowFolder();
         FitWidth();
     }
@@ -578,30 +579,32 @@ public partial class MainWindow : Window
     void UpdateNews()
     {
         if (IsMouseOver || Input.IsKeyboardFocused)
-            newsSeenAt = DateTime.UtcNow;
+        {
+            _newsSeenAt = DateTime.UtcNow;
+        }
     }
 
     void UpdateChatList()
     {
-        if (!shown)
-            return;
-        var any = false;
-        foreach (var chat in conversation.Chats)
+        if (!_shown)
         {
-            chat.Shown = chatsExpanded || conversation.IsCurrent(chat, hiddenAt);
+            return;
+        }
+        var any = false;
+        foreach (var chat in _conversation.Chats)
+        {
+            chat.Shown = _chatsExpanded || _conversation.IsCurrent(chat, _hiddenAt);
             any |= chat.Shown;
         }
         ChatArea.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    bool IsAtBottom => ChatScroll.VerticalOffset >= ChatScroll.ScrollableHeight - 1;
-
     void Pet_MouseEnterOrLeave(object sender, MouseEventArgs e) => Animate();
 
     void Pet_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        placement = PlacementAtPet;
-        (pressed, dragging, dragStart, pressedAt) = (true, false, e.GetPosition(petWindow), DateTime.UtcNow);
+        _placement = PlacementAtPet;
+        (_pressed, _dragging, _dragStart, _pressedAt) = (true, false, e.GetPosition(_petWindow), DateTime.UtcNow);
         Touch();
         Pet.CaptureMouse();
         Animate();
@@ -609,45 +612,58 @@ public partial class MainWindow : Window
 
     void Pet_MouseMove(object sender, MouseEventArgs e)
     {
-        if (!pressed)
+        if (!_pressed)
+        {
             return;
-        var offset = e.GetPosition(petWindow) - dragStart;
-        if (!dragging)
+        }
+        var offset = e.GetPosition(_petWindow) - _dragStart;
+        if (!_dragging)
         {
             if (Math.Abs(offset.X) < SystemParameters.MinimumHorizontalDragDistance && Math.Abs(offset.Y) < SystemParameters.MinimumVerticalDragDistance)
+            {
                 return;
-            dragging = true;
+            }
+            _dragging = true;
         }
         if (offset.Length < 1)
+        {
             return;
-        placement = placement with { Right = placement.Right + offset.X, Bottom = placement.Bottom + offset.Y };
+        }
+        _placement = _placement with { Right = _placement.Right + offset.X, Bottom = _placement.Bottom + offset.Y };
         Place();
         if (Math.Abs(offset.X) >= 1)
+        {
             Facing.ScaleX = offset.X > 0 ? -1 : 1;
-        lastMove = DateTime.UtcNow;
-        if (Status.Mood != mood)
-            Animate();
+        }
+        _lastMove = DateTime.UtcNow;
+        AnimateIfMoodChanged();
     }
 
     void Pet_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        var clicked = pressed && !dragging && DateTime.UtcNow - pressedAt < ClickTime;
-        newsSeenAt = DateTime.UtcNow;
+        var clicked = _pressed && !_dragging && DateTime.UtcNow - _pressedAt < _clickTime;
+        _newsSeenAt = DateTime.UtcNow;
         Pet.ReleaseMouseCapture();
         Activate();
-        foreach (var window in new Window?[] { settings, feedWindow }.OfType<Window>().Where(window => window.IsVisible))
+        foreach (var window in new Window?[] { _settingsWindow, _feedWindow }.OfType<Window>().Where(window => window.IsVisible))
+        {
             BringToFront(window);
+        }
         if (!clicked)
+        {
             return;
-        giggleUntil = DateTime.UtcNow + GiggleTime;
+        }
+        _giggleUntil = DateTime.UtcNow + _giggleTime;
         Animate();
     }
 
     void Pet_LostMouseCapture(object sender, MouseEventArgs e)
     {
-        if (dragging)
-            placementFile.Save(beforeFullScreen ?? placement);
-        (pressed, dragging) = (false, false);
+        if (_dragging)
+        {
+            _placementFile.Save(_beforeFullScreen ?? _placement);
+        }
+        (_pressed, _dragging) = (false, false);
         Facing.ScaleX = 1;
         FitToScreen();
         Animate();
@@ -655,74 +671,42 @@ public partial class MainWindow : Window
 
     void ResizeGrip_DragStarted(object sender, DragStartedEventArgs e)
     {
-        beforeFullScreen = null;
-        resizeStart = (Mouse.GetPosition(this), Root.ActualWidth, ChatScroll.Height);
-        ScrollToNewest();
-        FreezeHiddenChats();
+        _beforeFullScreen = null;
+        _resizeStart = (Mouse.GetPosition(this), Root.ActualWidth, Chats.ChatScroll.Height);
+        Chats.ScrollToNewest();
+        Chats.FreezeHiddenChats();
     }
 
     void ResizeGrip_DragDelta(object sender, DragDeltaEventArgs e)
     {
-        var moved = resizeStart.Mouse - Mouse.GetPosition(this);
-        var dragged = placement.DraggedTo(resizeStart.Width + moved.X, NarrowestWidth());
-        Apply(sender == WidthGrip ? dragged : dragged with { ChatHeight = resizeStart.ChatHeight + moved.Y });
-        FreezeHiddenChats();
+        var moved = _resizeStart.Mouse - Mouse.GetPosition(this);
+        var dragged = _placement.DraggedTo(_resizeStart.Width + moved.X, NarrowestWidth());
+        Apply(sender == WidthGrip ? dragged : dragged with { ChatHeight = _resizeStart.ChatHeight + moved.Y });
+        Chats.FreezeHiddenChats();
     }
 
     void ResizeGrip_DragCompleted(object sender, DragCompletedEventArgs e)
     {
-        ThawChats();
-        placementFile.Save(placement);
+        Chats.ThawChats();
+        _placementFile.Save(_placement);
     }
-
-    void ThawChats()
-    {
-        if (ChatContainers.FirstOrDefault(chat => !double.IsNaN(chat.Width)) is not { } frozen)
-            return;
-        frozen.ClearValue(WidthProperty);
-        Dispatcher.BeginInvoke(ThawChats, DispatcherPriority.ApplicationIdle);
-    }
-
-    IEnumerable<FrameworkElement> ChatContainers =>
-        Enumerable.Range(0, ChatList.Items.Count).Select(ChatList.ItemContainerGenerator.ContainerFromIndex).OfType<FrameworkElement>();
-
-    void FreezeHiddenChats()
-    {
-        bool thawed;
-        do
-        {
-            ChatList.UpdateLayout();
-            thawed = false;
-            foreach (var chat in ChatContainers.Where(chat => !double.IsNaN(chat.Width) && IsInView(chat)))
-            {
-                chat.ClearValue(WidthProperty);
-                thawed = true;
-            }
-        }
-        while (thawed);
-        foreach (var chat in ChatContainers.Where(chat => double.IsNaN(chat.Width) && !IsInView(chat)))
-            chat.Width = chat.ActualWidth;
-    }
-
-    bool IsInView(FrameworkElement chat) =>
-        chat.TranslatePoint(new Point(), ChatScroll).Y is var top && top < ChatScroll.ActualHeight && top + chat.ActualHeight > 0;
 
     void FullScreen_Click(object sender, RoutedEventArgs e)
     {
-        if (beforeFullScreen is { } previous)
+        if (_beforeFullScreen is { } previous)
         {
-            beforeFullScreen = null;
-            placement = previous;
+            _beforeFullScreen = null;
+            _placement = previous;
             Apply(OnScreen());
         }
         else
         {
-            beforeFullScreen = placement;
+            _beforeFullScreen = _placement;
             var screen = ScreenArea.Of(PetArea);
             Apply(new Placement(screen.Right, screen.Bottom, screen.Width, screen.Height));
         }
         Touch();
-        ScrollToNewest();
+        Chats.ScrollToNewest();
     }
 
     void FocusInput()
@@ -746,7 +730,9 @@ public partial class MainWindow : Window
         UpdateNews();
         Touch();
         if (e.Key == Key.Escape)
+        {
             LeaveInput();
+        }
     }
 
     async void Input_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -754,53 +740,30 @@ public partial class MainWindow : Window
         if (e.Key == Key.Enter && Keyboard.Modifiers != ModifierKeys.Shift)
         {
             e.Handled = true;
-            await attaching;
-            if (Input.Text.Trim().Length == 0 && attachedFiles.Count + attachedImages.Count == 0)
+            await _attaching;
+            if (Input.Text.Trim().Length == 0 && _attachedFiles.Count + _attachedImages.Count == 0)
+            {
                 return;
+            }
             var text = Input.Text.Trim();
             Input.Clear();
             await SendAsync(text);
         }
-        else if (e.Key == Key.Up && Input.Text.Length == 0 && lastPrompt.Length > 0)
+        else if (e.Key == Key.Up && Input.Text.Length == 0 && _lastPrompt.Length > 0)
         {
             e.Handled = true;
-            Input.Text = lastPrompt;
-            Input.CaretIndex = lastPrompt.Length;
+            Input.Text = _lastPrompt;
+            Input.CaretIndex = _lastPrompt.Length;
         }
-        else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && ClipboardFiles() is { } files)
+        else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && ClipboardAttachments.ClipboardFiles() is { } files)
         {
             e.Handled = true;
             await AttachAsync(files);
         }
-        else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && ClipboardImage() is { } image)
+        else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && ClipboardAttachments.ClipboardImage() is { } image)
         {
             e.Handled = true;
-            attachedImages.Add(new ImageAttachment("screenshot.png", "image/png", EncodePng(image)));
-            UpdateAttachments();
-        }
-    }
-
-    static IEnumerable<string>? ClipboardFiles()
-    {
-        try
-        {
-            return Clipboard.ContainsFileDropList() ? Clipboard.GetFileDropList().Cast<string>() : null;
-        }
-        catch (ExternalException)
-        {
-            return null;
-        }
-    }
-
-    static BitmapSource? ClipboardImage()
-    {
-        try
-        {
-            return Clipboard.ContainsImage() && !Clipboard.ContainsText() ? Clipboard.GetImage() : null;
-        }
-        catch (ExternalException)
-        {
-            return null;
+            AttachScreenshot(image);
         }
     }
 
@@ -810,14 +773,15 @@ public partial class MainWindow : Window
         try
         {
             if (await ScreenSnip.CaptureAsync() is not { } image)
+            {
                 return;
-            attachedImages.Add(new ImageAttachment("screenshot.png", "image/png", EncodePng(image)));
-            UpdateAttachments();
+            }
+            AttachScreenshot(image);
             FocusInput();
         }
         catch (Win32Exception)
         {
-            MessageBox.Show(this, Strings.Of("Main.SnipFailed"), "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Warning.Show(this, Strings.Of("Main.SnipFailed"));
         }
         finally
         {
@@ -825,13 +789,10 @@ public partial class MainWindow : Window
         }
     }
 
-    static byte[] EncodePng(BitmapSource image)
+    void AttachScreenshot(BitmapSource image)
     {
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(image));
-        using var stream = new MemoryStream();
-        encoder.Save(stream);
-        return stream.ToArray();
+        _attachedImages.Add(new ImageAttachment("screenshot.png", "image/png", ClipboardAttachments.EncodePng(image)));
+        UpdateAttachments();
     }
 
     void Window_DragOver(object sender, DragEventArgs e)
@@ -848,7 +809,7 @@ public partial class MainWindow : Window
         }
     }
 
-    Task AttachAsync(IEnumerable<string> files) => attaching = ReadAttachmentsAsync([.. files], attaching);
+    Task AttachAsync(IEnumerable<string> files) => _attaching = ReadAttachmentsAsync([.. files], _attaching);
 
     async Task ReadAttachmentsAsync(string[] files, Task previous)
     {
@@ -858,11 +819,11 @@ public partial class MainWindow : Window
         {
             if (image is not null)
             {
-                attachedImages.Add(image);
+                _attachedImages.Add(image);
             }
             else
             {
-                attachedFiles.Add(file);
+                _attachedFiles.Add(file);
             }
         }
         UpdateAttachments();
@@ -873,14 +834,14 @@ public partial class MainWindow : Window
 
     void ClearAttachments()
     {
-        attachedFiles.Clear();
-        attachedImages.Clear();
+        _attachedFiles.Clear();
+        _attachedImages.Clear();
         UpdateAttachments();
     }
 
     void UpdateAttachments()
     {
-        var names = attachedFiles.Select(Path.GetFileName).Concat(attachedImages.Select(image => image.Name)).ToArray();
+        var names = _attachedFiles.Select(Path.GetFileName).Concat(_attachedImages.Select(image => image.Name)).ToArray();
         AttachmentChip.Visibility = names.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         AttachmentChip.ToolTip = $"{string.Join('\n', names)}\n{Strings.Of("Main.ClickToRemove")}";
         AttachmentCount.Text = $"{names.Length}";
@@ -888,48 +849,50 @@ public partial class MainWindow : Window
 
     void ToggleChats_Click(object sender, RoutedEventArgs e)
     {
-        if (chatsExpanded)
-            readingOffset = IsAtBottom ? null : ChatScroll.VerticalOffset;
-        chatsExpanded = !chatsExpanded;
-        petFile.Save(petFile.Load() with { ChatsExpanded = chatsExpanded });
-        ToggleChats.Content = chatsExpanded ? CollapseIcon : ExpandIcon;
+        if (_chatsExpanded)
+        {
+            _readingOffset = Chats.IsAtBottom ? null : Chats.ChatScroll.VerticalOffset;
+        }
+        _chatsExpanded = !_chatsExpanded;
+        _petFile.Save(_petFile.Load() with { ChatsExpanded = _chatsExpanded });
+        ToggleChats.Content = _chatsExpanded ? _collapseIcon : _expandIcon;
         Touch();
         UpdateChatList();
-        if (chatsExpanded && readingOffset is { } offset)
-            ChatScroll.ScrollToVerticalOffset(offset);
+        if (_chatsExpanded && _readingOffset is { } offset)
+        {
+            Chats.ChatScroll.ScrollToVerticalOffset(offset);
+        }
         else
-            ScrollToNewest();
+        {
+            Chats.ScrollToNewest();
+        }
         Animate();
     }
 
-    void ChatScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
-    {
-        ChatScroll.ScrollToVerticalOffset(ChatScroll.VerticalOffset - e.Delta / 3.0);
-        e.Handled = true;
-    }
+    void NewChat_Click(object sender, RoutedEventArgs e) => _conversation.Reset();
 
-    void NewChat_Click(object sender, RoutedEventArgs e) => conversation.Reset();
-
-    void Stop_Click(object sender, RoutedEventArgs e) => conversation.Cancel();
+    void Stop_Click(object sender, RoutedEventArgs e) => _conversation.Cancel();
 
     void MoreMenu_Opened(object sender, RoutedEventArgs e)
     {
-        FullScreenItem.IsChecked = beforeFullScreen is not null;
-        SaveChatItem.IsEnabled = conversation.Chats.Count > 0;
-        UsageItem.Header = conversation.Usage is { } usage
+        FullScreenItem.IsChecked = _beforeFullScreen is not null;
+        SaveChatItem.IsEnabled = _conversation.Chats.Count > 0;
+        UsageItem.Header = _conversation.Usage is { } usage
             ? Strings.Format("Main.Usage", usage.FiveHourAt(DateTimeOffset.UtcNow), usage.SevenDayAt(DateTimeOffset.UtcNow))
             : Strings.Of("Main.UsageLater");
     }
 
     void Folder_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFolderDialog { InitialDirectory = (claude.Settings.WorkingDirectory ?? claude.Settings.LastFolder) is { } last && Directory.Exists(last) ? last : "" };
+        var dialog = new OpenFolderDialog { InitialDirectory = (_claude.Settings.WorkingDirectory ?? _claude.Settings.LastFolder) is { } last && Directory.Exists(last) ? last : "" };
         if (dialog.ShowDialog(this) == true)
+        {
             UseFolder(dialog.FolderName);
+        }
         ShowFolder();
     }
 
-    void NewHamster_Click(object sender, RoutedEventArgs e) => Open(new ProcessStartInfo(Environment.ProcessPath!), Strings.Of("Main.NewHamsterFailed"));
+    void NewHamster_Click(object sender, RoutedEventArgs e) => Warning.Open(this, new ProcessStartInfo(Environment.ProcessPath!), Strings.Of("Main.NewHamsterFailed"));
 
     void Chat_Click(object sender, RoutedEventArgs e)
     {
@@ -939,36 +902,35 @@ public partial class MainWindow : Window
 
     void UseFolder(string? folder)
     {
-        if (folder == claude.Settings.WorkingDirectory || !CanSwitch)
+        if (folder == _claude.Settings.WorkingDirectory || !CanSwitch)
+        {
             return;
-        claude.Settings = claude.Settings with { WorkingDirectory = folder, LastFolder = folder ?? claude.Settings.WorkingDirectory };
-        conversation.Switch(() => StoreFor(folder));
+        }
+        _claude.Settings = _claude.Settings with { WorkingDirectory = folder, LastFolder = folder ?? _claude.Settings.WorkingDirectory };
+        _conversation.Switch(() => _files.Chats(folder));
     }
 
-    bool CanSwitch => !conversation.IsBusy && conversation.BackgroundTasks == 0;
-
-    JsonFile<SavedChats>? StoreFor(string? folder) =>
-        SavedChats.FileFor(data, folder) is var file && owner.TryOwn(file) ? new JsonFile<SavedChats>(file, SavedChats.Empty) : null;
+    bool CanSwitch => !_conversation.IsBusy && _conversation.BackgroundTasks == 0;
 
     void ShowFolder()
     {
-        var folder = claude.Settings.WorkingDirectory;
+        var folder = _claude.Settings.WorkingDirectory;
         var idle = CanSwitch;
         (ChatButton.IsChecked, FolderButton.IsChecked, ChatButton.IsEnabled, FolderButton.IsEnabled) = (folder is null, folder is not null, idle, idle);
         (ChatButton.ToolTip, FolderButton.ToolTip) = idle ? (Strings.Of("Main.ChatHint"), folder ?? Strings.Of("Main.FolderHint")) : (SwitchWhenIdle, SwitchWhenIdle);
-        TemporaryBanner.Visibility = conversation.IsTemporary ? Visibility.Visible : Visibility.Collapsed;
+        TemporaryBanner.Visibility = _conversation.IsTemporary ? Visibility.Visible : Visibility.Collapsed;
         ShowInputHint();
     }
 
     void Input_TextChanged(object sender, TextChangedEventArgs e) => ShowInputHint();
 
-    void ShowInputHint() => InputHint.Visibility = conversation.IsTemporary && Input.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+    void ShowInputHint() => InputHint.Visibility = _conversation.IsTemporary && Input.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
 
     void Instructions_Click(object sender, RoutedEventArgs e)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(instructionsFile)!);
-        File.AppendAllText(instructionsFile, "");
-        Open(new ProcessStartInfo(instructionsFile) { UseShellExecute = true }, Strings.Of("Main.InstructionsFailed"));
+        Directory.CreateDirectory(Path.GetDirectoryName(_files.Instructions)!);
+        File.AppendAllText(_files.Instructions, "");
+        Warning.Open(this, new ProcessStartInfo(_files.Instructions) { UseShellExecute = true }, Strings.Of("Main.InstructionsFailed"));
     }
 
     async void SaveChat_Click(object sender, RoutedEventArgs e)
@@ -980,14 +942,16 @@ public partial class MainWindow : Window
             Filter = $"Markdown (*.md)|*.md|{Strings.Of("Main.TextFiles")} (*.txt)|*.txt",
         };
         if (dialog.ShowDialog(this) != true)
+        {
             return;
+        }
         try
         {
-            await File.WriteAllTextAsync(dialog.FileName, ChatExport.ToMarkdown(conversation.Chats.Select(chat => chat.ToRecord())));
+            await File.WriteAllTextAsync(dialog.FileName, ChatExport.ToMarkdown(_conversation.Chats.Select(chat => chat.ToRecord())));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, Strings.Format("Main.SaveChatFailed", exception.Message), "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Warning.Show(this, Strings.Format("Main.SaveChatFailed", exception.Message));
         }
     }
 
@@ -997,9 +961,11 @@ public partial class MainWindow : Window
         menu.Items.Clear();
         try
         {
-            prompts.EnsureFolder();
-            foreach (var prompt in prompts.Prompts)
+            _prompts.EnsureFolder();
+            foreach (var prompt in _prompts.Prompts)
+            {
                 menu.Items.Add(new MenuItem { Header = prompt.Name, Tag = prompt });
+            }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -1011,51 +977,31 @@ public partial class MainWindow : Window
     {
         if (((MenuItem)e.OriginalSource).Tag is not Prompt prompt)
         {
-            Open(new ProcessStartInfo(prompts.Folder) { UseShellExecute = true }, Strings.Of("Main.PromptsFolderFailed"));
+            Warning.Open(this, new ProcessStartInfo(_prompts.Folder) { UseShellExecute = true }, Strings.Of("Main.PromptsFolderFailed"));
             return;
         }
         try
         {
             var text = (await File.ReadAllTextAsync(prompt.File)).Trim();
             if (text.Length == 0)
+            {
                 return;
+            }
             await SendAsync(text, prompt.Name);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, Strings.Format("Main.PromptFailed", exception.Message), "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Warning.Show(this, Strings.Format("Main.PromptFailed", exception.Message));
         }
     }
 
-    void OpenClaude_Click(object sender, RoutedEventArgs e) =>
-        Open(new ProcessStartInfo("claude://") { UseShellExecute = true }, Strings.Of("Main.OpenClaudeFailed"));
-
-    void Login_Click(object sender, RoutedEventArgs e) => Open(new ProcessStartInfo("claude", "auth login"), Strings.Of("Main.LoginFailed"));
-
-    void Open(ProcessStartInfo start, string failure)
-    {
-        try
-        {
-            Process.Start(start);
-        }
-        catch (Win32Exception)
-        {
-            MessageBox.Show(this, failure, "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-    }
-
-    void Link_RequestNavigate(object sender, RequestNavigateEventArgs e)
-    {
-        var target = e.Uri.IsFile ? e.Uri.LocalPath : e.Uri.AbsoluteUri;
-        Open(new ProcessStartInfo(target) { UseShellExecute = true }, Strings.Format("Main.LinkFailed", target));
-        e.Handled = true;
-    }
+    void OpenClaude_Click(object sender, RoutedEventArgs e) => Warning.Open(this, new ProcessStartInfo("claude://") { UseShellExecute = true }, Strings.Of("Main.OpenClaudeFailed"));
 
     void ShowChoices_Click(object sender, RoutedEventArgs e)
     {
-        if (sender == closedByItsButton)
+        if (sender == _closedByItsButton)
         {
-            closedByItsButton = null;
+            _closedByItsButton = null;
             return;
         }
         var choices = ((Button)sender).ContextMenu;
@@ -1064,26 +1010,28 @@ public partial class MainWindow : Window
         choices.IsOpen = true;
     }
 
-    void Choices_Closed(object sender, RoutedEventArgs e) =>
-        closedByItsButton = ((ContextMenu)sender).PlacementTarget is Button button && Mouse.LeftButton == MouseButtonState.Pressed
+    void Choices_Closed(object sender, RoutedEventArgs e)
+    {
+        _closedByItsButton = ((ContextMenu)sender).PlacementTarget is Button button && Mouse.LeftButton == MouseButtonState.Pressed
             && new Rect(button.RenderSize).Contains(Mouse.GetPosition(button)) ? button : null;
+    }
 
     void Model_Click(object sender, RoutedEventArgs e)
     {
         var model = Choose(ModelButton, (string)((MenuItem)e.OriginalSource).Tag);
-        claude.Choose(claude.Settings with { Model = model }, ClaudeProtocol.SetModel(model));
+        _claude.Choose(_claude.Settings with { Model = model }, ClaudeProtocol.SetModel(model));
     }
 
     void Effort_Click(object sender, RoutedEventArgs e)
     {
         var effort = Choose(EffortButton, (string)((MenuItem)e.OriginalSource).Tag);
-        claude.Choose(claude.Settings with { Effort = effort }, ClaudeProtocol.SetEffort(effort));
+        _claude.Choose(_claude.Settings with { Effort = effort }, ClaudeProtocol.SetEffort(effort));
     }
 
     void Mode_Click(object sender, RoutedEventArgs e)
     {
         var mode = Choose(ModeButton, (string)((MenuItem)e.OriginalSource).Tag);
-        claude.Choose(claude.Settings with { PermissionMode = mode }, ClaudeProtocol.SetPermissionMode(mode));
+        _claude.Choose(_claude.Settings with { PermissionMode = mode }, ClaudeProtocol.SetPermissionMode(mode));
     }
 
     string Choose(Button button, string value)
@@ -1093,7 +1041,9 @@ public partial class MainWindow : Window
         {
             item.IsChecked = (string)item.Tag == value;
             if (item.IsChecked)
+            {
                 button.Content = item.Header;
+            }
         }
         FitWidth();
         return value;
@@ -1102,83 +1052,63 @@ public partial class MainWindow : Window
     void FitWidth()
     {
         if (!IsLoaded)
+        {
             return;
+        }
         UpdateLayout();
-        Apply(placement);
+        Apply(_placement);
     }
-
-    void CopyAnswer_Click(object sender, RoutedEventArgs e)
-    {
-        var button = (Button)sender;
-        ClipboardText.Copy(((ChatItem)button.DataContext).Answer, icon => button.Content = icon);
-    }
-
-    void DeleteChat_Click(object sender, RoutedEventArgs e) => conversation.Delete((ChatItem)((FrameworkElement)sender).DataContext);
 
     void Exit_Click(object sender, RoutedEventArgs e) => Close();
 
     void SizeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (resizeQueued)
+        if (_resizeQueued)
+        {
             return;
-        resizeQueued = true;
+        }
+        _resizeQueued = true;
         Dispatcher.BeginInvoke(ResizePet, DispatcherPriority.Background);
     }
 
     void ResizePet()
     {
-        resizeQueued = false;
+        _resizeQueued = false;
+        Chats.FreezeHiddenChats();
         ShowSize();
         UpdateLayout();
         Apply(OnScreen());
-        FreezeHiddenChats();
+        Chats.FreezeHiddenChats();
     }
 
     void SizeSlider_LostMouseCapture(object sender, MouseEventArgs e)
     {
-        Dispatcher.BeginInvoke(ThawChats, DispatcherPriority.Background);
-        petFile.Save(petFile.Load() with { SizePercent = (int)SizeSlider.Value });
+        Dispatcher.BeginInvoke(Chats.ThawChats, DispatcherPriority.Background);
+        _petFile.Save(_petFile.Load() with { SizePercent = (int)SizeSlider.Value });
     }
 
     void AutoHide_Click(object sender, RoutedEventArgs e)
     {
-        petFile.Save(petFile.Load() with { AutoHide = AutoHideItem.IsChecked });
+        _petFile.Save(_petFile.Load() with { AutoHide = AutoHideItem.IsChecked });
         FadeWhenIdle();
     }
 
     void ShowSize()
     {
         var scale = SizeSlider.Value / 100;
-        (PetArea.Width, PetArea.Height) = (PetWidth * scale, PetHeight * scale);
-        (petWindow.Width, petWindow.Height) = (PetArea.Width, PetArea.Height);
+        (PetArea.Width, PetArea.Height) = (_petWidth * scale, _petHeight * scale);
+        (_petWindow.Width, _petWindow.Height) = (PetArea.Width, PetArea.Height);
         SizeText.Text = $"{SizeSlider.Value}%";
-    }
-
-    void Allow_Click(object sender, RoutedEventArgs e) => ClickedRequest(sender)?.Respond(true);
-
-    void AllowAlways_Click(object sender, RoutedEventArgs e) => ClickedRequest(sender)?.RespondAlways();
-
-    void Deny_Click(object sender, RoutedEventArgs e) => ClickedRequest(sender)?.Respond(false);
-
-    static UserRequest? ClickedRequest(object sender) =>
-        ((FrameworkElement)sender).DataContext is UserRequest request && request.CanBeClicked(DateTime.UtcNow) ? request : null;
-
-    void Answer_RequestBringIntoView(object sender, RequestBringIntoViewEventArgs e)
-    {
-        if (e.TargetObject == sender)
-            e.Handled = true;
     }
 
     async Task SendAsync(string text, string? title = null)
     {
-        await attaching;
-        lastPrompt = text;
-        var prompt = Conversation.WithAttachments(text, attachedFiles, attachedImages);
-        ImageAttachment[] images = [.. attachedImages];
+        await _attaching;
+        _lastPrompt = text;
+        var prompt = Conversation.WithAttachments(text, _attachedFiles, _attachedImages);
+        ImageAttachment[] images = [.. _attachedImages];
         ClearAttachments();
-        ScrollToNewest();
-        await conversation.SendAsync(prompt, images, title);
+        Chats.ScrollToNewest();
+        await _conversation.SendAsync(prompt, images, title);
     }
-
-    void ScrollToNewest() => ChatScroll.ScrollToEnd();
 }

@@ -1,6 +1,6 @@
 namespace Hamster.Tests;
 
-public class DataFolderTests
+public sealed class DataFolderTests
 {
     [Fact]
     public void Of_WhenOverridden_ThenUsesTheOverride()

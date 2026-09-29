@@ -14,8 +14,8 @@ public sealed class FieldInput(ConnectorField field)
 
 public sealed class ConnectorRow(Connector connector, ConnectorSource source = ConnectorSource.Hamster) : INotifyPropertyChanged
 {
-    int claudeAiMisses;
-    bool restartPending;
+    int _claudeAiMisses;
+    bool _restartPending;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -43,11 +43,11 @@ public sealed class ConnectorRow(Connector connector, ConnectorSource source = C
     public bool NeedsSite => IsLogin && LoginSite is null;
     public string LoginLabel => LoginSite is null ? Strings.Of("Settings.LogIn") : Strings.Of("Settings.LogOut");
     public bool Installed => Server?.IsUsable == true;
-    public bool CanInstall => Known && IsHamster && Connector.Installable && !Installed && !Restarting && !restartPending;
+    public bool CanInstall => Known && IsHamster && Connector.Installable && !Installed && !Restarting && !_restartPending;
     public bool ShowForm => CanInstall || Editing;
     public bool CanEdit => IsHamster && Connector.Installable && Installed && Server?.Name == Connector.Name;
     public bool HasChoices => !IsOff && (Choices.Count > 0 || CanFetchChoices);
-    public bool ClaudeAiMissing => claudeAiMisses >= Connectors.ClaudeAiChecks;
+    public bool ClaudeAiMissing => _claudeAiMisses >= Connectors.ClaudeAiChecks;
 
     public string State => IsOff ? Strings.Of("Settings.TurnedOff")
         : IsLogin ? LoginSite is null ? Strings.Of("Settings.Site") : LoginConfirmed switch
@@ -57,7 +57,7 @@ public sealed class ConnectorRow(Connector connector, ConnectorSource source = C
             false => Strings.Format("Settings.LoginCheckFailed", new Uri(LoginSite).Host),
         }
         : !Known ? Strings.Of("Common.Fetching")
-        : Server is null && restartPending ? Strings.Of("Settings.SwitchesAfterRestart")
+        : Server is null && _restartPending ? Strings.Of("Settings.SwitchesAfterRestart")
         : Restarting && !Installed ? Strings.Of("Settings.SavedAfterRestart")
         : Server is null ? IsClaudeAi ? Connector.MissingOnClaudeAi : Strings.Of("Settings.NotInstalled")
         : Server.Status switch
@@ -69,16 +69,18 @@ public sealed class ConnectorRow(Connector connector, ConnectorSource source = C
 
     public void Show(IReadOnlyList<McpServer> servers, bool restartPending = false)
     {
-        (Server, Known, this.restartPending) = (IsOff ? null : Connector.FindIn(servers, IsClaudeAi), true, restartPending);
+        (Server, Known, _restartPending) = (IsOff ? null : Connector.FindIn(servers, IsClaudeAi), true, restartPending);
         Restarting &= !Installed && Server?.Name != Connector.Name;
-        claudeAiMisses = IsClaudeAi && Server is null && !restartPending ? claudeAiMisses + 1 : 0;
+        _claudeAiMisses = IsClaudeAi && Server is null && !restartPending ? _claudeAiMisses + 1 : 0;
         Changed();
     }
 
     public void SetSource(ConnectorSource source)
     {
         if (source != Source)
-            (Source, Editing, claudeAiMisses, Problem, Known, Server) = (source, false, 0, null, false, null);
+        {
+            (Source, Editing, _claudeAiMisses, Problem, Known, Server) = (source, false, 0, null, false, null);
+        }
         Changed();
     }
 

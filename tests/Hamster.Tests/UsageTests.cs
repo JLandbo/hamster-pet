@@ -1,8 +1,8 @@
 namespace Hamster.Tests;
 
-public class UsageTests
+public sealed class UsageTests
 {
-    static readonly DateTimeOffset Reset = new(2026, 9, 28, 12, 0, 0, TimeSpan.Zero);
+    static readonly DateTimeOffset _reset = new(2026, 9, 28, 12, 0, 0, TimeSpan.Zero);
 
     [Theory]
     [InlineData(-1, 0.95)]
@@ -10,10 +10,10 @@ public class UsageTests
     public void FiveHourAt_WhenTheWindowResets_ThenCountsFromZero(int minutesAfterReset, double expected)
     {
         // Arrange
-        var usage = new Usage(0.95, 0.5, Reset, Reset.AddDays(3));
+        var usage = new Usage(0.95, 0.5, _reset, _reset.AddDays(3));
 
         // Act
-        var fiveHour = usage.FiveHourAt(Reset.AddMinutes(minutesAfterReset));
+        var fiveHour = usage.FiveHourAt(_reset.AddMinutes(minutesAfterReset));
 
         // Assert
         Assert.Equal(expected, fiveHour);
@@ -25,10 +25,10 @@ public class UsageTests
     public void SevenDayAt_WhenTheWindowResets_ThenCountsFromZero(int minutesAfterReset, double expected)
     {
         // Arrange
-        var usage = new Usage(0.95, 0.5, Reset.AddDays(-1), Reset);
+        var usage = new Usage(0.95, 0.5, _reset.AddDays(-1), _reset);
 
         // Act
-        var sevenDay = usage.SevenDayAt(Reset.AddMinutes(minutesAfterReset));
+        var sevenDay = usage.SevenDayAt(_reset.AddMinutes(minutesAfterReset));
 
         // Assert
         Assert.Equal(expected, sevenDay);
@@ -40,7 +40,7 @@ public class UsageTests
     public void HighestAt_WhenEitherWindowIsHigher_ThenReturnsIt(double fiveHour, double sevenDay, double expected)
     {
         // Act
-        var highest = new Usage(fiveHour, sevenDay).HighestAt(Reset);
+        var highest = new Usage(fiveHour, sevenDay).HighestAt(_reset);
 
         // Assert
         Assert.Equal(expected, highest);
@@ -50,7 +50,7 @@ public class UsageTests
     public void HighestAt_WhenTheFiveHourWindowHasReset_ThenReturnsTheWeek()
     {
         // Act
-        var highest = new Usage(0.95, 0.5, Reset.AddMinutes(-1), Reset.AddDays(3)).HighestAt(Reset);
+        var highest = new Usage(0.95, 0.5, _reset.AddMinutes(-1), _reset.AddDays(3)).HighestAt(_reset);
 
         // Assert
         Assert.Equal(0.5, highest);
@@ -60,7 +60,7 @@ public class UsageTests
     public void FiveHourAt_WhenTheResetTimeIsUnknown_ThenKeepsTheUsage()
     {
         // Act
-        var fiveHour = new Usage(0.95, 0.5).FiveHourAt(Reset);
+        var fiveHour = new Usage(0.95, 0.5).FiveHourAt(_reset);
 
         // Assert
         Assert.Equal(0.95, fiveHour);

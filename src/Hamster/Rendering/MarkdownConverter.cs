@@ -144,7 +144,9 @@ public sealed class MarkdownConverter : IValueConverter
         var table = new Table { CellSpacing = 0, RowGroups = { rows } };
         var columns = rows.Rows.SelectMany(row => row.Cells.Index()).GroupBy(cell => cell.Index, cell => LongestWord(cell.Item));
         foreach (var column in columns)
+        {
             table.Columns.Add(new TableColumn { Width = new(Math.Max(1, column.Max()), GridUnitType.Star) });
+        }
         return table;
     }
 
@@ -176,8 +178,7 @@ public sealed class MarkdownConverter : IValueConverter
 
     static bool InsideLink(Markdig.Syntax.Inlines.Inline inline) => inline.Parent?.ContainsParentOfType<LinkInline>() == true;
 
-    static Uri? PictureUri(string? url) =>
-        Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri is { IsFile: true, IsUnc: false }
+    static Uri? PictureUri(string? url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri is { IsFile: true, IsUnc: false }
             ? _pictureFiles.Contains(Path.GetExtension(uri.LocalPath), StringComparer.OrdinalIgnoreCase) ? uri : null
             : ShowWebImages ? WebUri(url) : null;
 

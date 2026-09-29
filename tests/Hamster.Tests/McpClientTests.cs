@@ -2,7 +2,7 @@ using System.Text.Json.Nodes;
 
 namespace Hamster.Tests;
 
-public class McpClientTests
+public sealed class McpClientTests
 {
     [Theory]
     [InlineData("text/event-stream", "event: message\ndata: {\"id\":1}\n\ndata: {\"id\":2}\n\n")]

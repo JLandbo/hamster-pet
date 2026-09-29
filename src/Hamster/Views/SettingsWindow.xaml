@@ -174,7 +174,7 @@
                     </ItemsControl>
 
                     <TextBlock Text="{DynamicResource Settings.Connectors}" Foreground="{DynamicResource Muted}" Margin="0,16,0,8" />
-                    <TextBlock x:Name="ConnectorProblem" Foreground="{DynamicResource Attention}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed" />
+                    <TextBlock x:Name="ConnectorProblemText" Foreground="{DynamicResource Attention}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed" />
                     <ItemsControl x:Name="ConnectorList">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type local:ConnectorRow}">
@@ -219,7 +219,7 @@
                                         </StackPanel>
                                         <StackPanel x:Name="Subscribe" Margin="0,8,0,0" Visibility="Collapsed">
                                             <DockPanel>
-                                                <Button x:Name="FetchChoices" DockPanel.Dock="Right" Content="{DynamicResource Settings.FetchBoards}" Click="FetchStatuses_Click" IsEnabled="{Binding Idle}"
+                                                <Button x:Name="FetchChoices" DockPanel.Dock="Right" Content="{DynamicResource Settings.FetchBoards}" Click="FetchChoices_Click" IsEnabled="{Binding Idle}"
                                                         Style="{StaticResource TextButton}" Padding="6,2" Visibility="Collapsed" />
                                                 <TextBlock Text="{DynamicResource Settings.SubscribeTo}" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" />
                                             </DockPanel>

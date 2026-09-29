@@ -7,8 +7,13 @@ public sealed class ThemeLibrary(string folder)
 {
     public static Theme Default { get; } = new("Sort og gul", new Dictionary<string, Color>());
 
-    public IEnumerable<Theme> Themes =>
-        [Default, .. Own.Where(theme => !theme.Name.Equals(Default.Name, StringComparison.OrdinalIgnoreCase)).OrderBy(theme => theme.Name, StringComparer.CurrentCultureIgnoreCase)];
+    public IEnumerable<Theme> Themes
+    {
+        get
+        {
+            return [Default, .. Own.Where(theme => !theme.Name.Equals(Default.Name, StringComparison.OrdinalIgnoreCase)).OrderBy(theme => theme.Name, StringComparer.CurrentCultureIgnoreCase)];
+        }
+    }
 
     public string Folder => folder;
 

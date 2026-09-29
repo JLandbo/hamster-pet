@@ -10,10 +10,10 @@ public sealed record FeedSource(string Title, string? Error, IReadOnlyList<FeedG
 
 public sealed class Feed(IReadOnlyList<(string Source, Func<Task<IReadOnlyList<FeedItem>>> Fetch)> sources)
 {
-    readonly Dictionary<string, IReadOnlyList<FeedItem>> fetched = [];
-    readonly Dictionary<string, HashSet<string>> seen = [];
-    Task refreshing = Task.CompletedTask;
-    bool again, forget;
+    readonly Dictionary<string, IReadOnlyList<FeedItem>> _fetched = [];
+    readonly Dictionary<string, HashSet<string>> _seen = [];
+    Task _refreshing = Task.CompletedTask;
+    bool _again, _forget;
 
     public event Action<bool>? Changed;
 
@@ -40,12 +40,16 @@ public sealed class Feed(IReadOnlyList<(string Source, Func<Task<IReadOnlyList<F
     static IEnumerable<FeedBox> Boxes(FeedItem[] items, DateTimeOffset now)
     {
         foreach (var epic in items.Select(item => item.Kind == IssueKind.Epic ? item.Ref : item.Epic).OfType<IssueRef>().DistinctBy(epic => epic.Url).OrderBy(epic => epic.Key, FeedItem.KeyOrder))
+        {
             yield return new FeedBox(
                 items.FirstOrDefault(item => item.Url == epic.Url) is { } listed ? RowOf(listed, now) : RowOf(epic),
                 [.. Rows([.. items.Where(item => item.Kind != IssueKind.Epic && item.Epic?.Url == epic.Url)], now)]);
+        }
         FeedItem[] loose = [.. items.Where(item => item.Kind != IssueKind.Epic && item.Epic is null)];
         if (loose.Length > 0)
+        {
             yield return new FeedBox(null, [.. Rows(loose, now)]);
+        }
     }
 
     static IEnumerable<FeedRow> Rows(FeedItem[] items, DateTimeOffset now)
@@ -59,7 +63,9 @@ public sealed class Feed(IReadOnlyList<(string Source, Func<Task<IReadOnlyList<F
         {
             yield return top.Row;
             foreach (var subTask in items.Where(item => Nested(item) && item.Parent!.Url == top.Url).OrderBy(item => item.Id, FeedItem.KeyOrder))
+            {
                 yield return RowOf(subTask, now) with { Depth = 1 };
+            }
         }
     }
 
@@ -69,28 +75,29 @@ public sealed class Feed(IReadOnlyList<(string Source, Func<Task<IReadOnlyList<F
 
     public Task RefreshAsync(bool subscriptionsChanged = false)
     {
-        forget |= subscriptionsChanged;
-        if (!refreshing.IsCompleted)
+        _forget |= subscriptionsChanged;
+        if (!_refreshing.IsCompleted)
         {
-            again = true;
-            return refreshing;
+            _again = true;
+            return _refreshing;
         }
-        return refreshing = RefreshUntilCurrentAsync();
+        return _refreshing = RefreshUntilCurrentAsync();
     }
 
     async Task RefreshUntilCurrentAsync()
     {
         do
         {
-            again = false;
-            if (forget)
+            _again = false;
+            if (_forget)
             {
-                seen.Clear();
-                forget = false;
+                _seen.Clear();
+                _forget = false;
             }
             var news = false;
             List<(string Source, string Error)> errors = [];
             foreach (var (source, fetch) in sources)
+            {
                 try
                 {
                     news |= Take(source, await fetch());
@@ -99,20 +106,23 @@ public sealed class Feed(IReadOnlyList<(string Source, Func<Task<IReadOnlyList<F
                 {
                     errors.Add((source, exception.Message));
                 }
-            (Items, Errors) = ([.. sources.SelectMany(source => fetched.GetValueOrDefault(source.Source) ?? [])], errors);
+            }
+            (Items, Errors) = ([.. sources.SelectMany(source => _fetched.GetValueOrDefault(source.Source) ?? [])], errors);
             if (errors.Count == 0)
+            {
                 UpdatedAt = DateTime.Now;
-            Changed?.Invoke(news && !forget);
+            }
+            Changed?.Invoke(news && !_forget);
         }
-        while (again);
+        while (_again);
     }
 
     bool Take(string source, IReadOnlyList<FeedItem> items)
     {
-        fetched[source] = items;
+        _fetched[source] = items;
         var current = items.Select(item => item.Url).ToHashSet();
-        var fresh = seen.TryGetValue(source, out var before) && !current.IsSubsetOf(before);
-        seen[source] = current;
+        var fresh = _seen.TryGetValue(source, out var before) && !current.IsSubsetOf(before);
+        _seen[source] = current;
         return fresh;
     }
 }

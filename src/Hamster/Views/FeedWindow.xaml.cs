@@ -11,14 +11,14 @@ namespace Hamster.Views;
 
 public partial class FeedWindow : Window
 {
-    readonly Feed feed;
-    readonly Subscriptions subscriptions;
-    readonly HashSet<string> expanded = [];
+    readonly Feed _feed;
+    readonly Subscriptions _subscriptions;
+    readonly HashSet<string> _expanded = [];
 
     public FeedWindow(Feed feed, Subscriptions subscriptions)
     {
         InitializeComponent();
-        (this.feed, this.subscriptions) = (feed, subscriptions);
+        (_feed, _subscriptions) = (feed, subscriptions);
         ShowFeed();
         Strings.Changed += ShowFeed;
         Closed += (_, _) => Strings.Changed -= ShowFeed;
@@ -26,16 +26,16 @@ public partial class FeedWindow : Window
 
     public void ShowFeed()
     {
-        FeedSource[] sources = [.. feed.SourcesAt(DateTimeOffset.Now, subscriptions.Slots)];
+        FeedSource[] sources = [.. _feed.SourcesAt(DateTimeOffset.Now, _subscriptions.Slots)];
         SourceList.ItemsSource = sources;
         EmptyText.Visibility = sources.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        UpdatedText.Text = feed.UpdatedAt is { } updated ? Strings.Format("Tasks.Updated", updated) : "";
+        UpdatedText.Text = _feed.UpdatedAt is { } updated ? Strings.Format("Tasks.Updated", updated) : "";
     }
 
     async void Refresh_Click(object sender, RoutedEventArgs e)
     {
         (RefreshButton.IsEnabled, UpdatedText.Text) = (false, Strings.Of("Common.Fetching"));
-        await feed.RefreshAsync();
+        await _feed.RefreshAsync();
         RefreshButton.IsEnabled = true;
         ShowFeed();
     }
@@ -56,19 +56,13 @@ public partial class FeedWindow : Window
     void Expand_Loaded(object sender, RoutedEventArgs e)
     {
         var toggle = (ToggleButton)sender;
-        toggle.IsChecked = toggle.DataContext is FeedRow { Details: not null } row && expanded.Contains(row.Url);
+        toggle.IsChecked = toggle.DataContext is FeedRow { Details: not null } row && _expanded.Contains(row.Url);
     }
 
     void Link_RequestNavigate(object sender, RequestNavigateEventArgs e)
     {
         Open(e.Uri.AbsoluteUri);
         e.Handled = true;
-    }
-
-    void Description_RequestBringIntoView(object sender, RequestBringIntoViewEventArgs e)
-    {
-        if (e.TargetObject == sender)
-            e.Handled = true;
     }
 
     void List_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -82,9 +76,13 @@ public partial class FeedWindow : Window
         var toggle = (ToggleButton)sender;
         var url = ((FeedRow)toggle.DataContext).Url;
         if (toggle.IsChecked == true)
-            expanded.Add(url);
+        {
+            _expanded.Add(url);
+        }
         else
-            expanded.Remove(url);
+        {
+            _expanded.Remove(url);
+        }
         e.Handled = true;
     }
 

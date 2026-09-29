@@ -46,37 +46,37 @@ public sealed record ThemeChoice(Theme Theme, ResourceDictionary Defaults, bool 
 
 public partial class SettingsWindow : Window
 {
-    readonly Action<Translation> chooseLanguage;
-    readonly Action<int> chooseHideSeconds;
-    readonly Action<bool> chooseWebImages;
-    readonly ThemeLibrary themes;
-    readonly Action<Theme> chooseTheme;
-    readonly CharacterLibrary characters;
-    readonly Action<Character> choose;
-    readonly WebSession web;
-    readonly Connectors connectors;
-    readonly Subscriptions subscriptions;
-    readonly ObservableCollection<CharacterChoice> tiles = [];
-    readonly ConnectorRow[] rows;
-    string chosen;
-    string? chosenTheme;
+    readonly Action<Translation> _chooseLanguage;
+    readonly Action<int> _chooseHideSeconds;
+    readonly Action<bool> _chooseWebImages;
+    readonly ThemeLibrary _themes;
+    readonly Action<Theme> _chooseTheme;
+    readonly CharacterLibrary _characters;
+    readonly Action<Character> _chooseCharacter;
+    readonly WebSession _web;
+    readonly Connectors _connectors;
+    readonly Subscriptions _subscriptions;
+    readonly ObservableCollection<CharacterChoice> _tiles = [];
+    readonly ConnectorRow[] _rows;
+    string _chosenCharacter;
+    string? _chosenTheme;
 
-    public SettingsWindow(Action<Translation> chooseLanguage, int hideSeconds, Action<int> chooseHideSeconds, bool webImages, Action<bool> chooseWebImages, ThemeLibrary themes, string? chosenTheme, Action<Theme> chooseTheme, CharacterLibrary characters, string chosen,
-        Action<Character> choose, Connectors connectors, Subscriptions subscriptions, WebSession web)
+    public SettingsWindow(Action<Translation> chooseLanguage, int hideSeconds, Action<int> chooseHideSeconds, bool webImages, Action<bool> chooseWebImages, ThemeLibrary themes, string? chosenTheme, Action<Theme> chooseTheme, CharacterLibrary characters, string chosenCharacter,
+        Action<Character> chooseCharacter, Connectors connectors, Subscriptions subscriptions, WebSession web)
     {
         InitializeComponent();
-        (this.chooseLanguage, this.chooseHideSeconds) = (chooseLanguage, chooseHideSeconds);
+        (_chooseLanguage, _chooseHideSeconds) = (chooseLanguage, chooseHideSeconds);
         ShowLanguage();
         HideSecondsSlider.Value = hideSeconds;
         ShowHideSeconds();
         HideSecondsSlider.ValueChanged += (_, _) => ShowHideSeconds();
-        (WebImagesBox.IsChecked, this.chooseWebImages) = (webImages, chooseWebImages);
-        (this.themes, this.chosenTheme, this.chooseTheme) = (themes, chosenTheme, chooseTheme);
-        (this.characters, this.chosen, this.choose, this.connectors, this.subscriptions, this.web) = (characters, chosen, choose, connectors, subscriptions, web);
-        rows = [.. Connectors.All.Select(connector => new ConnectorRow(connector, connectors.SourceOf(connector)))];
-        CharacterList.ItemsSource = tiles;
-        ConnectorList.ItemsSource = rows;
-        foreach (var row in rows)
+        (WebImagesBox.IsChecked, _chooseWebImages) = (webImages, chooseWebImages);
+        (_themes, _chosenTheme, _chooseTheme) = (themes, chosenTheme, chooseTheme);
+        (_characters, _chosenCharacter, _chooseCharacter, _connectors, _subscriptions, _web) = (characters, chosenCharacter, chooseCharacter, connectors, subscriptions, web);
+        _rows = [.. Connectors.All.Select(connector => new ConnectorRow(connector, connectors.SourceOf(connector)))];
+        CharacterList.ItemsSource = _tiles;
+        ConnectorList.ItemsSource = _rows;
+        foreach (var row in _rows)
         {
             ShowChoices(row);
             row.ShowLogin(subscriptions.LoginSiteOf(row.Connector), confirmed: null);
@@ -95,45 +95,49 @@ public partial class SettingsWindow : Window
                 return;
             }
             row.Finish(null);
-            var login = new LoginWindow(web, row.Connector, site) { Owner = this };
+            var login = new LoginWindow(_web, row.Connector, site) { Owner = this };
             login.ShowDialog();
             if (login.Site is { } loggedIn)
             {
-                subscriptions.RememberLogin(row.Connector, loggedIn);
+                _subscriptions.RememberLogin(row.Connector, loggedIn);
             }
-            row.ShowLogin(subscriptions.LoginSiteOf(row.Connector));
+            row.ShowLogin(_subscriptions.LoginSiteOf(row.Connector));
             if (row.LoginSite is not null && row.CanFetchChoices)
+            {
                 await FetchChoicesAsync(row);
+            }
             return;
         }
         try
         {
-            await subscriptions.LogoutAsync();
+            await _subscriptions.LogoutAsync();
         }
         catch (Exception exception) when (Subscriptions.IsFetchError(exception))
         {
             row.Finish(exception.Message);
         }
-        foreach (var other in rows)
-            other.ShowLogin(subscriptions.LoginSiteOf(other.Connector));
+        foreach (var other in _rows)
+        {
+            other.ShowLogin(_subscriptions.LoginSiteOf(other.Connector));
+        }
     }
 
     void ShowChoices(ConnectorRow row, string? text = null)
     {
-        var choices = subscriptions.ChoicesFor(row.Connector);
+        var choices = _subscriptions.ChoicesFor(row.Connector);
         var canFetch = row.Connector == Subscriptions.Jira;
-        row.ShowChoices(choices, subscriptions.BoardChoicesFor(row.Connector), canFetch, text);
+        row.ShowChoices(choices, _subscriptions.BoardChoicesFor(row.Connector), canFetch, text);
     }
 
     async void Choice_Click(object sender, RoutedEventArgs e)
     {
         var box = (CheckBox)sender;
         var choice = (Choice)box.DataContext;
-        var row = rows.First(row => row.Choices.Contains(choice) || row.BoardChoices.Contains(choice));
+        var row = _rows.First(row => row.Choices.Contains(choice) || row.BoardChoices.Contains(choice));
         row.Start();
         try
         {
-            await subscriptions.ChooseAsync(choice, box.IsChecked == true);
+            await _subscriptions.ChooseAsync(choice, box.IsChecked == true);
             ShowChoices(row);
             row.Finish(null);
         }
@@ -144,7 +148,7 @@ public partial class SettingsWindow : Window
         }
     }
 
-    async void FetchStatuses_Click(object sender, RoutedEventArgs e) => await FetchChoicesAsync((ConnectorRow)((FrameworkElement)sender).DataContext);
+    async void FetchChoices_Click(object sender, RoutedEventArgs e) => await FetchChoicesAsync((ConnectorRow)((FrameworkElement)sender).DataContext);
 
     async Task FetchChoicesAsync(ConnectorRow row)
     {
@@ -152,7 +156,7 @@ public partial class SettingsWindow : Window
         ShowChoices(row, Strings.Of("Common.Fetching"));
         try
         {
-            await subscriptions.FetchJiraBoardsAsync();
+            await _subscriptions.FetchJiraBoardsAsync();
             ShowChoices(row);
         }
         catch (Exception exception) when (Subscriptions.IsFetchError(exception))
@@ -167,8 +171,8 @@ public partial class SettingsWindow : Window
 
     async void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        subscriptions.Changed += ShowLoggedOut;
-        Closed += (_, _) => subscriptions.Changed -= ShowLoggedOut;
+        _subscriptions.Changed += ShowLoggedOut;
+        Closed += (_, _) => _subscriptions.Changed -= ShowLoggedOut;
         _ = CheckLoginsAsync();
         while (IsVisible)
         {
@@ -179,8 +183,10 @@ public partial class SettingsWindow : Window
 
     async Task CheckLoginsAsync()
     {
-        foreach (var row in rows.Where(row => row.IsLogin && row.LoginSite is not null))
+        foreach (var row in _rows.Where(row => row.IsLogin && row.LoginSite is not null))
+        {
             await CheckLoginAsync(row);
+        }
     }
 
     async Task CheckLoginAsync(ConnectorRow row)
@@ -188,7 +194,7 @@ public partial class SettingsWindow : Window
         row.Start();
         try
         {
-            row.ShowLogin(await subscriptions.CheckLoginAsync(row.Connector));
+            row.ShowLogin(await _subscriptions.CheckLoginAsync(row.Connector));
             row.Finish(null);
         }
         catch (Exception exception) when (Subscriptions.IsFetchError(exception))
@@ -200,8 +206,10 @@ public partial class SettingsWindow : Window
 
     void ShowLoggedOut()
     {
-        foreach (var row in rows.Where(row => row.LoginSite is not null && subscriptions.LoginSiteOf(row.Connector) is null))
+        foreach (var row in _rows.Where(row => row.LoginSite is not null && _subscriptions.LoginSiteOf(row.Connector) is null))
+        {
             row.ShowLogin(null);
+        }
     }
 
     async void Window_Activated(object sender, EventArgs e)
@@ -214,52 +222,60 @@ public partial class SettingsWindow : Window
 
     void ShowHideSeconds() => HideSecondsText.Text = $"{HideSecondsSlider.Value} s";
 
-    void HideSecondsSlider_LostMouseCapture(object sender, MouseEventArgs e) => chooseHideSeconds((int)HideSecondsSlider.Value);
+    void HideSecondsSlider_LostMouseCapture(object sender, MouseEventArgs e) => _chooseHideSeconds((int)HideSecondsSlider.Value);
 
-    void WebImages_Click(object sender, RoutedEventArgs e) => chooseWebImages(WebImagesBox.IsChecked == true);
+    void WebImages_Click(object sender, RoutedEventArgs e) => _chooseWebImages(WebImagesBox.IsChecked == true);
 
     void Language_Click(object sender, RoutedEventArgs e)
     {
-        chooseLanguage(sender == EnglishButton ? Translation.English : Translation.Danish);
+        _chooseLanguage(sender == EnglishButton ? Translation.English : Translation.Danish);
         ShowLanguage();
-        foreach (var row in rows)
+        foreach (var row in _rows)
+        {
             ShowChoices(row, row.ChoicesText);
+        }
     }
 
     void ShowThemes()
     {
-        Theme[] all = [.. themes.Themes];
-        var current = ThemeLibrary.Find(all, chosenTheme).Name;
+        Theme[] all = [.. _themes.Themes];
+        var current = ThemeLibrary.Find(all, _chosenTheme).Name;
         ThemeList.ItemsSource = all.Select(theme => new ThemeChoice(theme, ((App)Application.Current).DefaultColors, theme.Name == current)).ToArray();
     }
 
     void Theme_Click(object sender, RoutedEventArgs e)
     {
         var choice = (ThemeChoice)((FrameworkElement)sender).DataContext;
-        chosenTheme = choice.Name;
-        chooseTheme(choice.Theme);
+        _chosenTheme = choice.Name;
+        _chooseTheme(choice.Theme);
         ShowThemes();
     }
 
     async Task ShowCharactersAsync()
     {
-        var fresh = await Task.Run(() => characters.Names.Select(Choice).ToArray());
-        for (var i = tiles.Count - 1; i >= 0; i--)
-            if (!fresh.Any(choice => choice.Name == tiles[i].Name))
-                tiles.RemoveAt(i);
+        var fresh = await Task.Run(() => _characters.Names.Select(CharacterChoiceOf).ToArray());
+        for (var i = _tiles.Count - 1; i >= 0; i--)
+        {
+            if (!fresh.Any(choice => choice.Name == _tiles[i].Name))
+            {
+                _tiles.RemoveAt(i);
+            }
+        }
         for (var i = 0; i < fresh.Length; i++)
         {
-            if (i == tiles.Count || tiles[i].Name != fresh[i].Name)
-                tiles.Insert(i, fresh[i]);
-            tiles[i].Update(fresh[i], fresh[i].Name == chosen);
+            if (i == _tiles.Count || _tiles[i].Name != fresh[i].Name)
+            {
+                _tiles.Insert(i, fresh[i]);
+            }
+            _tiles[i].Update(fresh[i], fresh[i].Name == _chosenCharacter);
         }
     }
 
-    CharacterChoice Choice(string name)
+    CharacterChoice CharacterChoiceOf(string name)
     {
         try
         {
-            var character = characters.Load(name);
+            var character = _characters.Load(name);
             return new(name, character, SpriteRenderer.Render(character.Animations[Mood.Awake][0].Rows, character.Palette), null);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
@@ -272,15 +288,17 @@ public partial class SettingsWindow : Window
     {
         var choice = (CharacterChoice)((FrameworkElement)sender).DataContext;
         if (choice.Character is not { } character)
+        {
             return;
-        chosen = choice.Name;
-        choose(character);
+        }
+        _chosenCharacter = choice.Name;
+        _chooseCharacter(character);
         await ShowCharactersAsync();
     }
 
-    void OpenCharacters_Click(object sender, RoutedEventArgs e) => OpenFolder(characters.Folder);
+    void OpenCharacters_Click(object sender, RoutedEventArgs e) => OpenFolder(_characters.Folder);
 
-    void OpenThemes_Click(object sender, RoutedEventArgs e) => OpenFolder(themes.Folder);
+    void OpenThemes_Click(object sender, RoutedEventArgs e) => OpenFolder(_themes.Folder);
 
     void OpenFolder(string folder)
     {
@@ -290,7 +308,7 @@ public partial class SettingsWindow : Window
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, exception.Message, "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Warning.Show(this, exception.Message);
         }
     }
 
@@ -298,12 +316,12 @@ public partial class SettingsWindow : Window
     {
         try
         {
-            var folder = await Task.Run(characters.AddCopy);
+            var folder = await Task.Run(_characters.AddCopy);
             Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, exception.Message, "Hamster", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Warning.Show(this, exception.Message);
         }
         await ShowCharactersAsync();
     }
@@ -312,24 +330,26 @@ public partial class SettingsWindow : Window
     {
         try
         {
-            var servers = await connectors.ServersAsync();
-            await connectors.EnableAsync(servers);
-            foreach (var row in rows)
+            var servers = await _connectors.ServersAsync();
+            await _connectors.EnableAsync(servers);
+            foreach (var row in _rows)
             {
-                row.Show(servers, connectors.RestartPending);
+                row.Show(servers, _connectors.RestartPending);
                 if (!row.ClaudeAiMissing)
+                {
                     continue;
+                }
                 SetSource(row, ConnectorSource.Off);
                 row.Finish($"{Connector.MissingOnClaudeAi}.");
             }
-            ConnectorProblem.Visibility = Visibility.Collapsed;
+            ConnectorProblemText.Visibility = Visibility.Collapsed;
         }
         catch (OperationCanceledException)
         {
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or ObjectDisposedException)
         {
-            (ConnectorProblem.Text, ConnectorProblem.Visibility) = (exception.Message, Visibility.Visible);
+            (ConnectorProblemText.Text, ConnectorProblemText.Visibility) = (exception.Message, Visibility.Visible);
         }
     }
 
@@ -342,10 +362,14 @@ public partial class SettingsWindow : Window
     void SetSource(ConnectorRow row, ConnectorSource source)
     {
         if (source != row.Source)
-            connectors.SetSource(row.Connector, source);
+        {
+            _connectors.SetSource(row.Connector, source);
+        }
         row.SetSource(source);
         if (row.IsLogin && row.LoginSite is not null)
+        {
             _ = CheckLoginAsync(row);
+        }
     }
 
     void Edit_Click(object sender, RoutedEventArgs e) => ((ConnectorRow)((FrameworkElement)sender).DataContext).Edit();
@@ -359,8 +383,10 @@ public partial class SettingsWindow : Window
             row.Finish(Strings.Of("Settings.FillInAllFields"));
             return;
         }
-        if (!await RunAsync(row, () => connectors.InstallAsync(row.Connector, values, row.AllowWrite)))
+        if (!await RunAsync(row, () => _connectors.InstallAsync(row.Connector, values, row.AllowWrite)))
+        {
             return;
+        }
         row.AwaitRestart();
     }
 

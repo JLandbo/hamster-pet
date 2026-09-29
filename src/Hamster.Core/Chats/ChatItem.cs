@@ -28,7 +28,9 @@ public sealed class ChatItem : INotifyPropertyChanged
         set
         {
             if (field == value)
+            {
                 return;
+            }
             field = value;
             Changed();
         }
@@ -80,13 +82,14 @@ public sealed class ChatItem : INotifyPropertyChanged
 
     public string DisplayAnswer => Status == ChatStatus.Busy ? Strings.Format("Chat.Chewing", FormatElapsed(DateTime.UtcNow - StartedAt)) : Answer;
 
-    public static string FormatElapsed(TimeSpan elapsed) =>
-        elapsed.TotalMinutes < 1 ? $"{elapsed.Seconds} s" : $"{(int)elapsed.TotalMinutes} min {elapsed.Seconds} s";
+    public static string FormatElapsed(TimeSpan elapsed) => elapsed.TotalMinutes < 1 ? $"{elapsed.Seconds} s" : $"{(int)elapsed.TotalMinutes} min {elapsed.Seconds} s";
 
     public void RefreshElapsed()
     {
         if (Status == ChatStatus.Busy)
+        {
             Changed(nameof(DisplayAnswer));
+        }
     }
 
     public ChatRecord ToRecord() => new(Prompt, Answer, Status, Title, [.. Commands.Lines], [.. Sources.Lines]);
@@ -95,9 +98,13 @@ public sealed class ChatItem : INotifyPropertyChanged
     {
         var chat = new ChatItem(record.Prompt) { Title = record.Title, Answer = record.Answer, Status = record.Status };
         foreach (var line in record.Commands ?? [])
+        {
             chat.Commands.Lines.Add(line);
+        }
         foreach (var line in record.Sources ?? [])
+        {
             chat.Sources.Lines.Add(line);
+        }
         return chat;
     }
 

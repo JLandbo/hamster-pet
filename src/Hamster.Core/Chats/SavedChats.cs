@@ -12,8 +12,7 @@ public sealed record SavedChats(string? SessionId, IReadOnlyList<ChatRecord> Cha
 {
     public static SavedChats Empty { get; } = new(null, []);
 
-    public static string FileFor(string data, string? folder) =>
-        folder is null
+    public static string FileFor(string data, string? folder) => folder is null
             ? Path.Combine(data, "chats.json")
             : Path.Combine(data, "Chats", $"{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(folder.TrimEnd('\\', '/').ToUpperInvariant())))[..16]}.json");
 
@@ -21,7 +20,9 @@ public sealed record SavedChats(string? SessionId, IReadOnlyList<ChatRecord> Cha
     {
         var chats = FileFor(data, null);
         if (folder is null || !File.Exists(chats) || Directory.Exists(Path.Combine(data, "Chats")))
+        {
             return;
+        }
         var target = FileFor(data, folder);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         File.Move(chats, target);

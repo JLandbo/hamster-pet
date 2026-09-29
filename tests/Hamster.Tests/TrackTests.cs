@@ -1,6 +1,6 @@
 namespace Hamster.Tests;
 
-public class TrackTests
+public sealed class TrackTests
 {
     [Theory]
     [InlineData(null)]

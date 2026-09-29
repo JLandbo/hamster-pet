@@ -81,11 +81,13 @@ public sealed partial class TranslationTests
         Assert.Empty(unused);
     }
 
-    static IEnumerable<string> UsedKeys() =>
-        Directory.EnumerateFiles(SourceFolder(), "*", SearchOption.AllDirectories)
+    static IEnumerable<string> UsedKeys()
+    {
+        return Directory.EnumerateFiles(SourceFolder(), "*", SearchOption.AllDirectories)
             .Where(file => Path.GetExtension(file) is ".cs" or ".xaml" && !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") && !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
             .SelectMany(file => Key().Matches(File.ReadAllText(file)).Select(match => match.Groups[1].Value))
             .Distinct();
+    }
 
     static string SourceFolder([CallerFilePath] string test = "") => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(test)!, "..", "..", "src"));
 

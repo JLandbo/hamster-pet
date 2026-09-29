@@ -10,15 +10,14 @@ public sealed record McpEndpoint(string Url, IReadOnlyDictionary<string, string>
 {
     public static string ClaudeConfigFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude.json");
 
-    public static McpEndpoint? FromClaudeConfig(string config, string name) =>
-        JsonNode.Parse(config)?["mcpServers"]?[name] is JsonObject server && (string?)server["url"] is { } url
+    public static McpEndpoint? FromClaudeConfig(string config, string name) => JsonNode.Parse(config)?["mcpServers"]?[name] is JsonObject server && (string?)server["url"] is { } url
             ? new(url, server["headers"] is JsonObject headers ? headers.ToDictionary(header => header.Key, header => (string?)header.Value ?? "") : new Dictionary<string, string>())
             : null;
 }
 
 public static class McpClient
 {
-    static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
     public static async Task<IReadOnlyList<string>> CallAsync(McpEndpoint endpoint, IReadOnlyList<ToolCall> calls)
     {
@@ -38,15 +37,16 @@ public static class McpClient
         return results;
     }
 
-    public static JsonNode? Reply(string? mediaType, string body) =>
-        mediaType == "text/event-stream"
+    public static JsonNode? Reply(string? mediaType, string body) => mediaType == "text/event-stream"
             ? body.Split('\n').Where(line => line.StartsWith("data:", StringComparison.Ordinal)).Select(line => line[5..].Trim()).LastOrDefault() is { } data ? JsonNode.Parse(data) : null
             : string.IsNullOrWhiteSpace(body) ? null : JsonNode.Parse(body);
 
     public static string ToolText(JsonNode? reply)
     {
         if (reply?["error"] is { } error)
+        {
             throw new InvalidOperationException((string?)error["message"] ?? error.ToJsonString());
+        }
         var text = string.Concat(reply?["result"]?["content"]?.AsArray().Select(block => (string?)block?["text"]) ?? []);
         return (bool?)reply?["result"]?["isError"] == true ? throw new InvalidOperationException(MessageOf(text)) : text;
     }
@@ -75,15 +75,21 @@ public static class McpClient
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint.Url) { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
         foreach (var (name, value) in endpoint.Headers)
+        {
             request.Headers.TryAddWithoutValidation(name, value);
+        }
         request.Headers.Accept.ParseAdd("application/json");
         request.Headers.Accept.ParseAdd("text/event-stream");
         if (session is not null)
+        {
             request.Headers.Add("Mcp-Session-Id", session);
-        using var response = await Task.Run(() => Http.SendAsync(request));
+        }
+        using var response = await Task.Run(() => _http.SendAsync(request));
         var text = await response.Content.ReadAsStringAsync();
         if (!response.IsSuccessStatusCode)
+        {
             throw new InvalidOperationException($"{(int)response.StatusCode} {response.ReasonPhrase}");
+        }
         return (Reply(response.Content.Headers.ContentType?.MediaType, text), response.Headers.TryGetValues("Mcp-Session-Id", out var values) ? values.First() : session);
     }
 }

@@ -10,8 +10,8 @@ namespace Hamster.Core.Feeds;
 
 static class JiraDescription
 {
-    const int DescriptionLength = 1500;
-    static readonly MarkdownPipeline SourcePositions = new MarkdownPipelineBuilder().UsePreciseSourceLocation().Build();
+    const int _descriptionLength = 1500;
+    static readonly MarkdownPipeline _sourcePositions = new MarkdownPipelineBuilder().UsePreciseSourceLocation().Build();
 
     public static string Of(JsonNode? description)
     {
@@ -21,14 +21,15 @@ static class JiraDescription
             JsonObject document => MarkdownOf(document),
             _ => "",
         }).Trim();
-        if (markdown.Length <= DescriptionLength)
+        if (markdown.Length <= _descriptionLength)
+        {
             return markdown;
-        var cut = markdown[..DescriptionLength];
+        }
+        var cut = markdown[.._descriptionLength];
         return $"{(cut.LastIndexOfAny([' ', '\n', '\r', '\t']) is > 0 and var space ? cut[..space] : cut).TrimEnd()} …";
     }
 
-    static string WithImagesMarked(string markdown) =>
-        Markdown.Parse(markdown, SourcePositions).Descendants<LinkInline>().Where(link => link.IsImage && !InsideImage(link)).Reverse()
+    static string WithImagesMarked(string markdown) => Markdown.Parse(markdown, _sourcePositions).Descendants<LinkInline>().Where(link => link.IsImage && !InsideImage(link)).Reverse()
             .Aggregate(markdown, (text, image) => text.Remove(image.Span.Start, image.Span.Length).Insert(image.Span.Start, ImageMark));
 
     static string ImageMark => Strings.Of("Tasks.Image");
@@ -56,10 +57,12 @@ static class JiraDescription
 
     static int StartOf(JsonObject list) => int.TryParse(list["attrs"]?["order"]?.ToString(), out var order) ? order : 1;
 
-    static string DayOf(JsonNode? timestamp) =>
-        long.TryParse(timestamp?.ToString(), out var stamp) && stamp >= DateTimeOffset.MinValue.ToUnixTimeMilliseconds() && stamp <= DateTimeOffset.MaxValue.ToUnixTimeMilliseconds()
+    static string DayOf(JsonNode? timestamp)
+    {
+        return long.TryParse(timestamp?.ToString(), out var stamp) && stamp >= DateTimeOffset.MinValue.ToUnixTimeMilliseconds() && stamp <= DateTimeOffset.MaxValue.ToUnixTimeMilliseconds()
             ? DateTimeOffset.FromUnixTimeMilliseconds(stamp).ToString("d. MMM", CultureInfo.CurrentCulture)
             : "";
+    }
 
     static string Nested(string marker, string text) => $"{marker}{text.Replace("\n", $"\n{new string(' ', marker.Length)}")}";
 
@@ -68,7 +71,9 @@ static class JiraDescription
         var text = (string?)item["text"] ?? "";
         var (start, end) = (text.Length - text.TrimStart().Length, text.TrimEnd().Length);
         if (start >= end)
+        {
             return text;
+        }
         var marks = (item["marks"] as JsonArray ?? []).OfType<JsonObject>().OrderBy(mark => (string?)mark["type"] == "link").ToArray();
         var core = marks.Any(mark => (string?)mark["type"] == "code") ? text[start..end] : Escaped(text[start..end]);
         var marked = marks.Aggregate(core, (inner, mark) => (string?)mark["type"] switch
@@ -97,8 +102,11 @@ static class JiraDescription
         return $"{fence}\n{code}\n{fence}\n\n";
     }
 
-    static string Backticks(string code, int least) =>
-        new('`', Math.Max(least, code.Aggregate((Longest: 0, Run: 0), (runs, character) => character == '`' ? (Math.Max(runs.Longest, runs.Run + 1), runs.Run + 1) : (runs.Longest, 0)).Longest + 1));
+    static string Backticks(string code, int least)
+    {
+        var longest = code.Aggregate((Longest: 0, Run: 0), (runs, character) => character == '`' ? (Math.Max(runs.Longest, runs.Run + 1), runs.Run + 1) : (runs.Longest, 0)).Longest;
+        return new('`', Math.Max(least, longest + 1));
+    }
 
     static string ChildrenOf(JsonObject item) => string.Concat((item["content"] as JsonArray ?? []).Select(MarkdownOf));
 
@@ -109,9 +117,13 @@ static class JiraDescription
         {
             var nested = (string?)entry["type"] == "taskList";
             if (nested && items.Count > 0)
+            {
                 items[^1] += $"\n{MarkdownOf(entry).Trim()}";
+            }
             else
+            {
                 items.Add((nested ? MarkdownOf(entry) : ChildrenOf(entry)).Trim());
+            }
         }
         return items;
     }

@@ -1,0 +1,143 @@
+<UserControl x:Class="Hamster.Views.ChatView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:chats="clr-namespace:Hamster.Core.Chats;assembly=Hamster.Core"
+             xmlns:claude="clr-namespace:Hamster.Core.Claude;assembly=Hamster.Core"
+             xmlns:rendering="clr-namespace:Hamster.Rendering">
+
+    <UserControl.Resources>
+        <rendering:ChatMarkdownConverter x:Key="ChatMarkdown" />
+
+        <Style x:Key="FoldButton" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <StackPanel Orientation="Horizontal" Background="Transparent">
+                            <TextBlock x:Name="Chevron" Text="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="8" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Chevron" Property="Text" Value="&#xE70D;" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource Text}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer x:Name="ChatScroll" Focusable="False" Margin="0,10,0,0"
+                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                  PreviewMouseWheel="ChatScroll_PreviewMouseWheel">
+        <ScrollViewer.Template>
+            <ControlTemplate TargetType="ScrollViewer">
+                <Grid Background="{TemplateBinding Background}">
+                    <ScrollContentPresenter />
+                    <ScrollBar x:Name="PART_VerticalScrollBar" HorizontalAlignment="Right"
+                               Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}"
+                               Value="{TemplateBinding VerticalOffset}" Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" />
+                </Grid>
+            </ControlTemplate>
+        </ScrollViewer.Template>
+        <ItemsControl x:Name="ChatList" Padding="8,0" VerticalAlignment="Bottom" Background="#01000000">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type chats:ChatItem}">
+                    <Border x:Name="Bubble" Margin="0,0,0,5" Padding="14,10" CornerRadius="14"
+                            Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Edge}" BorderThickness="1"
+                            Visibility="{Binding Shown, Converter={StaticResource VisibleWhenTrue}}">
+                        <StackPanel>
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="{DynamicResource Main.DeleteChat}" Click="DeleteChat_Click"
+                                        Style="{StaticResource SmallIconButton}" Margin="6,-2,-6,0" VerticalAlignment="Top" />
+                                <Button x:Name="Copy" DockPanel.Dock="Right" Content="&#xE8C8;" ToolTip="{DynamicResource Main.CopyAnswer}" Click="CopyAnswer_Click"
+                                        Style="{StaticResource SmallIconButton}" Margin="6,-2,0,0" VerticalAlignment="Top" />
+                                <Ellipse x:Name="Dot" DockPanel.Dock="Left" Width="8" Height="8" Margin="0,6,8,0"
+                                         VerticalAlignment="Top" Fill="{DynamicResource Link}" />
+                                <TextBlock Text="{Binding DisplayPrompt}" Foreground="{DynamicResource Text}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            </DockPanel>
+                            <ItemsControl ItemsSource="{Binding ToolGroups}" Margin="16,0,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type chats:ToolGroup}">
+                                        <StackPanel x:Name="Group" Margin="0,4,0,0">
+                                            <ToggleButton x:Name="Fold" Style="{StaticResource FoldButton}">
+                                                <TextBlock><Run x:Name="GroupTitle" Text="{DynamicResource Chat.Commands}" /> (<Run Text="{Binding Lines.Count, Mode=OneWay}" />)</TextBlock>
+                                            </ToggleButton>
+                                            <ItemsControl ItemsSource="{Binding Lines}" Margin="14,0,0,0"
+                                                          Visibility="{Binding IsChecked, ElementName=Fold, Converter={StaticResource VisibleWhenTrue}}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding}" ToolTip="{Binding}" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"
+                                                                   Foreground="{DynamicResource Muted}" FontFamily="{x:Static rendering:MarkdownConverter.CodeFont}" FontSize="12" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding Lines.Count}" Value="0">
+                                                <Setter TargetName="Group" Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsWeb}" Value="True">
+                                                <Setter TargetName="GroupTitle" Property="Text" Value="{DynamicResource Chat.Sources}" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <FlowDocumentScrollViewer Document="{Binding DisplayAnswer, Converter={StaticResource ChatMarkdown}}" Margin="16,4,0,0"
+                                                      VerticalScrollBarVisibility="Disabled" FocusVisualStyle="{x:Null}"
+                                                      Hyperlink.RequestNavigate="Link_RequestNavigate"
+                                                      Foreground="{DynamicResource Muted}" />
+                            <Button Content="{DynamicResource Main.LogIn}" Click="Login_Click" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Margin="16,8,0,0"
+                                    Visibility="{Binding NeedsLogin, Converter={StaticResource VisibleWhenTrue}}" />
+                            <ItemsControl ItemsSource="{Binding Requests}" Margin="16,0,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type claude:UserRequest}">
+                                        <StackPanel Margin="0,10,0,0">
+                                            <TextBlock Text="{DynamicResource Main.NeedsPermission}" Foreground="{DynamicResource Attention}" FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding Title}" Foreground="{DynamicResource Text}" Margin="0,4,0,2" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Details}" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"
+                                                       FontFamily="{x:Static rendering:MarkdownConverter.CodeFont}" FontSize="12" />
+                                            <TextBlock Foreground="{DynamicResource Muted}" TextWrapping="Wrap"
+                                                       FontSize="12" Margin="0,6,0,0" Visibility="{Binding CanAllowAlways, Converter={StaticResource VisibleWhenTrue}}"><Run Text="{DynamicResource Main.AllowAlwaysScope}" /> <Run Text="{Binding AlwaysScope, Mode=OneWay}" /></TextBlock>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                                                <Button Content="{DynamicResource Main.Deny}" Click="Deny_Click" Style="{StaticResource PillButton}" />
+                                                <Button Content="{DynamicResource Main.AllowAlways}" Click="AllowAlways_Click" Style="{StaticResource PillButton}" Margin="8,0,0,0"
+                                                        ToolTip="{DynamicResource Main.AllowAlwaysHint}" Visibility="{Binding CanAllowAlways, Converter={StaticResource VisibleWhenTrue}}" />
+                                                <Button Content="{DynamicResource Main.Allow}" Click="Allow_Click" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                    <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding Status}" Value="Busy">
+                            <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource Busy}" />
+                            <Setter TargetName="Copy" Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Status}" Value="Error">
+                            <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource Error}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding NeedsLogin}" Value="True">
+                            <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource Attention}" />
+                            <Setter TargetName="Bubble" Property="BorderBrush" Value="{DynamicResource Attention}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding NeedsAction}" Value="True">
+                            <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource Attention}" />
+                            <Setter TargetName="Bubble" Property="BorderBrush" Value="{DynamicResource Attention}" />
+                        </DataTrigger>
+                    </DataTemplate.Triggers>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </ScrollViewer>
+</UserControl>

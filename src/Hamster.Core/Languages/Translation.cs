@@ -5,7 +5,7 @@ namespace Hamster.Core.Languages;
 
 public sealed record Translation(string Name, IReadOnlyDictionary<string, string> Texts)
 {
-    static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web) { ReadCommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
+    static readonly JsonSerializerOptions _options = new(JsonSerializerDefaults.Web) { ReadCommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
 
     public static Translation Danish { get; } = BuiltIn("Dansk");
 
@@ -13,7 +13,7 @@ public sealed record Translation(string Name, IReadOnlyDictionary<string, string
 
     public static IReadOnlyList<Translation> All { get; } = [Danish, English];
 
-    public static Translation Parse(string name, string json) => new(name, JsonSerializer.Deserialize<SavedTranslation>(json, Options)?.Texts ?? []);
+    public static Translation Parse(string name, string json) => new(name, JsonSerializer.Deserialize<SavedTranslation>(json, _options)?.Texts ?? []);
 
     public string Of(string key) => Texts.GetValueOrDefault(key) ?? Danish.Texts.GetValueOrDefault(key) ?? key;
 

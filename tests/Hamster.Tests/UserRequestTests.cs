@@ -1,6 +1,6 @@
 namespace Hamster.Tests;
 
-public class UserRequestTests
+public sealed class UserRequestTests
 {
     [Theory]
     [InlineData(0, false)]

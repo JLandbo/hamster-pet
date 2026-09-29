@@ -2,17 +2,17 @@ using System.Text.Json.Nodes;
 
 namespace Hamster.Tests;
 
-public class ClaudeProtocolTests
+public sealed class ClaudeProtocolTests
 {
-    const string PermissionLine = """{"type":"control_request","request_id":"req-1","request":{"subtype":"can_use_tool","tool_name":"WebFetch","display_name":"Fetch","input":{"url":"https://example.com","prompt":"Titel?"},"description":"https://example.com","tool_use_id":"toolu_1"}}""";
+    const string _permissionLine = """{"type":"control_request","request_id":"req-1","request":{"subtype":"can_use_tool","tool_name":"WebFetch","display_name":"Fetch","input":{"url":"https://example.com","prompt":"Titel?"},"description":"https://example.com","tool_use_id":"toolu_1"}}""";
 
-    static PermissionRequest Permission => (PermissionRequest)ClaudeProtocol.Parse(PermissionLine).Single();
+    static PermissionRequest Permission => (PermissionRequest)ClaudeProtocol.Parse(_permissionLine).Single();
 
     [Fact]
     public void Parse_WhenCanUseToolRequest_ThenReturnsPermissionRequest()
     {
         // Act
-        var events = ClaudeProtocol.Parse(PermissionLine);
+        var events = ClaudeProtocol.Parse(_permissionLine);
 
         // Assert
         var request = Assert.IsType<PermissionRequest>(Assert.Single(events));

@@ -5,7 +5,7 @@ namespace Hamster.Core.Storage;
 
 public sealed class JsonFile<T>(string path, T empty, bool readOnly = false)
 {
-    static readonly JsonSerializerOptions Options = new()
+    static readonly JsonSerializerOptions _options = new()
     {
         WriteIndented = true,
         RespectRequiredConstructorParameters = true,
@@ -16,10 +16,12 @@ public sealed class JsonFile<T>(string path, T empty, bool readOnly = false)
     public T Load()
     {
         if (!File.Exists(path))
+        {
             return empty;
+        }
         try
         {
-            return JsonSerializer.Deserialize<T>(File.ReadAllText(path), Options) ?? empty;
+            return JsonSerializer.Deserialize<T>(File.ReadAllText(path), _options) ?? empty;
         }
         catch (JsonException)
         {
@@ -30,14 +32,16 @@ public sealed class JsonFile<T>(string path, T empty, bool readOnly = false)
     public void Save(T value)
     {
         if (readOnly)
+        {
             return;
+        }
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var temporary = path + ".tmp";
             using (var file = File.Create(temporary))
             {
-                JsonSerializer.Serialize(file, value, Options);
+                JsonSerializer.Serialize(file, value, _options);
                 file.Flush(flushToDisk: true);
             }
             File.Move(temporary, path, overwrite: true);

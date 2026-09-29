@@ -27,7 +27,9 @@ public sealed record Theme(string Name, IReadOnlyDictionary<string, Color> Color
     {
         var resources = new ResourceDictionary();
         foreach (var (name, color) in Colors)
+        {
             resources[name] = BrushOf(color);
+        }
         return resources;
     }
 
@@ -40,8 +42,10 @@ public sealed record Theme(string Name, IReadOnlyDictionary<string, Color> Color
         return brush;
     }
 
-    static Dictionary<string, Color> ColorsOf(Dictionary<string, string?> colors) =>
-        colors.Select(entry => (entry.Key, Color: ColorOf(entry.Value))).Where(entry => entry.Color is not null).ToDictionary(entry => entry.Key, entry => entry.Color!.Value);
+    static Dictionary<string, Color> ColorsOf(Dictionary<string, string?> colors)
+    {
+        return colors.Select(entry => (entry.Key, Color: ColorOf(entry.Value))).Where(entry => entry.Color is not null).ToDictionary(entry => entry.Key, entry => entry.Color!.Value);
+    }
 
     static Color? ColorOf(string? text)
     {

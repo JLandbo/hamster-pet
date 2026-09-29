@@ -2,22 +2,24 @@ namespace Hamster.Tests;
 
 public sealed class CharacterLibraryTests : IDisposable
 {
-    readonly string folder = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-    readonly CharacterLibrary library;
+    readonly string _folder = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+    readonly CharacterLibrary _library;
 
-    public CharacterLibraryTests() => library = new CharacterLibrary(folder);
+    public CharacterLibraryTests() => _library = new CharacterLibrary(_folder);
 
     public void Dispose()
     {
-        if (Directory.Exists(folder))
-            Directory.Delete(folder, recursive: true);
+        if (Directory.Exists(_folder))
+        {
+            Directory.Delete(_folder, recursive: true);
+        }
     }
 
     [Fact]
     public void Names_WhenNoFolderExists_ThenOnlyTheHamster()
     {
         // Act
-        var names = library.Names;
+        var names = _library.Names;
 
         // Assert
         Assert.Equal(["Hamster"], names);
@@ -27,11 +29,11 @@ public sealed class CharacterLibraryTests : IDisposable
     public void Names_WhenCharactersWereAdded_ThenHamsterFirstAndTheRestSorted()
     {
         // Arrange
-        Directory.CreateDirectory(Path.Combine(folder, "Zebra"));
-        Directory.CreateDirectory(Path.Combine(folder, "Kat"));
+        Directory.CreateDirectory(Path.Combine(_folder, "Zebra"));
+        Directory.CreateDirectory(Path.Combine(_folder, "Kat"));
 
         // Act
-        var names = library.Names;
+        var names = _library.Names;
 
         // Assert
         Assert.Equal(["Hamster", "Kat", "Zebra"], names);
@@ -41,7 +43,7 @@ public sealed class CharacterLibraryTests : IDisposable
     public void AddCopy_WhenCalled_ThenTheCopyLoadsLikeTheHamster()
     {
         // Act
-        var copy = library.Load(Path.GetFileName(library.AddCopy()));
+        var copy = _library.Load(Path.GetFileName(_library.AddCopy()));
 
         // Assert
         Assert.Equal(Character.Hamster.Palette, copy.Palette);
@@ -52,7 +54,7 @@ public sealed class CharacterLibraryTests : IDisposable
     public void AddCopy_WhenCalledTwice_ThenNamesThemApart()
     {
         // Act
-        var names = new[] { library.AddCopy(), library.AddCopy() }.Select(Path.GetFileName);
+        var names = new[] { _library.AddCopy(), _library.AddCopy() }.Select(Path.GetFileName);
 
         // Assert
         Assert.Equal(["Karakter 1", "Karakter 2"], names);

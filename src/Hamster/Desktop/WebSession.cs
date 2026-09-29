@@ -9,17 +9,19 @@ namespace Hamster.Desktop;
 
 public sealed class WebSession(string folder) : IWebSession
 {
-    const int HiddenPopup = unchecked((int)0x80000000);
-    static readonly HttpClient Http = new(new HttpClientHandler { UseCookies = false }) { Timeout = TimeSpan.FromSeconds(30) };
+    const int _hiddenPopup = unchecked((int)0x80000000);
+    static readonly HttpClient _http = new(new HttpClientHandler { UseCookies = false }) { Timeout = TimeSpan.FromSeconds(30) };
 
-    Task<CoreWebView2Environment>? environment;
-    Task<CoreWebView2Controller>? cookies;
-    HwndSource? host;
+    Task<CoreWebView2Environment>? _environment;
+    Task<CoreWebView2Controller>? _controller;
+    HwndSource? _host;
 
-    public Task<CoreWebView2Environment> EnvironmentAsync() =>
-        environment is { IsFaulted: false, IsCanceled: false } ? environment : environment = CoreWebView2Environment.CreateAsync(null, folder);
+    public Task<CoreWebView2Environment> EnvironmentAsync()
+    {
+        return _environment is { IsFaulted: false, IsCanceled: false } ? _environment : _environment = CoreWebView2Environment.CreateAsync(null, folder);
+    }
 
-    public async Task LogoutAsync() => (await CookiesAsync()).CookieManager.DeleteAllCookies();
+    public async Task LogoutAsync() => (await WebViewAsync()).CookieManager.DeleteAllCookies();
 
     public async Task<bool> IsLoggedInAsync(string site, WebLogin login)
     {
@@ -27,11 +29,13 @@ public sealed class WebSession(string folder) : IWebSession
         return IsLoggedIn(response);
     }
 
-    public static bool IsLoggedIn(HttpResponseMessage response) =>
-        response.IsSuccessStatusCode
-        || (response.StatusCode == HttpStatusCode.Unauthorized
-            ? false
-            : throw new InvalidOperationException($"{(int)response.StatusCode} {response.ReasonPhrase}"));
+    public static bool IsLoggedIn(HttpResponseMessage response)
+    {
+        return response.IsSuccessStatusCode
+            || (response.StatusCode == HttpStatusCode.Unauthorized
+                ? false
+                : throw new InvalidOperationException($"{(int)response.StatusCode} {response.ReasonPhrase}"));
+    }
 
     public async Task<Func<string, Task<string>>> ReaderAsync(string site)
     {
@@ -49,33 +53,36 @@ public sealed class WebSession(string folder) : IWebSession
                 : throw new InvalidOperationException($"{(int)response.StatusCode} {response.ReasonPhrase}");
     }
 
-    async Task<string> CookieHeaderAsync(string url) =>
-        string.Join("; ", (await (await CookiesAsync()).CookieManager.GetCookiesAsync(url)).Select(cookie => $"{cookie.Name}={cookie.Value}"));
+    async Task<string> CookieHeaderAsync(string url) => string.Join("; ", (await (await WebViewAsync()).CookieManager.GetCookiesAsync(url)).Select(cookie => $"{cookie.Name}={cookie.Value}"));
 
     static async Task<HttpResponseMessage> SendAsync(string url, string cookies)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.TryAddWithoutValidation("Cookie", cookies);
         request.Headers.Accept.ParseAdd("application/json");
-        return await Task.Run(() => Http.SendAsync(request));
+        return await Task.Run(() => _http.SendAsync(request));
     }
 
-    async Task<CoreWebView2> CookiesAsync()
+    async Task<CoreWebView2> WebViewAsync()
     {
-        host ??= new HwndSource(new HwndSourceParameters("Hamster") { WindowStyle = HiddenPopup, Width = 1, Height = 1 });
-        if (cookies is not { IsFaulted: false, IsCanceled: false })
-            cookies = CreateCookiesAsync(host.Handle);
-        return (await cookies).CoreWebView2;
+        _host ??= new HwndSource(new HwndSourceParameters("Hamster") { WindowStyle = _hiddenPopup, Width = 1, Height = 1 });
+        if (_controller is not { IsFaulted: false, IsCanceled: false })
+        {
+            _controller = CreateControllerAsync(_host.Handle);
+        }
+        return (await _controller).CoreWebView2;
     }
 
-    async Task<CoreWebView2Controller> CreateCookiesAsync(nint parent)
+    async Task<CoreWebView2Controller> CreateControllerAsync(nint parent)
     {
-        var controller = await (await EnvironmentAsync()).CreateCoreWebView2ControllerAsync(parent);
-        controller.CoreWebView2.ProcessFailed += (_, failure) =>
+        var created = await (await EnvironmentAsync()).CreateCoreWebView2ControllerAsync(parent);
+        created.CoreWebView2.ProcessFailed += (_, failure) =>
         {
             if (failure.ProcessFailedKind == CoreWebView2ProcessFailedKind.BrowserProcessExited)
-                cookies = null;
+            {
+                _controller = null;
+            }
         };
-        return controller;
+        return created;
     }
 }

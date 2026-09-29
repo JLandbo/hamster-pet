@@ -2,7 +2,7 @@ namespace Hamster.Core.Chats;
 
 public sealed record ImageAttachment(string Name, string MediaType, byte[] Data)
 {
-    static readonly Dictionary<string, string> MediaTypes = new(StringComparer.OrdinalIgnoreCase)
+    static readonly Dictionary<string, string> _mediaTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         [".png"] = "image/png",
         [".jpg"] = "image/jpeg",
@@ -13,8 +13,10 @@ public sealed record ImageAttachment(string Name, string MediaType, byte[] Data)
 
     public static ImageAttachment? FromFile(string path)
     {
-        if (!MediaTypes.TryGetValue(Path.GetExtension(path), out var mediaType))
+        if (!_mediaTypes.TryGetValue(Path.GetExtension(path), out var mediaType))
+        {
             return null;
+        }
         try
         {
             return new ImageAttachment(Path.GetFileName(path), mediaType, File.ReadAllBytes(path));

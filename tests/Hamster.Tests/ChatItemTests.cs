@@ -1,6 +1,6 @@
 namespace Hamster.Tests;
 
-public class ChatItemTests
+public sealed class ChatItemTests
 {
     [Fact]
     public void Shown_WhenSetToTheSameValue_ThenDoesNotNotify()

@@ -2,11 +2,11 @@ namespace Hamster.Tests;
 
 public sealed class CharacterTests : IDisposable
 {
-    readonly string folder = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+    readonly string _folder = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
 
-    public CharacterTests() => Directory.CreateDirectory(folder);
+    public CharacterTests() => Directory.CreateDirectory(_folder);
 
-    public void Dispose() => Directory.Delete(folder, recursive: true);
+    public void Dispose() => Directory.Delete(_folder, recursive: true);
 
     [Fact]
     public void Hamster_WhenLoaded_ThenEveryMoodHasFrames()
@@ -42,10 +42,10 @@ public sealed class CharacterTests : IDisposable
     public void FromFolder_WhenFilesAreMissing_ThenUsesTheHamsters()
     {
         // Arrange
-        File.WriteAllText(Path.Combine(folder, "palette.txt"), "a 112233\n");
+        File.WriteAllText(Path.Combine(_folder, "palette.txt"), "a 112233\n");
 
         // Act
-        var character = Character.FromFolder(folder);
+        var character = Character.FromFolder(_folder);
 
         // Assert
         Assert.Equal(0xFF112233u, character.Palette['a']);
@@ -56,10 +56,10 @@ public sealed class CharacterTests : IDisposable
     public void FromFolder_WhenThePaletteLacksAColor_ThenBorrowsTheHamsters()
     {
         // Arrange
-        File.WriteAllText(Path.Combine(folder, "palette.txt"), "a 112233\n");
+        File.WriteAllText(Path.Combine(_folder, "palette.txt"), "a 112233\n");
 
         // Act
-        var character = Character.FromFolder(folder);
+        var character = Character.FromFolder(_folder);
 
         // Assert
         Assert.Equal((0xFF112233u, Character.Hamster.Palette['K']), (character.Palette['a'], character.Palette['K']));
@@ -69,10 +69,10 @@ public sealed class CharacterTests : IDisposable
     public void FromFolder_WhenAColorHasEightDigits_ThenKeepsItsTransparency()
     {
         // Arrange
-        File.WriteAllText(Path.Combine(folder, "palette.txt"), "a 80F5C542\n");
+        File.WriteAllText(Path.Combine(_folder, "palette.txt"), "a 80F5C542\n");
 
         // Act
-        var character = Character.FromFolder(folder);
+        var character = Character.FromFolder(_folder);
 
         // Assert
         Assert.Equal(0x80F5C542u, character.Palette['a']);
@@ -82,10 +82,10 @@ public sealed class CharacterTests : IDisposable
     public void FromFolder_WhenFramesAreBig_ThenLoadsThemInTheirOwnSize()
     {
         // Arrange
-        File.WriteAllText(Path.Combine(folder, "sleep.txt"), "700\n" + string.Join('\n', Enumerable.Repeat(new string('.', 64), 64)));
+        File.WriteAllText(Path.Combine(_folder, "sleep.txt"), "700\n" + string.Join('\n', Enumerable.Repeat(new string('.', 64), 64)));
 
         // Act
-        var frame = Character.FromFolder(folder).Animations[Mood.Sleep][0];
+        var frame = Character.FromFolder(_folder).Animations[Mood.Sleep][0];
 
         // Assert
         Assert.Equal((64, 64), (frame.Width, frame.Height));
@@ -95,10 +95,10 @@ public sealed class CharacterTests : IDisposable
     public void FromFolder_WhenAFrameDiffersFromTheFirst_ThenSaysWhichFile()
     {
         // Arrange
-        File.WriteAllText(Path.Combine(folder, "sleep.txt"), "700\n....\n....\n\n700\n..\n..\n");
+        File.WriteAllText(Path.Combine(_folder, "sleep.txt"), "700\n....\n....\n\n700\n..\n..\n");
 
         // Act
-        var loading = () => Character.FromFolder(folder);
+        var loading = () => Character.FromFolder(_folder);
 
         // Assert
         Assert.StartsWith("sleep.txt:", Assert.Throws<InvalidDataException>(loading).Message);
@@ -108,10 +108,10 @@ public sealed class CharacterTests : IDisposable
     public void FromFolder_WhenRowsDifferInLength_ThenSaysWhichFile()
     {
         // Arrange
-        File.WriteAllText(Path.Combine(folder, "sleep.txt"), "700\n....\n..\n");
+        File.WriteAllText(Path.Combine(_folder, "sleep.txt"), "700\n....\n..\n");
 
         // Act
-        var loading = () => Character.FromFolder(folder);
+        var loading = () => Character.FromFolder(_folder);
 
         // Assert
         Assert.StartsWith("sleep.txt:", Assert.Throws<InvalidDataException>(loading).Message);
@@ -121,10 +121,10 @@ public sealed class CharacterTests : IDisposable
     public void FromFolder_WhenThePaletteIsBroken_ThenSaysSo()
     {
         // Arrange
-        File.WriteAllText(Path.Combine(folder, "palette.txt"), "a blå\n");
+        File.WriteAllText(Path.Combine(_folder, "palette.txt"), "a blå\n");
 
         // Act
-        var loading = () => Character.FromFolder(folder);
+        var loading = () => Character.FromFolder(_folder);
 
         // Assert
         Assert.StartsWith("palette.txt:", Assert.Throws<InvalidDataException>(loading).Message);

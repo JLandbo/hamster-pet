@@ -11,14 +11,14 @@ using System.Windows.Threading;
 
 namespace Hamster.Tests;
 
-public class MarkdownConverterTests : IDisposable
+public sealed class MarkdownConverterTests : IDisposable
 {
-    readonly string folder = Directory.CreateTempSubdirectory().FullName;
+    readonly string _folder = Directory.CreateTempSubdirectory().FullName;
 
     public void Dispose()
     {
         MarkdownConverter.ShowWebImages = false;
-        Directory.Delete(folder, true);
+        Directory.Delete(_folder, true);
     }
 
     [Theory]
@@ -77,7 +77,7 @@ public class MarkdownConverterTests : IDisposable
     public void Render_WhenTheImageIsWebP_ThenShowsIt() => UiThread.Run(() =>
     {
         // Arrange
-        var file = Path.Combine(folder, "graf.webp");
+        var file = Path.Combine(_folder, "graf.webp");
         File.WriteAllBytes(file, Convert.FromBase64String("UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA=="));
 
         // Act
@@ -166,7 +166,7 @@ public class MarkdownConverterTests : IDisposable
     public void Render_WhenTheFileIsMissing_ThenThePlaceholderBecomesItsText() => UiThread.Run(() =>
     {
         // Act
-        var document = MarkdownConverter.Render($"![graf](<{Path.Combine(folder, "missing.png")}>)");
+        var document = MarkdownConverter.Render($"![graf](<{Path.Combine(_folder, "missing.png")}>)");
         var placeholderAtOnce = Picture(document) is not null;
         UiThread.Until(() => Picture(document) is null);
 
@@ -229,12 +229,12 @@ public class MarkdownConverterTests : IDisposable
     public void Render_WhenTheFileIsNoImage_ThenShowsItsText(string name) => UiThread.Run(() =>
     {
         // Arrange
-        File.WriteAllText(Path.Combine(folder, "notes.txt"), "noter");
-        File.WriteAllText(Path.Combine(folder, "broken.png"), "ikke et billede");
-        File.WriteAllBytes(Path.Combine(folder, "noframes.gif"), [.. "GIF89a"u8, 1, 0, 1, 0, 0, 0, 0, 0x3B]);
+        File.WriteAllText(Path.Combine(_folder, "notes.txt"), "noter");
+        File.WriteAllText(Path.Combine(_folder, "broken.png"), "ikke et billede");
+        File.WriteAllBytes(Path.Combine(_folder, "noframes.gif"), [.. "GIF89a"u8, 1, 0, 1, 0, 0, 0, 0, 0x3B]);
 
         // Act
-        var document = Rendered($"![graf](<{Path.Combine(folder, name)}>)");
+        var document = Rendered($"![graf](<{Path.Combine(_folder, name)}>)");
 
         // Assert
         Assert.Equal((null, "graf"), (Picture(document), DocumentText(document)));
@@ -336,7 +336,7 @@ public class MarkdownConverterTests : IDisposable
     public void Render_WhenFencedCode_ThenOffersToCopyIt()
     {
         // Act
-        var document = MarkdownConverter.Render("```cs" + (char)10 + "var x = 1;" + (char)10 + "```");
+        var document = MarkdownConverter.Render("```cs\nvar x = 1;\n```");
 
         // Assert
         var header = Assert.IsType<Paragraph>(Assert.IsType<Section>(Assert.Single(document.Blocks)).Blocks.FirstBlock);
@@ -479,7 +479,7 @@ public class MarkdownConverterTests : IDisposable
 
     string ImageFile(string name, int width, int height = 10)
     {
-        var file = Path.Combine(folder, name);
+        var file = Path.Combine(_folder, name);
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         BitmapEncoder encoder = Path.GetExtension(name).ToLowerInvariant() switch
         {

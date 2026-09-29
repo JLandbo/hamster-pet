@@ -6,8 +6,7 @@ public static class DataFolder
 
     public static string Current => Of(Environment.GetEnvironmentVariable(Variable));
 
-    public static string Of(string? overridden) =>
-        string.IsNullOrWhiteSpace(overridden)
+    public static string Of(string? overridden) => string.IsNullOrWhiteSpace(overridden)
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Hamster")
             : overridden;
 }

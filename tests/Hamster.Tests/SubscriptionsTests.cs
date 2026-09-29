@@ -5,20 +5,22 @@ namespace Hamster.Tests;
 
 public sealed class SubscriptionsTests : IDisposable
 {
-    const string Site = "https://firma.atlassian.net";
-    readonly string folder = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+    const string _site = "https://firma.atlassian.net";
+    readonly string _folder = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
 
     public void Dispose()
     {
-        if (Directory.Exists(folder))
-            Directory.Delete(folder, recursive: true);
+        if (Directory.Exists(_folder))
+        {
+            Directory.Delete(_folder, recursive: true);
+        }
     }
 
     Subscriptions NewSubscriptions(ClaudeSettings? settings = null) => new(
-        new Connectors(new ClaudeClient(folder, Path.Combine(folder, "i.txt"), new JsonFile<ClaudeSettings>(Path.Combine(folder, "settings.json"), settings ?? ClaudeSettings.Default)), () => { }, () => false),
-        new ClaudeFetcher(folder),
-        new WebSession(folder),
-        new JsonFile<SubscriptionSettings>(Path.Combine(folder, "subscriptions.json"), SubscriptionSettings.Empty));
+        new Connectors(new ClaudeClient(_folder, Path.Combine(_folder, "i.txt"), new JsonFile<ClaudeSettings>(Path.Combine(_folder, "settings.json"), settings ?? ClaudeSettings.Default)), () => { }, () => false),
+        new ClaudeFetcher(_folder),
+        new WebSession(_folder),
+        new JsonFile<SubscriptionSettings>(Path.Combine(_folder, "subscriptions.json"), SubscriptionSettings.Empty));
 
     [Fact]
     public void ChoicesFor_WhenBoardsAreChosen_ThenListsTheirColumnsInBoardOrder()
@@ -70,7 +72,7 @@ public sealed class SubscriptionsTests : IDisposable
         var board = Board(12, "10200", ("To Do", ["1"]), ("Test", ["10012"]), ("Review", ["10014", "10019"]));
 
         // Act
-        var jql = Subscriptions.BoardJql(board, ["Test", "Review", "Findes ikke her"]);
+        var jql = FeedApi.BoardJql(board, ["Test", "Review", "Findes ikke her"]);
 
         // Assert
         Assert.Equal("filter = 10200 AND assignee = currentUser() AND status in (10012, 10014, 10019) ORDER BY updated DESC", jql);
@@ -82,7 +84,7 @@ public sealed class SubscriptionsTests : IDisposable
     public void BoardJql_WhenNothingOnTheBoardIsChosen_ThenSkipsTheBoard(string? filter, string column)
     {
         // Act
-        var jql = Subscriptions.BoardJql(Board(12, filter, ("Test", ["10012"])), [column]);
+        var jql = FeedApi.BoardJql(Board(12, filter, ("Test", ["10012"])), [column]);
 
         // Assert
         Assert.Null(jql);
@@ -95,10 +97,10 @@ public sealed class SubscriptionsTests : IDisposable
         const string json = """{"isLast":false,"values":[{"id":12,"name":"ACS board","location":{"projectKey":"ACS"}},{"id":13,"name":"Team"}]}""";
 
         // Act
-        var (boards, last) = Subscriptions.BoardPage(json, Site);
+        var (boards, last) = FeedApi.BoardPage(json, _site);
 
         // Assert
-        Assert.Equal([new JiraBoard(12, "ACS board (ACS)", Site), new JiraBoard(13, "Team", Site)], boards);
+        Assert.Equal([new JiraBoard(12, "ACS board (ACS)", _site), new JiraBoard(13, "Team", _site)], boards);
         Assert.False(last);
     }
 
@@ -109,7 +111,7 @@ public sealed class SubscriptionsTests : IDisposable
         const string json = """{"filter":{"id":"10200"},"columnConfig":{"columns":[{"name":"To Do","statuses":[{"id":"1"}]},{"name":"Test","statuses":[{"id":"10012"},{"id":"10020"}]}]}}""";
 
         // Act
-        var board = Subscriptions.Configured(new JiraBoard(12, "ACS board", Site), json);
+        var board = FeedApi.Configured(new JiraBoard(12, "ACS board", _site), json);
 
         // Assert
         Assert.Equal(("10200", "To Do: 1 | Test: 10012,10020"), (board.FilterId, string.Join(" | ", board.Columns.Select(column => $"{column.Name}: {string.Join(',', column.StatusIds)}"))));
@@ -123,7 +125,7 @@ public sealed class SubscriptionsTests : IDisposable
     public void IsJiraSite_WhenGivenAUrl_ThenOnlyAcceptsAtlassianSitesOverHttps(string url, bool expected)
     {
         // Act
-        var accepted = Subscriptions.IsJiraSite(url);
+        var accepted = FeedApi.IsJiraSite(url);
 
         // Assert
         Assert.Equal(expected, accepted);
@@ -135,10 +137,10 @@ public sealed class SubscriptionsTests : IDisposable
     public void JiraSites_WhenEitherAtlassianServerAnswers_ThenReadsTheSites(string json)
     {
         // Act
-        var sites = Subscriptions.JiraSites(json);
+        var sites = FeedApi.JiraSites(json);
 
         // Assert
-        Assert.Equal([Site], sites);
+        Assert.Equal([_site], sites);
     }
 
     [Theory]
@@ -147,7 +149,7 @@ public sealed class SubscriptionsTests : IDisposable
     public void JiraItems_WhenIssuesAreFound_ThenLinksToTheirSiteUnderTheirColumn(string json)
     {
         // Act
-        var items = Subscriptions.JiraItems(json, Site, new Dictionary<string, string> { ["10012"] = "Under Test in DEV" });
+        var items = FeedApi.JiraItems(json, _site, new Dictionary<string, string> { ["10012"] = "Under Test in DEV" });
 
         // Assert
         Assert.Equal([("Jira", "Under Test in DEV", "ACS-1", "Test af login", "https://firma.atlassian.net/browse/ACS-1")], items.Select(item => (item.Source, item.Group, item.Id, item.Title, item.Url)));
@@ -160,7 +162,7 @@ public sealed class SubscriptionsTests : IDisposable
         const string json = """{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test af login","updated":"2026-09-26T10:42:00.000+0200"}}]}""";
 
         // Act
-        var item = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>()));
+        var item = Assert.Single(FeedApi.JiraItems(json, _site, new Dictionary<string, string>()));
 
         // Assert
         Assert.Equal(new DateTimeOffset(2026, 9, 26, 10, 42, 0, TimeSpan.FromHours(2)), item.Updated);
@@ -173,7 +175,7 @@ public sealed class SubscriptionsTests : IDisposable
         const string json = """{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test af login","status":{"id":"3","name":"In Progress"}}}]}""";
 
         // Act
-        var item = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>()));
+        var item = Assert.Single(FeedApi.JiraItems(json, _site, new Dictionary<string, string>()));
 
         // Assert
         Assert.Equal("In Progress", item.Group);
@@ -183,7 +185,7 @@ public sealed class SubscriptionsTests : IDisposable
     public void SearchUrl_WhenGivenJql_ThenAsksJiraForMyIssuesWithTheirDetails()
     {
         // Act
-        var url = Subscriptions.SearchUrl(Site, "status in (\"Test\")", ["customfield_10020"]);
+        var url = FeedApi.SearchUrl(_site, "status in (\"Test\")", ["customfield_10020"]);
 
         // Assert
         Assert.Equal("https://firma.atlassian.net/rest/api/3/search/jql?jql=status%20in%20%28%22Test%22%29&fields=summary,status,updated,issuetype,parent,priority,labels,components,created,description,duedate,timetracking,customfield_10020&maxResults=100", url);
@@ -196,52 +198,10 @@ public sealed class SubscriptionsTests : IDisposable
         const string json = """{"items":[{"html_url":"https://github.com/AciesDK/app/pull/11","number":11,"repository_url":"https://api.github.com/repos/AciesDK/app","title":"Ny knap","updated_at":"2026-09-26T08:42:00Z"}],"total_count":1}""";
 
         // Act
-        var items = Subscriptions.GitHubItems(json, "Mine åbne PR'er");
+        var items = FeedApi.GitHubItems(json, "Mine åbne PR'er");
 
         // Assert
         Assert.Equal([new FeedItem("GitHub", "Mine åbne PR'er", "#11", "Ny knap", "https://github.com/AciesDK/app/pull/11", "app", new DateTimeOffset(2026, 9, 26, 8, 42, 0, TimeSpan.Zero))], items);
-    }
-
-    [Theory]
-    [InlineData(0.5, "nu")]
-    [InlineData(12, "12 min")]
-    [InlineData(150, "2 t")]
-    [InlineData(1500, "i går")]
-    [InlineData(4400, "3 dage")]
-    public void Ago_WhenTimeHasPassed_ThenSaysHowLongAgo(double minutes, string expected)
-    {
-        // Act
-        var ago = FeedItem.Ago(TimeSpan.FromMinutes(minutes));
-
-        // Assert
-        Assert.Equal(expected, ago);
-    }
-
-    [Fact]
-    public void DetailAt_WhenTheItemHasARepositoryAndUpdateTime_ThenShowsBoth()
-    {
-        // Arrange
-        var now = new DateTimeOffset(2026, 9, 26, 10, 0, 0, TimeSpan.Zero);
-        var item = new FeedItem("GitHub", "Mine åbne PR'er", "#11", "Ny knap", "https://github.com/AciesDK/app/pull/11", "app", now.AddHours(-2));
-
-        // Act
-        var detail = item.DetailAt(now);
-
-        // Assert
-        Assert.Equal("app · 2 t", detail);
-    }
-
-    [Fact]
-    public void DetailAt_WhenThePullRequestIsADraft_ThenSaysSo()
-    {
-        // Arrange
-        var item = new FeedItem("GitHub", "Mine åbne PR'er", "#11", "Ny knap", "https://github.com/AciesDK/app/pull/11", "app", Draft: true);
-
-        // Act
-        var detail = item.DetailAt(DateTimeOffset.Now);
-
-        // Assert
-        Assert.Equal("app · kladde", detail);
     }
 
     [Fact]
@@ -251,7 +211,7 @@ public sealed class SubscriptionsTests : IDisposable
         const string json = """{"items":[{"html_url":"https://github.com/AciesDK/app/pull/11","number":11,"title":"Ny knap","draft":true}]}""";
 
         // Act
-        var item = Assert.Single(Subscriptions.GitHubItems(json, "Mine åbne PR'er"));
+        var item = Assert.Single(FeedApi.GitHubItems(json, "Mine åbne PR'er"));
 
         // Assert
         Assert.True(item.Draft);
@@ -274,7 +234,7 @@ public sealed class SubscriptionsTests : IDisposable
     public void WithBoard_WhenAConfiguredBoardIsChosen_ThenReplacesTheKnownOne()
     {
         // Arrange
-        var settings = SubscriptionSettings.Empty with { JiraBoards = [new JiraBoard(12, "ACS board", Site)] };
+        var settings = SubscriptionSettings.Empty with { JiraBoards = [new JiraBoard(12, "ACS board", _site)] };
         var configured = Board(12, "10200", ("Test", ["10012"]));
 
         // Act
@@ -282,228 +242,6 @@ public sealed class SubscriptionsTests : IDisposable
 
         // Assert
         Assert.Equal(("10200", configured.Key), (Assert.Single(changed.JiraBoards).FilterId, Assert.Single(changed.ChosenBoards)));
-    }
-
-    [Fact]
-    public async Task RefreshAsync_WhenTheFirstItemsArrive_ThenIsNotNews()
-    {
-        // Arrange
-        List<bool> news = [];
-        var feed = new Feed([("Jira", Returning(Item("a")))]);
-        feed.Changed += news.Add;
-
-        // Act
-        await feed.RefreshAsync();
-
-        // Assert
-        Assert.Equal([false], news);
-    }
-
-    [Fact]
-    public async Task RefreshAsync_WhenANewItemArrives_ThenIsNews()
-    {
-        // Arrange
-        FeedItem[] items = [Item("a")];
-        List<bool> news = [];
-        var feed = new Feed([("Jira", Current(() => items))]);
-        feed.Changed += news.Add;
-        await feed.RefreshAsync();
-        await feed.RefreshAsync();
-        items = [Item("a"), Item("b")];
-
-        // Act
-        await feed.RefreshAsync();
-
-        // Assert
-        Assert.Equal([false, false, true], news);
-    }
-
-    [Fact]
-    public async Task RefreshAsync_WhenTheFirstFetchFailed_ThenTheFirstSuccessfulOneIsNotNews()
-    {
-        // Arrange
-        var failing = true;
-        List<bool> news = [];
-        var feed = new Feed([("Jira", () => failing ? Failing("fejl")() : Returning(Item("a"))())]);
-        feed.Changed += news.Add;
-        await feed.RefreshAsync();
-        failing = false;
-
-        // Act
-        await feed.RefreshAsync();
-
-        // Assert
-        Assert.Equal([false, false], news);
-    }
-
-    [Fact]
-    public async Task RefreshAsync_WhenAnItemLeavesAndComesBack_ThenIsNews()
-    {
-        // Arrange
-        FeedItem[] items = [Item("a")];
-        List<bool> news = [];
-        var feed = new Feed([("Jira", Current(() => items))]);
-        feed.Changed += news.Add;
-        await feed.RefreshAsync();
-        items = [];
-        await feed.RefreshAsync();
-        items = [Item("a")];
-
-        // Act
-        await feed.RefreshAsync();
-
-        // Assert
-        Assert.True(news[^1]);
-    }
-
-    [Fact]
-    public async Task RefreshAsync_WhenOneSourceKeepsFailing_ThenNewItemsFromTheOtherAreNews()
-    {
-        // Arrange
-        FeedItem[] items = [Item("a")];
-        List<bool> news = [];
-        var feed = new Feed([("Jira", Failing("fejl")), ("GitHub", Current(() => items))]);
-        feed.Changed += news.Add;
-        await feed.RefreshAsync();
-        items = [Item("a"), Item("b")];
-
-        // Act
-        await feed.RefreshAsync();
-
-        // Assert
-        Assert.True(news[^1]);
-    }
-
-    [Fact]
-    public async Task RefreshAsync_WhenASourceFails_ThenKeepsItsItemsShowsTheErrorAndIsNotMarkedUpdated()
-    {
-        // Arrange
-        var failing = false;
-        var feed = new Feed([("Jira", () => failing ? Failing("fejl")() : Returning(Item("a"))())]);
-        await feed.RefreshAsync();
-        var updated = feed.UpdatedAt;
-        failing = true;
-
-        // Act
-        await feed.RefreshAsync();
-
-        // Assert
-        Assert.Equal(("a", ("Jira", "fejl"), updated), (Assert.Single(feed.Items).Id, Assert.Single(feed.Errors), feed.UpdatedAt));
-    }
-
-    [Fact]
-    public async Task RefreshAsync_WhenAskedWhileRefreshing_ThenWaitsForAnotherRefresh()
-    {
-        // Arrange
-        var gate = new TaskCompletionSource<IReadOnlyList<FeedItem>>();
-        var fetches = 0;
-        var feed = new Feed([("Jira", () => ++fetches == 1 ? gate.Task : Returning()())]);
-        _ = feed.RefreshAsync();
-
-        // Act
-        var asked = feed.RefreshAsync();
-        var waiting = (asked.IsCompleted, fetches);
-        gate.SetResult([]);
-        await asked;
-
-        // Assert
-        Assert.Equal(((false, 1), 2), (waiting, fetches));
-    }
-
-    [Fact]
-    public async Task RefreshAsync_WhenTheSubscriptionsChangeWhileFetching_ThenTheNewItemsAreNotNews()
-    {
-        // Arrange
-        FeedItem[] items = [Item("a")];
-        var gate = Task.CompletedTask;
-        List<bool> news = [];
-        var feed = new Feed([("Jira", async () => { await gate; return items; })]);
-        feed.Changed += news.Add;
-        await feed.RefreshAsync();
-        var fetching = new TaskCompletionSource();
-        gate = fetching.Task;
-        var refreshing = feed.RefreshAsync();
-        items = [Item("a"), Item("b")];
-
-        // Act
-        var changed = feed.RefreshAsync(subscriptionsChanged: true);
-        fetching.SetResult();
-        await refreshing;
-        await changed;
-
-        // Assert
-        Assert.Equal([false, false, false], news);
-    }
-
-    [Fact]
-    public async Task RefreshAsync_WhenTheSubscriptionsChanged_ThenExistingItemsAreNotNews()
-    {
-        // Arrange
-        FeedItem[] items = [Item("a")];
-        List<bool> news = [];
-        var feed = new Feed([("Jira", Current(() => items))]);
-        feed.Changed += news.Add;
-        await feed.RefreshAsync();
-        items = [Item("a"), Item("b")];
-
-        // Act
-        await feed.RefreshAsync(subscriptionsChanged: true);
-
-        // Assert
-        Assert.False(news[^1]);
-    }
-
-    [Fact]
-    public async Task SourcesAt_WhenItemsAreFound_ThenGroupsThemPerSourceAndGroupWithCounts()
-    {
-        // Arrange
-        var feed = await Refreshed(Item("a", "Jira", "Test"), Item("b", "Jira", "Under Review"), Item("c", "Jira", "Test"), Item("d", "GitHub", "Mine åbne PR'er"));
-
-        // Act
-        var sources = feed.SourcesAt(DateTimeOffset.Now, []).Select(source => $"{source.Title}: {string.Join(" | ", source.Groups.Select(group => $"{group.Title} {string.Join(",", group.Boxes.SelectMany(box => box.Rows).Select(row => row.Id))}"))}");
-
-        // Assert
-        Assert.Equal(["Jira: Test · 2 a,c | Under Review · 1 b", "GitHub: Mine åbne PR'er · 1 d"], sources);
-    }
-
-    [Fact]
-    public async Task SourcesAt_WhenTheGitHubGroupIsAFeedKey_ThenShowsTheFeedTitle()
-    {
-        // Arrange
-        var feed = await Refreshed(Item("a", "GitHub", "authored"));
-
-        // Act
-        var group = feed.SourcesAt(DateTimeOffset.Now, []).Single().Groups.Single();
-
-        // Assert
-        Assert.Equal("Mine åbne PR'er · 1", group.Title);
-    }
-
-    [Fact]
-    public async Task SourcesAt_WhenASubscribedGroupIsEmpty_ThenShowsItWithZero()
-    {
-        // Arrange
-        var feed = await Refreshed(Item("a", "Jira", "Under Review"));
-
-        // Act
-        var groups = feed.SourcesAt(DateTimeOffset.Now, [("Jira", "Test"), ("Jira", "Under Review")]).SelectMany(source => source.Groups).Select(group => group.Title);
-
-        // Assert
-        Assert.Equal(["Test · 0", "Under Review · 1"], groups);
-    }
-
-    [Fact]
-    public async Task SourcesAt_WhenASourceFailed_ThenShowsItsErrorEvenWithoutSubscriptions()
-    {
-        // Arrange
-        var feed = new Feed([("GitHub", Failing("claude svarede ikke."))]);
-        await feed.RefreshAsync();
-
-        // Act
-        var sources = feed.SourcesAt(DateTimeOffset.Now, [("Jira", "Test")]).Select(source => (source.Title, source.Error));
-
-        // Assert
-        Assert.Equal([("Jira", null), ("GitHub", "claude svarede ikke.")], sources);
     }
 
     [Fact]
@@ -535,53 +273,6 @@ public sealed class SubscriptionsTests : IDisposable
     }
 
     [Fact]
-    public async Task SourcesAt_WhenTasksHaveEpics_ThenBoxesThemUnderTheirEpicSortedByKey()
-    {
-        // Arrange
-        var epic = Ref("ACS-1", IssueKind.Epic);
-        var feed = await Refreshed(
-            Issue("ACS-20", IssueKind.Task, epic, epic),
-            Issue("ACS-7", IssueKind.Task),
-            Issue("ACS-11", IssueKind.SubTask, Ref("ACS-50", IssueKind.Task), epic),
-            Issue("ACS-9", IssueKind.SubTask, Ref("ACS-3", IssueKind.Task), epic),
-            Issue("ACS-3", IssueKind.Task, epic, epic));
-
-        // Act
-        var boxes = feed.SourcesAt(DateTimeOffset.Now, []).Single().Groups.Single().Boxes
-            .Select(box => $"{box.Epic?.Id ?? "-"}: {string.Join(", ", box.Rows.Select(row => $"{(row.Depth > 0 ? ">" : "")}{(row.Muted ? "~" : "")}{row.Id}"))}");
-
-        // Assert
-        Assert.Equal(["ACS-1: ACS-3, >ACS-9, ACS-20, ~ACS-50, >ACS-11", "-: ACS-7"], boxes);
-    }
-
-    [Fact]
-    public async Task SourcesAt_WhenTheEpicItselfIsListed_ThenItHeadsItsBox()
-    {
-        // Arrange
-        var epic = Ref("ACS-1", IssueKind.Epic);
-        var feed = await Refreshed(Issue("ACS-2", IssueKind.Task, epic, epic), Issue("ACS-1", IssueKind.Epic) with { Updated = DateTimeOffset.Now.AddHours(-2) });
-
-        // Act
-        var box = Assert.Single(feed.SourcesAt(DateTimeOffset.Now, []).Single().Groups.Single().Boxes);
-
-        // Assert
-        Assert.Equal(("ACS-1", "2 t", "ACS-2"), (box.Epic?.Id, box.Epic?.Detail, Assert.Single(box.Rows).Id));
-    }
-
-    [Fact]
-    public void KeyOrder_WhenKeysHaveNumbers_ThenSortsByTheirNumber()
-    {
-        // Arrange
-        string[] keys = ["ACS-17578", "#498", "ACS-5588", "#11"];
-
-        // Act
-        var sorted = keys.Order(FeedItem.KeyOrder);
-
-        // Assert
-        Assert.Equal(["#11", "#498", "ACS-5588", "ACS-17578"], sorted);
-    }
-
-    [Fact]
     public void JiraItems_WhenIssuesHaveTypesAndParents_ThenKeepsThem()
     {
         // Arrange
@@ -595,7 +286,7 @@ public sealed class SubscriptionsTests : IDisposable
             """;
 
         // Act
-        var items = Subscriptions.JiraItems(json, Site, new Dictionary<string, string>()).Select(item => (item.Id, item.Kind, item.Parent));
+        var items = FeedApi.JiraItems(json, _site, new Dictionary<string, string>()).Select(item => (item.Id, item.Kind, item.Parent));
 
         // Assert
         Assert.Equal(
@@ -615,7 +306,7 @@ public sealed class SubscriptionsTests : IDisposable
         FeedItem[] items = [Issue("ACS-2", IssueKind.Task, epic), Issue("ACS-3", IssueKind.SubTask, Ref("ACS-2", IssueKind.Task))];
 
         // Act
-        var epics = Subscriptions.WithEpics(items, new Dictionary<string, IssueRef?>()).Select(item => item.Epic);
+        var epics = FeedApi.WithEpics(items, new Dictionary<string, IssueRef?>()).Select(item => item.Epic);
 
         // Assert
         Assert.Equal([epic, epic], epics);
@@ -629,7 +320,7 @@ public sealed class SubscriptionsTests : IDisposable
         FeedItem[] items = [Issue("ACS-3", IssueKind.SubTask, Ref("ACS-2", IssueKind.Task))];
 
         // Act
-        var item = Assert.Single(Subscriptions.WithEpics(items, new Dictionary<string, IssueRef?> { [Url("ACS-2")] = epic }));
+        var item = Assert.Single(FeedApi.WithEpics(items, new Dictionary<string, IssueRef?> { [Url("ACS-2")] = epic }));
 
         // Assert
         Assert.Equal(epic, item.Epic);
@@ -643,7 +334,7 @@ public sealed class SubscriptionsTests : IDisposable
         FeedItem[] items = [Issue("ACS-3", IssueKind.SubTask, task), Issue("ACS-4", IssueKind.SubTask, task), Issue("ACS-6", IssueKind.SubTask, Ref("ACS-5", IssueKind.Task)), Issue("ACS-5", IssueKind.Task)];
 
         // Act
-        var tasks = Subscriptions.TasksWithUnknownEpic(items);
+        var tasks = FeedApi.TasksWithUnknownEpic(items);
 
         // Assert
         Assert.Equal([task], tasks);
@@ -653,7 +344,7 @@ public sealed class SubscriptionsTests : IDisposable
     public void SearchUrl_WhenAskedForTheNextPage_ThenPassesTheToken()
     {
         // Act
-        var url = Subscriptions.SearchUrl(Site, "assignee = currentUser()", ["customfield_10020"], "abc=");
+        var url = FeedApi.SearchUrl(_site, "assignee = currentUser()", ["customfield_10020"], "abc=");
 
         // Assert
         Assert.EndsWith("&maxResults=100&nextPageToken=abc%3D", url);
@@ -667,7 +358,7 @@ public sealed class SubscriptionsTests : IDisposable
     public void NextPageToken_WhenJiraAnswers_ThenFindsTheNextPage(string json, string? expected)
     {
         // Act
-        var token = Subscriptions.NextPageToken(json);
+        var token = FeedApi.NextPageToken(json);
 
         // Assert
         Assert.Equal(expected, token);
@@ -685,7 +376,7 @@ public sealed class SubscriptionsTests : IDisposable
         }
 
         // Act
-        var pages = await Subscriptions.PagesAsync(Get, Site, "assignee = currentUser()", ["customfield_10020"]);
+        var pages = await FeedApi.PagesAsync(Get, _site, "assignee = currentUser()", ["customfield_10020"]);
 
         // Assert
         Assert.Equal((2, 2), (pages.Count, asked.Count));
@@ -698,7 +389,7 @@ public sealed class SubscriptionsTests : IDisposable
         var call = new ToolCall("searchJiraIssuesUsingJql", new JsonObject { ["jql"] = "x" });
 
         // Act
-        var next = Subscriptions.NextJiraPage(call, """{"issues":{"nodes":[],"pageInfo":{"hasNextPage":true,"endCursor":"c2"}}}""");
+        var next = FeedApi.NextJiraPage(call, """{"issues":{"nodes":[],"pageInfo":{"hasNextPage":true,"endCursor":"c2"}}}""");
 
         // Assert
         Assert.Equal(("x", "c2"), ((string?)next?.Arguments["jql"], (string?)next?.Arguments["nextPageToken"]));
@@ -715,7 +406,7 @@ public sealed class SubscriptionsTests : IDisposable
         var json = new JsonObject { ["total_count"] = total, ["items"] = new JsonArray([.. Enumerable.Range(0, items).Select(_ => (JsonNode)new JsonObject())]) }.ToJsonString();
 
         // Act
-        var next = Subscriptions.NextGitHubPage(call, json);
+        var next = FeedApi.NextGitHubPage(call, json);
 
         // Assert
         Assert.Equal(expected, (int?)next?.Arguments["page"]);
@@ -728,7 +419,7 @@ public sealed class SubscriptionsTests : IDisposable
         var tasks = Enumerable.Range(1, 150).Select(number => Ref($"ACS-{number}", IssueKind.Task));
 
         // Act
-        var searches = Subscriptions.LookupSearches(tasks).ToArray();
+        var searches = FeedApi.LookupSearches(tasks).ToArray();
 
         // Assert
         Assert.Equal((2, "key in (ACS-101"), (searches.Length, searches[1].Jql[..15]));
@@ -751,7 +442,7 @@ public sealed class SubscriptionsTests : IDisposable
         var known = Board(12, "10200", ("Test", ["7"]));
 
         // Act
-        var board = Assert.Single(Subscriptions.Merged([new JiraBoard(12, "Nyt navn", Site)], [known]));
+        var board = Assert.Single(FeedApi.Merged([new JiraBoard(12, "Nyt navn", _site)], [known]));
 
         // Assert
         Assert.Equal(("Nyt navn", "10200"), (board.Name, board.FilterId));
@@ -772,7 +463,7 @@ public sealed class SubscriptionsTests : IDisposable
         var fields = new Dictionary<string, string> { ["Sprint"] = "customfield_10020", ["Story Points"] = "customfield_10026", ["Reviewer"] = "customfield_10066", ["Tester"] = "customfield_10061", ["Kundenavn"] = "customfield_10068" };
 
         // Act
-        var details = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>(), fields)).Details!;
+        var details = Assert.Single(FeedApi.JiraItems(json, _site, new Dictionary<string, string>(), fields)).Details!;
 
         // Assert
         Assert.Equal($"Sprint 2 · slutter {new DateTimeOffset(2026, 10, 1, 10, 0, 0, TimeSpan.Zero).ToLocalTime().ToString("d. MMM", CultureInfo.CurrentCulture)}", details.Sprint);
@@ -791,7 +482,7 @@ public sealed class SubscriptionsTests : IDisposable
         var json = """{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":"WORDS"}}]}""".Replace("WORDS", words);
 
         // Act
-        var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
+        var description = Assert.Single(FeedApi.JiraItems(json, _site, new Dictionary<string, string>())).Details!.Description;
 
         // Assert
         Assert.Equal($"{string.Join(' ', Enumerable.Repeat("ord", 375))} …", description);
@@ -812,7 +503,7 @@ public sealed class SubscriptionsTests : IDisposable
             """;
 
         // Act
-        var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
+        var description = Assert.Single(FeedApi.JiraItems(json, _site, new Dictionary<string, string>())).Details!.Description;
 
         // Assert
         Assert.Equal("## Baggrund\n\nRing til @Jacob om **API**\\-kaldet\\, se https://x.atlassian.net/browse/ACS-2 og `Foo()`\\.\n\n- punkt 1\n- punkt 2", description);
@@ -880,7 +571,7 @@ public sealed class SubscriptionsTests : IDisposable
             """;
 
         // Act
-        var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
+        var description = Assert.Single(FeedApi.JiraItems(json, _site, new Dictionary<string, string>())).Details!.Description;
 
         // Assert
         Assert.Equal("linje 1  \nlinje 2", description);
@@ -896,7 +587,7 @@ public sealed class SubscriptionsTests : IDisposable
             """;
 
         // Act
-        var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
+        var description = Assert.Single(FeedApi.JiraItems(json, _site, new Dictionary<string, string>())).Details!.Description;
 
         // Assert
         Assert.Equal("Ring om **API** kaldet", description);
@@ -910,7 +601,7 @@ public sealed class SubscriptionsTests : IDisposable
             .Replace("LONG", new string('x', 1000));
 
         // Act
-        var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
+        var description = Assert.Single(FeedApi.JiraItems(json, _site, new Dictionary<string, string>())).Details!.Description;
 
         // Assert
         Assert.Equal("Følgende:\n\n[Billede]Problem i dag [Billede]", description);
@@ -1079,7 +770,7 @@ public sealed class SubscriptionsTests : IDisposable
         const string json = """{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":"Før [![x](a)](b) efter"}}]}""";
 
         // Act
-        var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
+        var description = Assert.Single(FeedApi.JiraItems(json, _site, new Dictionary<string, string>())).Details!.Description;
 
         // Assert
         Assert.Equal("Før [[Billede]](b) efter", description);
@@ -1092,7 +783,7 @@ public sealed class SubscriptionsTests : IDisposable
         const string json = """{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":"Før ![a ![b](x)](y) efter"}}]}""";
 
         // Act
-        var description = Assert.Single(Subscriptions.JiraItems(json, Site, new Dictionary<string, string>())).Details!.Description;
+        var description = Assert.Single(FeedApi.JiraItems(json, _site, new Dictionary<string, string>())).Details!.Description;
 
         // Assert
         Assert.Equal("Før [Billede] efter", description);
@@ -1102,7 +793,7 @@ public sealed class SubscriptionsTests : IDisposable
     public void JiraSearch_WhenBuilt_ThenAsksForAllDetailsAsMarkdownAHundredAtATime()
     {
         // Act
-        var call = Subscriptions.JiraSearch(Site, "assignee = currentUser()", ["customfield_10020", "customfield_10026"]);
+        var call = FeedApi.JiraSearch(_site, "assignee = currentUser()", ["customfield_10020", "customfield_10026"]);
 
         // Assert
         Assert.Equal(("markdown", 100, "customfield_10026"), ((string?)call.Arguments["responseContentFormat"], (int?)call.Arguments["maxResults"], (string?)call.Arguments["fields"]!.AsArray()[^1]));
@@ -1120,7 +811,7 @@ public sealed class SubscriptionsTests : IDisposable
             """;
 
         // Act
-        var fields = Subscriptions.JiraFieldsOf(json);
+        var fields = FeedApi.JiraFieldsOf(json);
 
         // Assert
         Assert.Equal(["Sprint=customfield_10020", "Story Points=customfield_10026", "Reviewer=customfield_10066", "Tester=customfield_10061", "Kundenavn=customfield_10068"],
@@ -1142,31 +833,20 @@ public sealed class SubscriptionsTests : IDisposable
         Assert.Equal([("Jira", "Under Review"), ("Jira", "Test"), ("GitHub", "review"), ("GitHub", "authored")], slots);
     }
 
-    static Func<Task<IReadOnlyList<FeedItem>>> Returning(params FeedItem[] items) => () => Task.FromResult<IReadOnlyList<FeedItem>>(items);
-
-    static Func<Task<IReadOnlyList<FeedItem>>> Current(Func<FeedItem[]> items) => () => Task.FromResult<IReadOnlyList<FeedItem>>(items());
-
-    static Func<Task<IReadOnlyList<FeedItem>>> Failing(string message) => () => Task.FromException<IReadOnlyList<FeedItem>>(new InvalidOperationException(message));
-
-    static async Task<Feed> Refreshed(params FeedItem[] items)
+    static string Described(string content)
     {
-        var feed = new Feed([("Jira", Returning(items))]);
-        await feed.RefreshAsync();
-        return feed;
+        return Assert.Single(FeedApi.JiraItems("""{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":{"type":"doc","content":[CONTENT]}}}]}""".Replace("CONTENT", content),
+            _site, new Dictionary<string, string>())).Details!.Description;
     }
 
-    static string Described(string content) =>
-        Assert.Single(Subscriptions.JiraItems("""{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":{"type":"doc","content":[CONTENT]}}}]}""".Replace("CONTENT", content),
-            Site, new Dictionary<string, string>())).Details!.Description;
-
-    static string Url(string key) => $"{Site}/browse/{key}";
+    static string Url(string key) => $"{_site}/browse/{key}";
 
     static IssueRef Ref(string key, IssueKind kind) => new(key, "", kind, Url(key));
 
     static FeedItem Issue(string key, IssueKind kind, IssueRef? parent = null, IssueRef? epic = null) => new("Jira", "Test", key, "", Url(key), Kind: kind, Parent: parent, Epic: epic);
 
-    static FeedItem Item(string id, string source = "Jira", string group = "Test") => new(source, group, id, "", $"https://example.com/{id}");
-
-    static JiraBoard Board(int id, string? filter, params (string Name, string[] Statuses)[] columns) =>
-        new(id, $"Board {id}", Site) { FilterId = filter, Columns = [.. columns.Select(column => new JiraColumn(column.Name, column.Statuses))] };
+    static JiraBoard Board(int id, string? filter, params (string Name, string[] Statuses)[] columns)
+    {
+        return new(id, $"Board {id}", _site) { FilterId = filter, Columns = [.. columns.Select(column => new JiraColumn(column.Name, column.Statuses))] };
+    }
 }

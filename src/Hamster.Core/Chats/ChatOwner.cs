@@ -5,7 +5,7 @@ namespace Hamster.Core.Chats;
 
 public sealed class ChatOwner : IDisposable
 {
-    Mutex? held;
+    Mutex? _held;
 
     public bool TryOwn(string file)
     {
@@ -30,7 +30,7 @@ public sealed class ChatOwner : IDisposable
         catch (AbandonedMutexException)
         {
         }
-        held = mutex;
+        _held = mutex;
         return true;
     }
 
@@ -38,8 +38,8 @@ public sealed class ChatOwner : IDisposable
 
     void Release()
     {
-        held?.ReleaseMutex();
-        held?.Dispose();
-        held = null;
+        _held?.ReleaseMutex();
+        _held?.Dispose();
+        _held = null;
     }
 }

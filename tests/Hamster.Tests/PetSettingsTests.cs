@@ -2,18 +2,20 @@ namespace Hamster.Tests;
 
 public sealed class PetSettingsTests : IDisposable
 {
-    readonly string file = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
+    readonly string _file = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
 
-    public void Dispose() => File.Delete(file);
+    JsonFile<PetSettings> Store() => new(_file, PetSettings.Default);
+
+    public void Dispose() => File.Delete(_file);
 
     [Fact]
     public void Load_WhenPetSettingsWereSavedBeforeSizes_ThenSizeIs100Percent()
     {
         // Arrange
-        File.WriteAllText(file, """{"CharacterName": "Hamster"}""");
+        File.WriteAllText(_file, """{"CharacterName": "Hamster"}""");
 
         // Act
-        var pet = new JsonFile<PetSettings>(file, PetSettings.Default).Load();
+        var pet = Store().Load();
 
         // Assert
         Assert.Equal(100, pet.SizePercent);
@@ -23,10 +25,10 @@ public sealed class PetSettingsTests : IDisposable
     public void Load_WhenPetSettingsWereSavedBeforeAutoHide_ThenAutoHideIsOn()
     {
         // Arrange
-        File.WriteAllText(file, """{"CharacterName": "Hamster"}""");
+        File.WriteAllText(_file, """{"CharacterName": "Hamster"}""");
 
         // Act
-        var pet = new JsonFile<PetSettings>(file, PetSettings.Default).Load();
+        var pet = Store().Load();
 
         // Assert
         Assert.True(pet.AutoHide);
@@ -36,10 +38,10 @@ public sealed class PetSettingsTests : IDisposable
     public void Load_WhenPetSettingsWereSavedBeforeHideSeconds_ThenHidesAfter60Seconds()
     {
         // Arrange
-        File.WriteAllText(file, """{"CharacterName": "Hamster"}""");
+        File.WriteAllText(_file, """{"CharacterName": "Hamster"}""");
 
         // Act
-        var pet = new JsonFile<PetSettings>(file, PetSettings.Default).Load();
+        var pet = Store().Load();
 
         // Assert
         Assert.Equal(60, pet.HideSeconds);
@@ -49,10 +51,10 @@ public sealed class PetSettingsTests : IDisposable
     public void Load_WhenPetSettingsWereSavedBeforeChatsExpanded_ThenChatsAreExpanded()
     {
         // Arrange
-        File.WriteAllText(file, """{"CharacterName": "Hamster"}""");
+        File.WriteAllText(_file, """{"CharacterName": "Hamster"}""");
 
         // Act
-        var pet = new JsonFile<PetSettings>(file, PetSettings.Default).Load();
+        var pet = Store().Load();
 
         // Assert
         Assert.True(pet.ChatsExpanded);
@@ -62,7 +64,7 @@ public sealed class PetSettingsTests : IDisposable
     public void Save_WhenChatsAreCollapsed_ThenLoadReturnsIt()
     {
         // Arrange
-        var store = new JsonFile<PetSettings>(file, PetSettings.Default);
+        var store = Store();
 
         // Act
         store.Save(PetSettings.Default with { ChatsExpanded = false });
@@ -75,10 +77,10 @@ public sealed class PetSettingsTests : IDisposable
     public void Load_WhenPetSettingsWereSavedBeforeWebImages_ThenWebImagesAreOff()
     {
         // Arrange
-        File.WriteAllText(file, """{"CharacterName": "Hamster"}""");
+        File.WriteAllText(_file, """{"CharacterName": "Hamster"}""");
 
         // Act
-        var pet = new JsonFile<PetSettings>(file, PetSettings.Default).Load();
+        var pet = Store().Load();
 
         // Assert
         Assert.False(pet.ShowWebImages);
@@ -88,7 +90,7 @@ public sealed class PetSettingsTests : IDisposable
     public void Save_WhenSizeChanges_ThenLoadReturnsIt()
     {
         // Arrange
-        var store = new JsonFile<PetSettings>(file, PetSettings.Default);
+        var store = Store();
 
         // Act
         store.Save(PetSettings.Default with { SizePercent = 250 });

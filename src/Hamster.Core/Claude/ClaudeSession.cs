@@ -7,11 +7,11 @@ namespace Hamster.Core.Claude;
 
 public sealed class ClaudeSession(Task<(TextReader Output, TextWriter Input)> streams, IClaudeListener listener)
 {
-    readonly Lock order = new();
-    readonly ConcurrentDictionary<string, CancellationTokenSource> questions = new();
-    readonly ConcurrentDictionary<string, TaskCompletionSource<JsonObject?>> replies = new();
-    Task writing = streams;
-    volatile bool detached;
+    readonly Lock _order = new();
+    readonly ConcurrentDictionary<string, CancellationTokenSource> _questions = new();
+    readonly ConcurrentDictionary<string, TaskCompletionSource<JsonObject?>> _replies = new();
+    Task _writing = streams;
+    volatile bool _detached;
 
     public ClaudeSession(TextReader output, TextWriter input, IClaudeListener listener) : this(Task.FromResult((output, input)), listener)
     {
@@ -31,9 +31,13 @@ public sealed class ClaudeSession(Task<(TextReader Output, TextWriter Input)> st
                 foreach (var message in ClaudeProtocol.Parse(line))
                 {
                     if (message is ClaudeResult)
+                    {
                         Results++;
-                    if (!detached)
+                    }
+                    if (!_detached)
+                    {
                         Dispatch(message);
+                    }
                 }
             }
         }
@@ -43,15 +47,15 @@ public sealed class ClaudeSession(Task<(TextReader Output, TextWriter Input)> st
         }
     }
 
-    public Task SendAsync(string id, string prompt, IReadOnlyList<ImageAttachment> images) => Queue(() => Write(detached ? throw NotRunning() : ClaudeProtocol.UserMessage(prompt, images, id)));
+    public Task SendAsync(string id, string prompt, IReadOnlyList<ImageAttachment> images) => Queue(() => Write(_detached ? throw NotRunning() : ClaudeProtocol.UserMessage(prompt, images, id)));
 
     public async Task<JsonObject?> RequestAsync(JsonObject request, TimeSpan timeout)
     {
         var id = Guid.NewGuid().ToString();
-        var reply = replies[id] = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reply = _replies[id] = new(TaskCreationOptions.RunContinuationsAsynchronously);
         try
         {
-            if (detached)
+            if (_detached)
             {
                 throw NotRunning();
             }
@@ -64,7 +68,7 @@ public sealed class ClaudeSession(Task<(TextReader Output, TextWriter Input)> st
         }
         finally
         {
-            replies.TryRemove(id, out _);
+            _replies.TryRemove(id, out _);
         }
     }
 
@@ -74,9 +78,9 @@ public sealed class ClaudeSession(Task<(TextReader Output, TextWriter Input)> st
 
     Task Queue(Action write)
     {
-        lock (order)
+        lock (_order)
         {
-            return writing = writing.ContinueWith(_ => write(), TaskScheduler.Default);
+            return _writing = _writing.ContinueWith(_ => write(), TaskScheduler.Default);
         }
     }
 
@@ -91,7 +95,7 @@ public sealed class ClaudeSession(Task<(TextReader Output, TextWriter Input)> st
 
     public void Detach()
     {
-        detached = true;
+        _detached = true;
         CancelOpen();
     }
 
@@ -109,10 +113,10 @@ public sealed class ClaudeSession(Task<(TextReader Output, TextWriter Input)> st
                 listener.ToolFinished(toolResult);
                 break;
             case PermissionRequest request:
-                var withdrawal = questions[request.RequestId] = new CancellationTokenSource();
+                var withdrawal = _questions[request.RequestId] = new CancellationTokenSource();
                 _ = AnswerAsync(request, withdrawal.Token);
                 break;
-            case CancelRequest cancel when questions.TryRemove(cancel.RequestId, out var withdrawn):
+            case CancelRequest cancel when _questions.TryRemove(cancel.RequestId, out var withdrawn):
                 withdrawn.Cancel();
                 break;
             case Usage usage:
@@ -127,10 +131,10 @@ public sealed class ClaudeSession(Task<(TextReader Output, TextWriter Input)> st
             case ClaudeResult result:
                 listener.ResultReceived(result);
                 break;
-            case ControlReply { Error: { } error } reply when replies.TryRemove(reply.RequestId, out var waiter):
+            case ControlReply { Error: { } error } reply when _replies.TryRemove(reply.RequestId, out var waiter):
                 waiter.TrySetException(new InvalidOperationException(error));
                 break;
-            case ControlReply reply when replies.TryRemove(reply.RequestId, out var waiter):
+            case ControlReply reply when _replies.TryRemove(reply.RequestId, out var waiter):
                 waiter.TrySetResult(reply.Response);
                 break;
         }
@@ -141,7 +145,7 @@ public sealed class ClaudeSession(Task<(TextReader Output, TextWriter Input)> st
         try
         {
             var answer = await listener.AskPermissionAsync(request, cancellationToken);
-            if (questions.TryRemove(request.RequestId, out _))
+            if (_questions.TryRemove(request.RequestId, out _))
             {
                 await SendAsync(answer == PermissionAnswer.Deny ? ClaudeProtocol.Deny(request) : ClaudeProtocol.Allow(request, answer == PermissionAnswer.AllowAlways));
             }
@@ -153,11 +157,19 @@ public sealed class ClaudeSession(Task<(TextReader Output, TextWriter Input)> st
 
     void CancelOpen()
     {
-        foreach (var id in questions.Keys)
-            if (questions.TryRemove(id, out var question))
+        foreach (var id in _questions.Keys)
+        {
+            if (_questions.TryRemove(id, out var question))
+            {
                 question.Cancel();
-        foreach (var id in replies.Keys)
-            if (replies.TryRemove(id, out var reply))
+            }
+        }
+        foreach (var id in _replies.Keys)
+        {
+            if (_replies.TryRemove(id, out var reply))
+            {
                 reply.TrySetCanceled();
+            }
+        }
     }
 }

@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
 
@@ -7,17 +6,17 @@ namespace Hamster.Tests;
 
 public sealed class ClaudeSessionTests
 {
-    const string Permission = """{"type":"control_request","request_id":"req-1","request":{"subtype":"can_use_tool","tool_name":"WebFetch","input":{"url":"https://example.com"}}}""";
-    const string Withdrawal = """{"type":"control_cancel_request","request_id":"req-1"}""";
-    const string WebSearch = """{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_1","name":"WebSearch","input":{}}]}}""";
-    const string SearchDone = """{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"..."}]}}""";
-    const string RateLimit = """{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","unifiedWindows":{"five_hour":{"utilization":0.03},"seven_day":{"utilization":0.59}}}}""";
-    const string Started = """{"type":"command_lifecycle","command_uuid":"id-1","state":"started"}""";
-    const string Tasks = """{"type":"system","subtype":"background_tasks_changed","tasks":[]}""";
-    const string Status = """{"type":"system","subtype":"status","status":null,"permissionMode":"plan"}""";
-    const string Result = """{"type":"result","subtype":"success","is_error":false,"result":"Svar","session_id":"session-1","user_message_uuids":["id-1"]}""";
+    const string _permission = """{"type":"control_request","request_id":"req-1","request":{"subtype":"can_use_tool","tool_name":"WebFetch","input":{"url":"https://example.com"}}}""";
+    const string _withdrawal = """{"type":"control_cancel_request","request_id":"req-1"}""";
+    const string _webSearch = """{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_1","name":"WebSearch","input":{}}]}}""";
+    const string _searchDone = """{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"..."}]}}""";
+    const string _rateLimit = """{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","unifiedWindows":{"five_hour":{"utilization":0.03},"seven_day":{"utilization":0.59}}}}""";
+    const string _started = """{"type":"command_lifecycle","command_uuid":"id-1","state":"started"}""";
+    const string _tasks = """{"type":"system","subtype":"background_tasks_changed","tasks":[]}""";
+    const string _status = """{"type":"system","subtype":"status","status":null,"permissionMode":"plan"}""";
+    const string _result = """{"type":"result","subtype":"success","is_error":false,"result":"Svar","session_id":"session-1","user_message_uuids":["id-1"]}""";
 
-    static readonly TimeSpan Patience = TimeSpan.FromMinutes(1);
+    static readonly TimeSpan _patience = TimeSpan.FromMinutes(1);
 
     static CancellationToken Token => TestContext.Current.CancellationToken;
 
@@ -70,7 +69,7 @@ public sealed class ClaudeSessionTests
         var listener = new FakeListener();
 
         // Act
-        await new ClaudeSession(Output(Started, Result, Started, Result), new StringWriter(), listener).ReadAsync();
+        await new ClaudeSession(Output(_started, _result, _started, _result), new StringWriter(), listener).ReadAsync();
 
         // Assert
         Assert.Equal(2, listener.Results.Count);
@@ -83,7 +82,7 @@ public sealed class ClaudeSessionTests
         var listener = new FakeListener();
 
         // Act
-        await new ClaudeSession(Output(Started), new StringWriter(), listener).ReadAsync();
+        await new ClaudeSession(Output(_started), new StringWriter(), listener).ReadAsync();
 
         // Assert
         Assert.Equal(["id-1"], listener.Turns);
@@ -96,7 +95,7 @@ public sealed class ClaudeSessionTests
         var listener = new FakeListener();
 
         // Act
-        await new ClaudeSession(Output(Status), new StringWriter(), listener).ReadAsync();
+        await new ClaudeSession(Output(_status), new StringWriter(), listener).ReadAsync();
 
         // Assert
         Assert.Equal(["plan"], listener.Modes);
@@ -109,7 +108,7 @@ public sealed class ClaudeSessionTests
         var listener = new FakeListener();
 
         // Act
-        await new ClaudeSession(Output(Tasks), new StringWriter(), listener).ReadAsync();
+        await new ClaudeSession(Output(_tasks), new StringWriter(), listener).ReadAsync();
 
         // Assert
         Assert.Equal([0], listener.Tasks);
@@ -124,7 +123,7 @@ public sealed class ClaudeSessionTests
         var input = new LineWriter();
 
         // Act
-        await new ClaudeSession(Output(Permission, Result), input, new FakeListener(answer)).ReadAsync();
+        await new ClaudeSession(Output(_permission, _result), input, new FakeListener(answer)).ReadAsync();
         var sent = await input.NextAsync();
 
         // Assert
@@ -139,7 +138,7 @@ public sealed class ClaudeSessionTests
         var input = new LineWriter();
 
         // Act
-        await new ClaudeSession(Output(permission, Result), input, new FakeListener(PermissionAnswer.AllowAlways)).ReadAsync();
+        await new ClaudeSession(Output(permission, _result), input, new FakeListener(PermissionAnswer.AllowAlways)).ReadAsync();
         var sent = await input.NextAsync();
 
         // Assert
@@ -153,7 +152,7 @@ public sealed class ClaudeSessionTests
         // Arrange
         var listener = new FakeListener(answer: null);
         var input = new LineWriter();
-        var session = new ClaudeSession(Output(Permission, Withdrawal, WebSearch), input, listener);
+        var session = new ClaudeSession(Output(_permission, _withdrawal, _webSearch), input, listener);
 
         // Act
         await session.ReadAsync();
@@ -173,8 +172,8 @@ public sealed class ClaudeSessionTests
         var reading = new ClaudeSession(output, new StringWriter(), listener).ReadAsync();
 
         // Act
-        output.Add(Permission);
-        output.Add(Result);
+        output.Add(_permission);
+        output.Add(_result);
         await listener.FirstResult.WaitAsync(Token);
 
         // Assert
@@ -190,7 +189,7 @@ public sealed class ClaudeSessionTests
         var listener = new FakeListener(answer: null);
 
         // Act
-        await new ClaudeSession(Output(Permission), new StringWriter(), listener).ReadAsync();
+        await new ClaudeSession(Output(_permission), new StringWriter(), listener).ReadAsync();
 
         // Assert
         Assert.True(listener.Question.IsCancellationRequested);
@@ -203,7 +202,7 @@ public sealed class ClaudeSessionTests
         var listener = new FakeListener();
 
         // Act
-        await new ClaudeSession(Output(WebSearch, SearchDone), new StringWriter(), listener).ReadAsync();
+        await new ClaudeSession(Output(_webSearch, _searchDone), new StringWriter(), listener).ReadAsync();
 
         // Assert
         Assert.Equal([new ToolUse("toolu_1", "WebSearch", Input: "{}")], listener.Started);
@@ -217,7 +216,7 @@ public sealed class ClaudeSessionTests
         var listener = new FakeListener();
 
         // Act
-        await new ClaudeSession(Output(RateLimit), new StringWriter(), listener).ReadAsync();
+        await new ClaudeSession(Output(_rateLimit), new StringWriter(), listener).ReadAsync();
 
         // Assert
         Assert.Equal([new Usage(0.03, 0.59)], listener.Usages);
@@ -228,7 +227,7 @@ public sealed class ClaudeSessionTests
     {
         // Arrange
         var listener = new FakeListener();
-        var session = new ClaudeSession(Output(Started, Result), new StringWriter(), listener);
+        var session = new ClaudeSession(Output(_started, _result), new StringWriter(), listener);
         session.Detach();
 
         // Act
@@ -245,7 +244,7 @@ public sealed class ClaudeSessionTests
         var (output, input) = (new LineReader(), new LineWriter());
         var session = new ClaudeSession(output, input, new FakeListener());
         _ = session.ReadAsync();
-        var asking = session.RequestAsync(new JsonObject { ["subtype"] = "mcp_status" }, Patience);
+        var asking = session.RequestAsync(new JsonObject { ["subtype"] = "mcp_status" }, _patience);
 
         // Act
         output.Add(Reply(await input.NextAsync(), """{"subtype":"success","response":{"mcpServers":[]}}"""));
@@ -261,7 +260,7 @@ public sealed class ClaudeSessionTests
         var (output, input) = (new LineReader(), new LineWriter());
         var session = new ClaudeSession(output, input, new FakeListener());
         _ = session.ReadAsync();
-        var asking = session.RequestAsync(new JsonObject { ["subtype"] = "mcp_status" }, Patience);
+        var asking = session.RequestAsync(new JsonObject { ["subtype"] = "mcp_status" }, _patience);
         var request = await input.NextAsync();
 
         // Act
@@ -279,7 +278,7 @@ public sealed class ClaudeSessionTests
         var (output, input) = (new LineReader(), new LineWriter());
         var session = new ClaudeSession(output, input, new FakeListener());
         _ = session.ReadAsync();
-        var asking = session.RequestAsync(new JsonObject { ["subtype"] = "mcp_toggle" }, Patience);
+        var asking = session.RequestAsync(new JsonObject { ["subtype"] = "mcp_toggle" }, _patience);
 
         // Act
         output.Add(Reply(await input.NextAsync(), """{"subtype":"error","error":"Server not found: x"}"""));
@@ -295,7 +294,7 @@ public sealed class ClaudeSessionTests
         var (output, input) = (new LineReader(), new LineWriter());
         var session = new ClaudeSession(output, input, new FakeListener());
         var reading = session.ReadAsync();
-        var asking = session.RequestAsync(new JsonObject { ["subtype"] = "mcp_status" }, Patience);
+        var asking = session.RequestAsync(new JsonObject { ["subtype"] = "mcp_status" }, _patience);
         await input.NextAsync();
 
         // Act
@@ -332,105 +331,27 @@ public sealed class ClaudeSessionTests
 
     sealed class LineReader : TextReader
     {
-        readonly Channel<string> lines = Channel.CreateUnbounded<string>();
+        readonly Channel<string> _lines = Channel.CreateUnbounded<string>();
 
-        public void Add(string line) => lines.Writer.TryWrite(line);
+        public void Add(string line) => _lines.Writer.TryWrite(line);
 
-        public void End() => lines.Writer.Complete();
+        public void End() => _lines.Writer.Complete();
 
-        public override async Task<string?> ReadLineAsync() =>
-            await lines.Reader.WaitToReadAsync() && lines.Reader.TryRead(out var line) ? line : null;
+        public override async Task<string?> ReadLineAsync() => await _lines.Reader.WaitToReadAsync() && _lines.Reader.TryRead(out var line) ? line : null;
     }
 
     sealed class BrokenOnceWriter : StringWriter
     {
-        bool broken;
+        bool _broken;
 
         public override void Write(string? value)
         {
-            if (!broken)
+            if (!_broken)
             {
-                broken = true;
+                _broken = true;
                 throw new IOException();
             }
             base.Write(value);
-        }
-    }
-
-    internal sealed class LineWriter(bool blocked = false) : TextWriter
-    {
-        readonly Channel<string> lines = Channel.CreateUnbounded<string>();
-        readonly ManualResetEventSlim open = new(!blocked);
-
-        public override Encoding Encoding => Encoding.UTF8;
-
-        public override void Write(string? value)
-        {
-            open.Wait();
-            lines.Writer.TryWrite(value!.TrimEnd('\n'));
-        }
-
-        public void Open() => open.Set();
-
-        public Task<string> NextAsync() => lines.Reader.ReadAsync(Token).AsTask().WaitAsync(TimeSpan.FromSeconds(5), Token);
-
-        protected override void Dispose(bool disposing)
-        {
-            open.Set();
-            lines.Writer.TryComplete();
-            base.Dispose(disposing);
-        }
-    }
-
-    internal sealed class FakeListener(PermissionAnswer? answer = PermissionAnswer.Allow) : IClaudeListener
-    {
-        readonly TaskCompletionSource firstResult = new();
-
-        public CancellationToken Question { get; private set; }
-        public List<string?> Turns { get; } = [];
-        public List<ToolUse> Started { get; } = [];
-        public List<ToolResult> Finished { get; } = [];
-        public List<Usage> Usages { get; } = [];
-        public List<string> Modes { get; } = [];
-        public List<int> Tasks { get; } = [];
-        public List<ClaudeResult> Results { get; } = [];
-        public bool QuestionCancelledBeforeNextTool { get; private set; }
-        public Task FirstResult => firstResult.Task;
-
-        public void TurnStarted(string? messageId) => Turns.Add(messageId);
-
-        public void ToolStarted(ToolUse tool)
-        {
-            Started.Add(tool);
-            QuestionCancelledBeforeNextTool = Question.IsCancellationRequested;
-        }
-
-        public void ToolFinished(ToolResult result) => Finished.Add(result);
-
-        public void UsageReported(Usage usage) => Usages.Add(usage);
-
-        public void ModeChanged(string mode) => Modes.Add(mode);
-
-        public void BackgroundTasksChanged(int count) => Tasks.Add(count);
-
-        public void ResultReceived(ClaudeResult result)
-        {
-            Results.Add(result);
-            firstResult.TrySetResult();
-        }
-
-        public void Exited(string error)
-        {
-        }
-
-        public async Task<PermissionAnswer> AskPermissionAsync(PermissionRequest request, CancellationToken cancellationToken)
-        {
-            Question = cancellationToken;
-            if (answer is { } given)
-                return given;
-            var never = new TaskCompletionSource<PermissionAnswer>();
-            using var registration = cancellationToken.Register(() => never.TrySetCanceled(cancellationToken));
-            return await never.Task;
         }
     }
 }

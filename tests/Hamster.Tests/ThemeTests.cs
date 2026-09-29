@@ -5,20 +5,22 @@ namespace Hamster.Tests;
 
 public sealed class ThemeTests : IDisposable
 {
-    readonly string directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+    readonly string _directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
 
     string Write(string name, string json)
     {
-        Directory.CreateDirectory(directory);
-        var file = Path.Combine(directory, name);
+        Directory.CreateDirectory(_directory);
+        var file = Path.Combine(_directory, name);
         File.WriteAllText(file, json);
         return file;
     }
 
     public void Dispose()
     {
-        if (Directory.Exists(directory))
-            Directory.Delete(directory, recursive: true);
+        if (Directory.Exists(_directory))
+        {
+            Directory.Delete(_directory, recursive: true);
+        }
     }
 
     [Fact]
@@ -108,7 +110,7 @@ public sealed class ThemeTests : IDisposable
     public void Themes_WhenYouHaveNoThemesOfYourOwn_ThenListsOnlyTheDefault()
     {
         // Act
-        var themes = new ThemeLibrary(directory).Themes;
+        var themes = new ThemeLibrary(_directory).Themes;
 
         // Assert
         Assert.Equal(["Sort og gul"], themes.Select(theme => theme.Name));
@@ -123,7 +125,7 @@ public sealed class ThemeTests : IDisposable
         Write("Ødelagt.json", "{");
 
         // Act
-        var themes = new ThemeLibrary(directory).Themes;
+        var themes = new ThemeLibrary(_directory).Themes;
 
         // Assert
         Assert.Equal(["Sort og gul", "Lys", "Mørk"], themes.Select(theme => theme.Name));
@@ -136,7 +138,7 @@ public sealed class ThemeTests : IDisposable
         Write("sort og gul.json", """{"colors": {"Surface": "#000000"}}""");
 
         // Act
-        var themes = new ThemeLibrary(directory).Themes;
+        var themes = new ThemeLibrary(_directory).Themes;
 
         // Assert
         Assert.Same(ThemeLibrary.Default, Assert.Single(themes));
@@ -149,7 +151,7 @@ public sealed class ThemeTests : IDisposable
         Write("Mørk.json", """{"colors": {"Surface": "#101010"}}""");
 
         // Act
-        var theme = new ThemeLibrary(directory).Find("Mørk");
+        var theme = new ThemeLibrary(_directory).Find("Mørk");
 
         // Assert
         Assert.Equal(Color.FromRgb(0x10, 0x10, 0x10), theme.Colors["Surface"]);
@@ -159,7 +161,7 @@ public sealed class ThemeTests : IDisposable
     public void Find_WhenTheThemeIsUnknown_ThenGivesTheDefault()
     {
         // Act
-        var theme = new ThemeLibrary(directory).Find("Mørk");
+        var theme = new ThemeLibrary(_directory).Find("Mørk");
 
         // Assert
         Assert.Same(ThemeLibrary.Default, theme);

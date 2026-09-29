@@ -2,7 +2,7 @@ using System.Text.Json.Nodes;
 
 namespace Hamster.Tests;
 
-public class ClaudeFetcherTests
+public sealed class ClaudeFetcherTests
 {
     static Connector Atlassian => Connectors.All.Single(connector => connector.Name == "hamster-atlassian-rovo");
 

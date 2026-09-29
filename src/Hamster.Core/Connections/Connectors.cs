@@ -20,11 +20,9 @@ public sealed record ConnectorField(string Key, bool Secret)
 
 public sealed record WebLogin(string SiteSuffix, string CheckPath)
 {
-    public string? SiteOf(Uri page) =>
-        page.Scheme == Uri.UriSchemeHttps && page.Host.EndsWith(SiteSuffix, StringComparison.OrdinalIgnoreCase) ? page.GetLeftPart(UriPartial.Authority) : null;
+    public string? SiteOf(Uri page) => page.Scheme == Uri.UriSchemeHttps && page.Host.EndsWith(SiteSuffix, StringComparison.OrdinalIgnoreCase) ? page.GetLeftPart(UriPartial.Authority) : null;
 
-    public string? SiteFrom(string input) =>
-        Uri.TryCreate(input.Trim().Contains("://") ? input.Trim() : $"https://{input.Trim()}", UriKind.Absolute, out var url) && url.Host.Length > 0
+    public string? SiteFrom(string input) => Uri.TryCreate(input.Trim().Contains("://") ? input.Trim() : $"https://{input.Trim()}", UriKind.Absolute, out var url) && url.Host.Length > 0
             ? SiteOf(new Uri($"https://{(url.Host.Contains('.') ? url.Host : url.Host + SiteSuffix)}"))
             : null;
 }
@@ -34,11 +32,14 @@ public sealed record ConnectorProblem(string Title, McpServer? Server)
     public string Text => $"{Title}: {(Server is null ? Connector.MissingOnClaudeAi : Connector.StateOf(Server))}";
 }
 
-public sealed record Connector(string Title, string Name, string Url, Uri? TokenPage, IReadOnlyList<ConnectorField> Fields, Func<IReadOnlyList<string>, string>? Authorization, bool CanBeReadOnly = false, string? ClaudeAiName = null, WebLogin? Login = null)
+public sealed record Connector(string Title, string Name, string Url, Uri? TokenPage, IReadOnlyList<ConnectorField> Fields, Func<IReadOnlyList<string>, string>? Authorization,
+    bool CanBeReadOnly = false, string? ClaudeAiName = null, WebLogin? Login = null)
 {
     public static string MissingOnClaudeAi => Strings.Of("Settings.MissingOnClaudeAi");
 
     public bool Installable => Authorization is not null;
+
+    public string ServerUrlPattern => $"https://{new Uri(Url).Host}/*";
 
     public static string StateOf(McpServer server) => server.Status switch
     {
@@ -50,22 +51,19 @@ public sealed record Connector(string Title, string Name, string Url, Uri? Token
         var status => status,
     };
 
-    public ConnectorProblem? ProblemIn(IEnumerable<McpServer> servers, bool claudeAi) =>
-        FindIn(servers, claudeAi) switch
+    public ConnectorProblem? ProblemIn(IEnumerable<McpServer> servers, bool claudeAi) => FindIn(servers, claudeAi) switch
         {
             null => claudeAi ? new(Title, null) : null,
             { Status: "needs-auth" or "failed" } server => new(Title, server),
             _ => null,
         };
 
-    public McpServer? FindIn(IEnumerable<McpServer> servers, bool claudeAi = false) =>
-        claudeAi
+    public McpServer? FindIn(IEnumerable<McpServer> servers, bool claudeAi = false) => claudeAi
             ? servers.Where(server => server.FromClaudeAi && Uri.TryCreate(server.Url, UriKind.Absolute, out var url) && url.Host == new Uri(Url).Host)
                 .OrderByDescending(server => server.IsUsable).FirstOrDefault()
             : servers.FirstOrDefault(server => !server.FromClaudeAi && server.Name == Name);
 
-    public IReadOnlyList<string> AddArguments(IReadOnlyList<string> values, bool allowWrite) =>
-    [
+    public IReadOnlyList<string> AddArguments(IReadOnlyList<string> values, bool allowWrite) => [
         "mcp", "add", "--scope", "user", "--transport", "http", Name, Url, "--header", $"Authorization: {Authorization!(values)}",
         .. (CanBeReadOnly && !allowWrite ? ["--header", $"{Connectors.ReadOnlyHeader}: true"] : Array.Empty<string>()),
     ];
@@ -92,10 +90,9 @@ public sealed class Connectors(IClaudeClient claude, Action restart, Func<bool> 
             ClaudeAiName: "claude.ai Microsoft 365"),
     ];
 
-    public static JsonArray AllowedServers() => [.. All.Select(connector => new JsonObject { ["serverUrl"] = $"https://{new Uri(connector.Url).Host}/*" })];
+    public static JsonArray AllowedServers() => [.. All.Select(connector => new JsonObject { ["serverUrl"] = connector.ServerUrlPattern })];
 
-    public static JsonArray DeniedServers(ClaudeSettings settings) =>
-        [.. All.SelectMany(connector => SourceOf(connector, settings) switch
+    public static JsonArray DeniedServers(ClaudeSettings settings) => [.. All.SelectMany(connector => SourceOf(connector, settings) switch
             {
                 ConnectorSource.Hamster => new[] { connector.ClaudeAiName },
                 ConnectorSource.ClaudeAi or ConnectorSource.Login => [connector.Installable ? connector.Name : null],
@@ -103,8 +100,7 @@ public sealed class Connectors(IClaudeClient claude, Action restart, Func<bool> 
             })
             .OfType<string>().Select(name => new JsonObject { ["serverName"] = name })];
 
-    public static ConnectorSource SourceOf(Connector connector, ClaudeSettings settings) =>
-        settings.ClaudeAiConnectors?.Contains(connector.Name) == true ? ConnectorSource.ClaudeAi
+    public static ConnectorSource SourceOf(Connector connector, ClaudeSettings settings) => settings.ClaudeAiConnectors?.Contains(connector.Name) == true ? ConnectorSource.ClaudeAi
         : settings.LoginConnectors?.Contains(connector.Name) == true && connector.Login is not null ? ConnectorSource.Login
         : settings.OffConnectors?.Contains(connector.Name) == true || !connector.Installable ? ConnectorSource.Off
         : ConnectorSource.Hamster;
@@ -126,7 +122,9 @@ public sealed class Connectors(IClaudeClient claude, Action restart, Func<bool> 
             LoginConnectors = [.. Others(claude.Settings.LoginConnectors), .. source == ConnectorSource.Login ? [connector.Name] : Array.Empty<string>()],
         };
         if (!JsonNode.DeepEquals(denied, DeniedServers(claude.Settings)))
+        {
             restart();
+        }
     }
 
     public async Task<IReadOnlyList<McpServer>> ServersAsync() => ClaudeProtocol.McpServers(await claude.RequestAsync(ClaudeProtocol.McpStatus()));
@@ -134,7 +132,9 @@ public sealed class Connectors(IClaudeClient claude, Action restart, Func<bool> 
     public async Task<IReadOnlyList<ConnectorProblem>> ProblemsAsync(TimeSpan interval)
     {
         if (RestartPending)
+        {
             return [];
+        }
         for (var check = 1; ; check++)
         {
             var servers = await ServersAsync();
@@ -143,7 +143,9 @@ public sealed class Connectors(IClaudeClient claude, Action restart, Func<bool> 
                 .Select(connector => (Problem: connector.ProblemIn(servers, UsesClaudeAi(connector)), Missing: UsesClaudeAi(connector) && connector.FindIn(servers, claudeAi: true) is null))
                 .Where(found => found.Problem is not null).ToArray();
             if (check == ClaudeAiChecks || !servers.Any(server => server.Status == "pending") && !problems.Any(found => found.Missing))
+            {
                 return [.. problems.Select(found => found.Problem!)];
+            }
             await Task.Delay(interval);
         }
     }
@@ -152,7 +154,9 @@ public sealed class Connectors(IClaudeClient claude, Action restart, Func<bool> 
     {
         foreach (var server in All.Where(connector => SourceOf(connector) != ConnectorSource.Off)
             .Select(connector => connector.FindIn(servers, UsesClaudeAi(connector))).OfType<McpServer>().Where(server => server.Status == "disabled"))
+        {
             await claude.RequestAsync(ClaudeProtocol.McpToggle(server.Name, true));
+        }
     }
 
     public async Task InstallAsync(Connector connector, IReadOnlyList<string> values, bool allowWrite)

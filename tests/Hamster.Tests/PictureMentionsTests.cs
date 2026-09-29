@@ -6,13 +6,13 @@ namespace Hamster.Tests;
 
 public sealed class PictureMentionsTests : IDisposable
 {
-    static readonly string[] Files =
+    static readonly string[] _files =
     [
         "graf.png", "før.png", "efter.png", @"Skærm billeder\graf v2.png", "noter.txt", "graf.png.txt",
         "b.png", "b.jpg", "b.jpeg", "b.gif", "b.bmp", "b.tif", "b.tiff", "b.ico", "b.webp",
     ];
 
-    readonly string folder = Directory.CreateTempSubdirectory("billeder æøå ").FullName;
+    readonly string _folder = Directory.CreateTempSubdirectory("billeder æøå ").FullName;
 
     public PictureMentionsTests()
     {
@@ -20,15 +20,15 @@ public sealed class PictureMentionsTests : IDisposable
         encoder.Frames.Add(BitmapFrame.Create(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgra32, null, new byte[64], 16)));
         using var png = new MemoryStream();
         encoder.Save(png);
-        foreach (var file in Files)
+        foreach (var file in _files)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(folder, file))!);
-            File.WriteAllBytes(Path.Combine(folder, file), png.ToArray());
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(_folder, file))!);
+            File.WriteAllBytes(Path.Combine(_folder, file), png.ToArray());
         }
-        Directory.CreateDirectory(Path.Combine(folder, "mappe.png"));
+        Directory.CreateDirectory(Path.Combine(_folder, "mappe.png"));
     }
 
-    public void Dispose() => Directory.Delete(folder, true);
+    public void Dispose() => Directory.Delete(_folder, true);
 
     [Theory]
     [InlineData(@"Gemt i {dir}\graf.png", "graf.png")]
@@ -60,7 +60,7 @@ public sealed class PictureMentionsTests : IDisposable
         var found = PictureMentions.In(Filled(text));
 
         // Assert
-        Assert.Equal(Path.Combine(folder, file), Assert.Single(found).LocalPath, ignoreCase: true);
+        Assert.Equal(Path.Combine(_folder, file), Assert.Single(found).LocalPath, ignoreCase: true);
     }
 
     [Theory]
@@ -135,7 +135,7 @@ public sealed class PictureMentionsTests : IDisposable
         var found = PictureMentions.In(Filled(@"Se {dir}\b.jpg, {dir}\noter.txt og {dir}\b.gif"));
 
         // Assert
-        Assert.Equal([Path.Combine(folder, "b.jpg"), Path.Combine(folder, "b.gif")], found.Select(uri => uri.LocalPath));
+        Assert.Equal([Path.Combine(_folder, "b.jpg"), Path.Combine(_folder, "b.gif")], found.Select(uri => uri.LocalPath));
     }
 
     [Theory]
@@ -160,7 +160,7 @@ public sealed class PictureMentionsTests : IDisposable
         var document = Rendered(answer);
 
         // Assert
-        Assert.Equal(Path.Combine(folder, "graf.png"), PictureAfter(document, "graf.png"));
+        Assert.Equal(Path.Combine(_folder, "graf.png"), PictureAfter(document, "graf.png"));
     });
 
     [Fact]
@@ -170,7 +170,7 @@ public sealed class PictureMentionsTests : IDisposable
         var document = Rendered(@"Sammenlign {dir}\før.png med {dir}\efter.png.");
 
         // Assert
-        Assert.Equal([Path.Combine(folder, "før.png"), Path.Combine(folder, "efter.png")], PicturesOf(document.Blocks.Skip(1)));
+        Assert.Equal([Path.Combine(_folder, "før.png"), Path.Combine(_folder, "efter.png")], PicturesOf(document.Blocks.Skip(1)));
     });
 
     [Fact]
@@ -190,7 +190,7 @@ public sealed class PictureMentionsTests : IDisposable
     public void Render_WhenTheMentionedFileCannotBeShown_ThenNoPictureIsShown(string file) => UiThread.Run(() =>
     {
         // Arrange
-        File.WriteAllText(Path.Combine(folder, "ødelagt.png"), "ikke et billede");
+        File.WriteAllText(Path.Combine(_folder, "ødelagt.png"), "ikke et billede");
 
         // Act
         var document = MarkdownConverter.Render(Filled($@"Se {{dir}}\{file}"), PictureMentions.In);
@@ -234,12 +234,12 @@ public sealed class PictureMentionsTests : IDisposable
 
     string Filled(string text)
     {
-        var forward = folder.Replace('\\', '/');
+        var forward = _folder.Replace('\\', '/');
         return text
             .Replace("{dir/}", forward)
-            .Replace("{dir2}", folder.Replace(@"\", @"\\"))
-            .Replace("{dir}", folder)
-            .Replace("{uri}", new Uri(folder).AbsoluteUri);
+            .Replace("{dir2}", _folder.Replace(@"\", @"\\"))
+            .Replace("{dir}", _folder)
+            .Replace("{uri}", new Uri(_folder).AbsoluteUri);
     }
 
     static string? PictureAfter(FlowDocument document, string text)
@@ -256,14 +256,16 @@ public sealed class PictureMentionsTests : IDisposable
         return null;
     }
 
-    static IEnumerable<BlockCollection> Collections(BlockCollection blocks) =>
-        blocks.SelectMany(block => block switch
+    static IEnumerable<BlockCollection> Collections(BlockCollection blocks)
+    {
+        return blocks.SelectMany(block => block switch
         {
             Section section => Collections(section.Blocks),
             List list => list.ListItems.SelectMany(item => Collections(item.Blocks)),
             Table table => table.RowGroups.SelectMany(group => group.Rows).SelectMany(row => row.Cells).SelectMany(cell => Collections(cell.Blocks)),
             _ => [],
         }).Prepend(blocks);
+    }
 
     static IEnumerable<string> PicturesOf(IEnumerable<Block> blocks) => blocks.SelectMany(Documents.Links).Where(link => Documents.Images(link).Any()).Select(link => link.NavigateUri.LocalPath);
 }

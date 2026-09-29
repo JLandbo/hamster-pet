@@ -1,6 +1,6 @@
 namespace Hamster.Tests;
 
-public class MoodTransitionTests
+public sealed class MoodTransitionTests
 {
     static int SpinLength => Character.Hamster.Animations[Mood.Spin].Length;
 

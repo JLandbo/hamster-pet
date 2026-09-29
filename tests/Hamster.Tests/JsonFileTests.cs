@@ -2,16 +2,18 @@ namespace Hamster.Tests;
 
 public sealed class JsonFileTests : IDisposable
 {
-    readonly string directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+    readonly string _directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
 
-    string FilePath => Path.Combine(directory, "chats.json");
+    string FilePath => Path.Combine(_directory, "chats.json");
 
     JsonFile<SavedChats> Store() => new(FilePath, SavedChats.Empty);
 
     public void Dispose()
     {
-        if (Directory.Exists(directory))
-            Directory.Delete(directory, recursive: true);
+        if (Directory.Exists(_directory))
+        {
+            Directory.Delete(_directory, recursive: true);
+        }
     }
 
     [Fact]
@@ -32,7 +34,7 @@ public sealed class JsonFileTests : IDisposable
     public void Load_WhenFileCorrupt_ThenReturnsEmpty(string content)
     {
         // Arrange
-        Directory.CreateDirectory(directory);
+        Directory.CreateDirectory(_directory);
         File.WriteAllText(FilePath, content);
 
         // Act
