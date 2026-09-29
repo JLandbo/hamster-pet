@@ -574,6 +574,60 @@ public sealed class ClaudeProtocolTests
         Assert.Null(result.Answers);
     }
 
+    [Theory]
+    [InlineData("", "Fejl fra Claude")]
+    [InlineData("   ", "Fejl fra Claude")]
+    public void Parse_WhenResultTextIsEmptyAndErrorsExist_ThenUsesErrors(string resultText, string expected)
+    {
+        // Arrange
+        var line = $$"""{"type":"result","subtype":"error_during_execution","is_error":true,"result":"{{resultText}}","errors":["{{expected}}"]}""";
+
+        // Act
+        var result = Assert.IsType<ClaudeResult>(Assert.Single(ClaudeProtocol.Parse(line)));
+
+        // Assert
+        Assert.Equal(expected, result.Text);
+    }
+
+    [Fact]
+    public void Parse_WhenResultTextAndErrorsExist_ThenUsesResultText()
+    {
+        // Arrange
+        const string line = """{"type":"result","subtype":"error_during_execution","is_error":true,"result":"Forklaring","errors":["Fejl fra Claude"]}""";
+
+        // Act
+        var result = Assert.IsType<ClaudeResult>(Assert.Single(ClaudeProtocol.Parse(line)));
+
+        // Assert
+        Assert.Equal("Forklaring", result.Text);
+    }
+
+    [Fact]
+    public void Parse_WhenResultTextIsMissingAndErrorsExist_ThenJoinsErrors()
+    {
+        // Arrange
+        const string line = """{"type":"result","subtype":"error_during_execution","is_error":true,"errors":["Første fejl","Anden fejl"]}""";
+
+        // Act
+        var result = Assert.IsType<ClaudeResult>(Assert.Single(ClaudeProtocol.Parse(line)));
+
+        // Assert
+        Assert.Equal("Første fejl\nAnden fejl", result.Text);
+    }
+
+    [Fact]
+    public void Parse_WhenResultAndErrorsHaveNoText_ThenUsesSubtype()
+    {
+        // Arrange
+        const string line = """{"type":"result","subtype":"error_during_execution","is_error":true,"result":"","errors":[null,""]}""";
+
+        // Act
+        var result = Assert.IsType<ClaudeResult>(Assert.Single(ClaudeProtocol.Parse(line)));
+
+        // Assert
+        Assert.Equal("error_during_execution", result.Text);
+    }
+
     [Fact]
     public void SetModel_WhenCalled_ThenAsksClaudeToSwitchModel()
     {

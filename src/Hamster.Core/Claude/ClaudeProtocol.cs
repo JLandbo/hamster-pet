@@ -249,10 +249,18 @@ public static class ClaudeProtocol
 
     static bool IsMainMessage(JsonNode message) => (string?)message["parent_tool_use_id"] is null;
 
-    static string ResultText(JsonNode message) => (string?)message["result"]
-        ?? (message["errors"] is JsonArray { Count: > 0 } errors ? string.Join('\n', errors.Select(error => (string?)error)) : null)
-        ?? (string?)message["subtype"]
-        ?? "";
+    static string ResultText(JsonNode message)
+    {
+        var resultText = (string?)message["result"];
+        if (!string.IsNullOrWhiteSpace(resultText))
+        {
+            return resultText;
+        }
+        var errorTexts = message["errors"] is JsonArray errors
+            ? errors.Select(error => (string?)error).OfType<string>().Where(error => !string.IsNullOrWhiteSpace(error)).ToArray()
+            : [];
+        return errorTexts.Length > 0 ? string.Join('\n', errorTexts) : (string?)message["subtype"] ?? "";
+    }
 
     static IReadOnlyList<string>? Answers(JsonNode message) => message["user_message_uuids"] is JsonArray ids ? [.. ids.Select(id => (string)id!)]
         : (string?)message["user_message_uuid"] is { } id ? [id]
