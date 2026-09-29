@@ -76,15 +76,16 @@ public partial class MainWindow : Window
     FeedWindow? _feedWindow;
     Mood _mood;
     int _frame;
-    bool _feedFetched, _resizeQueued, _pressed, _dragging, _chatsExpanded, _shown = true;
+    bool _feedFetched, _resizeQueued, _pressed, _dragging, _chatsExpanded, _shown = true, _lastResponseVisible = true;
     Point _dragStart;
     DateTime _pressedAt, _giggleUntil, _lastMove, _lastActivity = DateTime.UtcNow, _newsSeenAt = DateTime.UtcNow;
     Placement _placement;
     Placement? _beforeFullScreen;
     (Point Mouse, double Width, double ChatHeight) _resizeStart;
     (DateTime AnsweredAt, bool Waiting) _poppedUp;
-    TimeSpan _hideTime;
-    DateTime _hiddenAt;
+    TimeSpan _hideTime, _lastResponseTime;
+    DateTime _sentAt;
+    DateTime _lastResponseSeenAt;
     DateTime _frontAt;
     double? _readingOffset;
     Button? _closedByItsButton;
@@ -124,6 +125,7 @@ public partial class MainWindow : Window
         MarkdownConverter.ShowWebImages = pet.ShowWebImages;
         _chatsExpanded = pet.ChatsExpanded;
         _hideTime = TimeSpan.FromSeconds(pet.HideSeconds);
+        _lastResponseTime = TimeSpan.FromSeconds(pet.LastResponseSeconds);
         _placementFile = files.Store("placement.json", DefaultPlacement);
         _placement = _placementFile.Load();
         if (_chatOnly)
@@ -174,6 +176,7 @@ public partial class MainWindow : Window
         _timer.Tick += (_, _) =>
         {
             FadeWhenIdle();
+            RefreshLastResponseVisibility();
             Animate();
         };
         _clock.Tick += (_, _) =>
@@ -298,7 +301,7 @@ public partial class MainWindow : Window
             _settingsWindow.Activate();
             return;
         }
-        var window = _settingsWindow = new SettingsWindow(ChooseLanguage, (int)_hideTime.TotalSeconds, ChooseHideSeconds, MarkdownConverter.ShowWebImages, ChooseWebImages, _claude.Settings.EnablePartialMessages, ChoosePartialMessages, _themes, _petFile.Load().ThemeName, ChooseTheme, _characters, _character.Name, ChooseCharacter, _connectors, _subscriptions, _web) { Topmost = KeepOnTopItem.IsChecked };
+        var window = _settingsWindow = new SettingsWindow(ChooseLanguage, (int)_hideTime.TotalSeconds, ChooseHideSeconds, (int)_lastResponseTime.TotalSeconds, ChooseLastResponseSeconds, MarkdownConverter.ShowWebImages, ChooseWebImages, _claude.Settings.EnablePartialMessages, ChoosePartialMessages, _themes, _petFile.Load().ThemeName, ChooseTheme, _characters, _character.Name, ChooseCharacter, _connectors, _subscriptions, _web) { Topmost = KeepOnTopItem.IsChecked };
         RememberSize(window, _settingsSize);
         window.Closed += (_, _) => _ = CheckConnectorsAsync();
         window.Show();
@@ -387,6 +390,13 @@ public partial class MainWindow : Window
         FadeWhenIdle();
     }
 
+    void ChooseLastResponseSeconds(int seconds)
+    {
+        _petFile.Save(_petFile.Load() with { LastResponseSeconds = seconds });
+        _lastResponseTime = TimeSpan.FromSeconds(seconds);
+        UpdateChatList();
+    }
+
     void ChooseWebImages(bool show)
     {
         _petFile.Save(_petFile.Load() with { ShowWebImages = show });
@@ -435,6 +445,7 @@ public partial class MainWindow : Window
         var now = DateTime.UtcNow;
         if (ForegroundWindow.IsThisApp())
         {
+            MarkLastResponseSeen(now);
             _frontAt = now;
         }
         var show = !AutoHideItem.IsChecked || Input.Text.Length > 0 || IsMouseOver || _shown && Pet.IsMouseOver
@@ -447,10 +458,6 @@ public partial class MainWindow : Window
         if (_shown)
         {
             UpdateChatList();
-        }
-        else
-        {
-            _hiddenAt = now;
         }
         Fade(ChatArea, _shown);
         Fade(TemporaryBanner, _shown);
@@ -595,7 +602,9 @@ public partial class MainWindow : Window
     {
         if (IsMouseOver || Input.IsKeyboardFocused)
         {
-            _newsSeenAt = DateTime.UtcNow;
+            var now = DateTime.UtcNow;
+            MarkLastResponseSeen(now);
+            _newsSeenAt = now;
         }
     }
 
@@ -605,13 +614,32 @@ public partial class MainWindow : Window
         {
             return;
         }
+        _lastResponseVisible = IsLastResponseVisible(DateTime.UtcNow);
         var any = false;
         foreach (var chat in _conversation.Chats)
         {
-            chat.Shown = _chatsExpanded || _conversation.IsCurrent(chat, _hiddenAt);
+            chat.Shown = _chatsExpanded || _conversation.IsCurrent(chat, _lastResponseVisible, _sentAt);
             any |= chat.Shown;
         }
         ChatArea.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    bool IsLastResponseVisible(DateTime now) => _conversation.AnsweredAt > _lastResponseSeenAt || now - _lastResponseSeenAt < _lastResponseTime;
+
+    void MarkLastResponseSeen(DateTime now)
+    {
+        if (_conversation.AnsweredAt > _lastResponseSeenAt)
+        {
+            _lastResponseSeenAt = now;
+        }
+    }
+
+    void RefreshLastResponseVisibility()
+    {
+        if (_shown && IsLastResponseVisible(DateTime.UtcNow) != _lastResponseVisible)
+        {
+            UpdateChatList();
+        }
     }
 
     void Pet_MouseEnterOrLeave(object sender, MouseEventArgs e) => Animate();
@@ -657,7 +685,9 @@ public partial class MainWindow : Window
     void Pet_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         var clicked = _pressed && !_dragging && DateTime.UtcNow - _pressedAt < _clickTime;
-        _newsSeenAt = DateTime.UtcNow;
+        var now = DateTime.UtcNow;
+        MarkLastResponseSeen(now);
+        _newsSeenAt = now;
         Pet.ReleaseMouseCapture();
         Activate();
         foreach (var window in new Window?[] { _settingsWindow, _feedWindow }.OfType<Window>().Where(window => window.IsVisible))
@@ -1133,6 +1163,7 @@ public partial class MainWindow : Window
         ImageAttachment[] images = [.. _attachedImages];
         ClearAttachments();
         Chats.ScrollToNewest();
+        _sentAt = DateTime.UtcNow;
         await _conversation.SendAsync(prompt, images, title);
     }
 }

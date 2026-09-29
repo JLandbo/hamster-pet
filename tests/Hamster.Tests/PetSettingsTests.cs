@@ -48,6 +48,32 @@ public sealed class PetSettingsTests : IDisposable
     }
 
     [Fact]
+    public void Load_WhenPetSettingsWereSavedBeforeLastResponseSeconds_ThenHidesItAfter60Seconds()
+    {
+        // Arrange
+        File.WriteAllText(_file, """{"CharacterName": "Hamster"}""");
+
+        // Act
+        var pet = Store().Load();
+
+        // Assert
+        Assert.Equal(60, pet.LastResponseSeconds);
+    }
+
+    [Fact]
+    public void Save_WhenLastResponseSecondsChange_ThenLoadReturnsThem()
+    {
+        // Arrange
+        var store = Store();
+
+        // Act
+        store.Save(PetSettings.Default with { LastResponseSeconds = 90 });
+
+        // Assert
+        Assert.Equal(90, store.Load().LastResponseSeconds);
+    }
+
+    [Fact]
     public void Load_WhenPetSettingsWereSavedBeforeChatsExpanded_ThenChatsAreExpanded()
     {
         // Arrange

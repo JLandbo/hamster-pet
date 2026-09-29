@@ -6,6 +6,7 @@
     "Settings.Title": "Settings",
     "Settings.Language": "Language",
     "Settings.HideAfter": "Hide chat and toolbar after",
+    "Settings.HideLastResponseAfter": "Hide last response after",
     "Settings.Chat": "Chat",
     "Settings.ShowWebImages": "Show external images",
     "Settings.EnablePartialMessages": "Enable partial messages",

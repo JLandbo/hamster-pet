@@ -683,7 +683,7 @@ public sealed class ConversationTests : IDisposable
         await _conversation.SendAsync("hej");
 
         // Act
-        var current = _conversation.IsCurrent(_conversation.Chats[0], DateTime.UtcNow);
+        var current = _conversation.IsCurrent(_conversation.Chats[0], showLastResponse: false, DateTime.MaxValue);
 
         // Assert
         Assert.True(current);
@@ -697,25 +697,25 @@ public sealed class ConversationTests : IDisposable
         _ = _conversation.AskPermissionAsync(Request(), CancellationToken.None);
 
         // Act
-        var current = _conversation.IsCurrent(_conversation.Chats[0], DateTime.UtcNow.AddMinutes(1));
+        var current = _conversation.IsCurrent(_conversation.Chats[0], showLastResponse: false, DateTime.MaxValue);
 
         // Assert
         Assert.True(current);
     }
 
     [Theory]
-    [InlineData(-1, true)]
-    [InlineData(1, false)]
-    public async Task IsCurrent_WhenAnswered_ThenTrueUntilTheChatsAreHidden(int hiddenSecondsLater, bool expected)
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task IsCurrent_WhenAnswered_ThenUsesLastResponseVisibility(bool showLastResponse)
     {
         // Arrange
         await _conversation.SendAsync("hej");
 
         // Act
-        var current = _conversation.IsCurrent(_conversation.Chats[0], DateTime.UtcNow.AddSeconds(hiddenSecondsLater));
+        var current = _conversation.IsCurrent(_conversation.Chats[0], showLastResponse, DateTime.MinValue);
 
         // Assert
-        Assert.Equal(expected, current);
+        Assert.Equal(showLastResponse, current);
     }
 
     [Fact]
@@ -726,10 +726,27 @@ public sealed class ConversationTests : IDisposable
         await _conversation.SendAsync("anden");
 
         // Act
-        var current = _conversation.IsCurrent(_conversation.Chats[0], DateTime.MinValue);
+        var current = _conversation.IsCurrent(_conversation.Chats[0], showLastResponse: true, DateTime.MinValue);
 
         // Assert
         Assert.False(current);
+    }
+
+    [Theory]
+    [InlineData(-1, true)]
+    [InlineData(1, true)]
+    [InlineData(2, false)]
+    [InlineData(3, false)]
+    public async Task IsCurrent_WhenAMessageIsSentAfterTheAnswer_ThenTrueOnlyWithinTwoSeconds(int sentSecondsLater, bool expected)
+    {
+        // Arrange
+        await _conversation.SendAsync("hej");
+
+        // Act
+        var current = _conversation.IsCurrent(_conversation.Chats[0], showLastResponse: true, _conversation.AnsweredAt.AddSeconds(sentSecondsLater));
+
+        // Assert
+        Assert.Equal(expected, current);
     }
 
     [Theory]
@@ -1215,7 +1232,7 @@ public sealed class ConversationTests : IDisposable
         _claude.Listener.Exited("claude stoppede uventet");
 
         // Assert
-        Assert.Equal((true, false), (_conversation.IsCurrent(_conversation.Chats[0], DateTime.MinValue), _conversation.IsCurrent(_conversation.Chats[1], DateTime.MinValue)));
+        Assert.Equal((true, false), (_conversation.IsCurrent(_conversation.Chats[0], showLastResponse: true, DateTime.MinValue), _conversation.IsCurrent(_conversation.Chats[1], showLastResponse: true, DateTime.MinValue)));
     }
 
     [Fact]

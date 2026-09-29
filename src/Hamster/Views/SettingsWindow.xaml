@@ -100,6 +100,12 @@
                                 <Slider x:Name="HideSecondsSlider" Minimum="1" Maximum="240" TickFrequency="1" IsSnapToTickEnabled="True" Focusable="False" VerticalAlignment="Center"
                                         LostMouseCapture="HideSecondsSlider_LostMouseCapture" />
                             </DockPanel>
+                            <DockPanel Margin="0,0,0,10">
+                                <TextBlock x:Name="LastResponseSecondsText" DockPanel.Dock="Right" Width="44" TextAlignment="Right" Foreground="{DynamicResource Text}" VerticalAlignment="Center" />
+                                <TextBlock DockPanel.Dock="Left" Text="{DynamicResource Settings.HideLastResponseAfter}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                <Slider x:Name="LastResponseSecondsSlider" Minimum="1" Maximum="240" TickFrequency="1" IsSnapToTickEnabled="True" Focusable="False" VerticalAlignment="Center"
+                                        LostMouseCapture="LastResponseSecondsSlider_LostMouseCapture" />
+                            </DockPanel>
                             <CheckBox x:Name="WebImagesBox" Content="{DynamicResource Settings.ShowWebImages}" Click="WebImages_Click" />
                             <CheckBox x:Name="PartialMessagesBox" Content="{DynamicResource Settings.EnablePartialMessages}" Click="PartialMessages_Click" Margin="0,8,0,0" />
                             <TextBlock x:Name="PartialMessagesRestartText" Text="{DynamicResource Settings.SwitchesAfterRestart}" Foreground="{DynamicResource Muted}"

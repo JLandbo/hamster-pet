@@ -11,6 +11,7 @@ public sealed class Conversation : IClaudeListener
     public const int MaxChats = 100;
     public static string BackgroundPrompt => Strings.Of("Chat.FromClaude");
     public static string AnsweredAbove => Strings.Of("Chat.AnsweredAbove");
+    static readonly TimeSpan _readTime = TimeSpan.FromSeconds(2);
 
     readonly IClaudeClient _claude;
     JsonFile<SavedChats>? _store;
@@ -44,7 +45,8 @@ public sealed class Conversation : IClaudeListener
     public bool IsBrowsingWeb => _webTools.Count > 0;
     public bool IsWaitingForUser => Chats.Any(chat => chat.NeedsAction);
 
-    public bool IsCurrent(ChatItem chat, DateTime hiddenAt) => chat.Status == ChatStatus.Busy || chat.NeedsAction || (chat == _lastAnswered && AnsweredAt > hiddenAt);
+    public bool IsCurrent(ChatItem chat, bool showLastResponse, DateTime sentAt) => chat.Status == ChatStatus.Busy || chat.NeedsAction
+        || (chat == _lastAnswered && showLastResponse && sentAt - AnsweredAt < _readTime);
 
     public bool AnsweredWithin(TimeSpan time, DateTime now) => _lastAnswered is { Status: ChatStatus.Done } && now - AnsweredAt < time;
 

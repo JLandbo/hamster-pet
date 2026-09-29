@@ -6,6 +6,7 @@
     "Settings.Title": "Indstillinger",
     "Settings.Language": "Sprog",
     "Settings.HideAfter": "Skjul chat og menu efter",
+    "Settings.HideLastResponseAfter": "Skjul sidste respons efter",
     "Settings.Chat": "Chat",
     "Settings.ShowWebImages": "Vis eksterne billeder",
     "Settings.EnablePartialMessages": "Vis svar, mens Claude skriver",

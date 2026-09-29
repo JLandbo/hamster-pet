@@ -48,6 +48,7 @@ public partial class SettingsWindow : Window
 {
     readonly Action<Translation> _chooseLanguage;
     readonly Action<int> _chooseHideSeconds;
+    readonly Action<int> _chooseLastResponseSeconds;
     readonly Action<bool> _chooseWebImages;
     readonly Action<bool> _choosePartialMessages;
     readonly ThemeLibrary _themes;
@@ -63,15 +64,18 @@ public partial class SettingsWindow : Window
     string? _chosenTheme;
     bool _partialMessagesAwaitingRestart;
 
-    public SettingsWindow(Action<Translation> chooseLanguage, int hideSeconds, Action<int> chooseHideSeconds, bool webImages, Action<bool> chooseWebImages, bool partialMessages, Action<bool> choosePartialMessages, ThemeLibrary themes, string? chosenTheme, Action<Theme> chooseTheme, CharacterLibrary characters, string chosenCharacter,
+    public SettingsWindow(Action<Translation> chooseLanguage, int hideSeconds, Action<int> chooseHideSeconds, int lastResponseSeconds, Action<int> chooseLastResponseSeconds, bool webImages, Action<bool> chooseWebImages, bool partialMessages, Action<bool> choosePartialMessages, ThemeLibrary themes, string? chosenTheme, Action<Theme> chooseTheme, CharacterLibrary characters, string chosenCharacter,
         Action<Character> chooseCharacter, Connectors connectors, Subscriptions subscriptions, WebSession web)
     {
         InitializeComponent();
-        (_chooseLanguage, _chooseHideSeconds) = (chooseLanguage, chooseHideSeconds);
+        (_chooseLanguage, _chooseHideSeconds, _chooseLastResponseSeconds) = (chooseLanguage, chooseHideSeconds, chooseLastResponseSeconds);
         ShowLanguage();
         HideSecondsSlider.Value = hideSeconds;
         ShowHideSeconds();
         HideSecondsSlider.ValueChanged += (_, _) => ShowHideSeconds();
+        LastResponseSecondsSlider.Value = lastResponseSeconds;
+        ShowLastResponseSeconds();
+        LastResponseSecondsSlider.ValueChanged += (_, _) => ShowLastResponseSeconds();
         (WebImagesBox.IsChecked, _chooseWebImages) = (webImages, chooseWebImages);
         (PartialMessagesBox.IsChecked, _choosePartialMessages) = (partialMessages, choosePartialMessages);
         (_themes, _chosenTheme, _chooseTheme) = (themes, chosenTheme, chooseTheme);
@@ -228,6 +232,10 @@ public partial class SettingsWindow : Window
     void ShowHideSeconds() => HideSecondsText.Text = $"{HideSecondsSlider.Value} s";
 
     void HideSecondsSlider_LostMouseCapture(object sender, MouseEventArgs e) => _chooseHideSeconds((int)HideSecondsSlider.Value);
+
+    void ShowLastResponseSeconds() => LastResponseSecondsText.Text = $"{LastResponseSecondsSlider.Value} s";
+
+    void LastResponseSecondsSlider_LostMouseCapture(object sender, MouseEventArgs e) => _chooseLastResponseSeconds((int)LastResponseSecondsSlider.Value);
 
     void WebImages_Click(object sender, RoutedEventArgs e) => _chooseWebImages(WebImagesBox.IsChecked == true);
 
