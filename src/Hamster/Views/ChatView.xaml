@@ -50,18 +50,19 @@
         <ItemsControl x:Name="ChatList" Padding="8,0" VerticalAlignment="Bottom" Background="#01000000">
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="{x:Type chats:ChatItem}">
-                    <Border x:Name="Bubble" Margin="0,0,0,5" Padding="14,10" CornerRadius="14"
+                    <Border x:Name="Bubble" Margin="0,0,0,5" CornerRadius="14"
                             Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Edge}" BorderThickness="1"
                             Visibility="{Binding Shown, Converter={StaticResource VisibleWhenTrue}}">
-                        <StackPanel>
+                        <Grid>
+                            <Border x:Name="StatusBar" Width="4" Margin="16,10,0,10" HorizontalAlignment="Left" CornerRadius="2"
+                                    Background="{DynamicResource Link}" />
+                            <StackPanel Margin="14,10">
                             <DockPanel>
                                 <Button DockPanel.Dock="Right" Content="&#xE711;" ToolTip="{DynamicResource Main.DeleteChat}" Click="DeleteChat_Click"
                                         Style="{StaticResource SmallIconButton}" Margin="6,-2,-6,0" VerticalAlignment="Top" />
                                 <Button x:Name="Copy" DockPanel.Dock="Right" Content="&#xE8C8;" ToolTip="{DynamicResource Main.CopyAnswer}" Click="CopyAnswer_Click"
                                         Style="{StaticResource SmallIconButton}" Margin="6,-2,0,0" VerticalAlignment="Top" />
-                                <Ellipse x:Name="Dot" DockPanel.Dock="Left" Width="8" Height="8" Margin="0,6,8,0"
-                                         VerticalAlignment="Top" Fill="{DynamicResource Link}" />
-                                <TextBlock Text="{Binding DisplayPrompt}" Foreground="{DynamicResource Text}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding DisplayPrompt}" Margin="16,0,0,0" Foreground="{DynamicResource Text}" FontWeight="SemiBold" TextWrapping="Wrap" />
                             </DockPanel>
                             <ItemsControl ItemsSource="{Binding ToolGroups}" Margin="16,0,0,0">
                                 <ItemsControl.ItemTemplate>
@@ -124,22 +125,23 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                        </StackPanel>
+                            </StackPanel>
+                        </Grid>
                     </Border>
                     <DataTemplate.Triggers>
                         <DataTrigger Binding="{Binding Status}" Value="Busy">
-                            <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource Busy}" />
+                            <Setter TargetName="StatusBar" Property="Background" Value="{DynamicResource Busy}" />
                             <Setter TargetName="Copy" Property="Visibility" Value="Collapsed" />
                         </DataTrigger>
                         <DataTrigger Binding="{Binding Status}" Value="Error">
-                            <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource Error}" />
+                            <Setter TargetName="StatusBar" Property="Background" Value="{DynamicResource Error}" />
                         </DataTrigger>
                         <DataTrigger Binding="{Binding NeedsLogin}" Value="True">
-                            <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource Attention}" />
+                            <Setter TargetName="StatusBar" Property="Background" Value="{DynamicResource Attention}" />
                             <Setter TargetName="Bubble" Property="BorderBrush" Value="{DynamicResource Attention}" />
                         </DataTrigger>
                         <DataTrigger Binding="{Binding NeedsAction}" Value="True">
-                            <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource Attention}" />
+                            <Setter TargetName="StatusBar" Property="Background" Value="{DynamicResource Attention}" />
                             <Setter TargetName="Bubble" Property="BorderBrush" Value="{DynamicResource Attention}" />
                         </DataTrigger>
                     </DataTemplate.Triggers>
