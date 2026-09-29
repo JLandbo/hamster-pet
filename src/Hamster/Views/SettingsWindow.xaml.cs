@@ -49,6 +49,7 @@ public partial class SettingsWindow : Window
     readonly Action<Translation> _chooseLanguage;
     readonly Action<int> _chooseHideSeconds;
     readonly Action<bool> _chooseWebImages;
+    readonly Action<bool> _choosePartialMessages;
     readonly ThemeLibrary _themes;
     readonly Action<Theme> _chooseTheme;
     readonly CharacterLibrary _characters;
@@ -60,8 +61,9 @@ public partial class SettingsWindow : Window
     readonly ConnectorRow[] _rows;
     string _chosenCharacter;
     string? _chosenTheme;
+    bool _partialMessagesAwaitingRestart;
 
-    public SettingsWindow(Action<Translation> chooseLanguage, int hideSeconds, Action<int> chooseHideSeconds, bool webImages, Action<bool> chooseWebImages, ThemeLibrary themes, string? chosenTheme, Action<Theme> chooseTheme, CharacterLibrary characters, string chosenCharacter,
+    public SettingsWindow(Action<Translation> chooseLanguage, int hideSeconds, Action<int> chooseHideSeconds, bool webImages, Action<bool> chooseWebImages, bool partialMessages, Action<bool> choosePartialMessages, ThemeLibrary themes, string? chosenTheme, Action<Theme> chooseTheme, CharacterLibrary characters, string chosenCharacter,
         Action<Character> chooseCharacter, Connectors connectors, Subscriptions subscriptions, WebSession web)
     {
         InitializeComponent();
@@ -71,6 +73,7 @@ public partial class SettingsWindow : Window
         ShowHideSeconds();
         HideSecondsSlider.ValueChanged += (_, _) => ShowHideSeconds();
         (WebImagesBox.IsChecked, _chooseWebImages) = (webImages, chooseWebImages);
+        (PartialMessagesBox.IsChecked, _choosePartialMessages) = (partialMessages, choosePartialMessages);
         (_themes, _chosenTheme, _chooseTheme) = (themes, chosenTheme, chooseTheme);
         (_characters, _chosenCharacter, _chooseCharacter, _connectors, _subscriptions, _web) = (characters, chosenCharacter, chooseCharacter, connectors, subscriptions, web);
         _rows = [.. Connectors.All.Select(connector => new ConnectorRow(connector, connectors.SourceOf(connector)))];
@@ -176,6 +179,7 @@ public partial class SettingsWindow : Window
         _ = CheckLoginsAsync();
         while (IsVisible)
         {
+            ShowPartialMessagesRestart();
             await ShowConnectorsAsync();
             await Task.Delay(Connectors.StatusInterval);
         }
@@ -214,6 +218,7 @@ public partial class SettingsWindow : Window
 
     async void Window_Activated(object sender, EventArgs e)
     {
+        ShowPartialMessagesRestart();
         ShowThemes();
         await ShowCharactersAsync();
     }
@@ -225,6 +230,19 @@ public partial class SettingsWindow : Window
     void HideSecondsSlider_LostMouseCapture(object sender, MouseEventArgs e) => _chooseHideSeconds((int)HideSecondsSlider.Value);
 
     void WebImages_Click(object sender, RoutedEventArgs e) => _chooseWebImages(WebImagesBox.IsChecked == true);
+
+    void PartialMessages_Click(object sender, RoutedEventArgs e)
+    {
+        _choosePartialMessages(PartialMessagesBox.IsChecked == true);
+        _partialMessagesAwaitingRestart = _connectors.RestartPending;
+        ShowPartialMessagesRestart();
+    }
+
+    void ShowPartialMessagesRestart()
+    {
+        _partialMessagesAwaitingRestart &= _connectors.RestartPending;
+        PartialMessagesRestartText.Visibility = _partialMessagesAwaitingRestart ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     void Language_Click(object sender, RoutedEventArgs e)
     {

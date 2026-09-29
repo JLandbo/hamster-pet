@@ -101,6 +101,9 @@
                                         LostMouseCapture="HideSecondsSlider_LostMouseCapture" />
                             </DockPanel>
                             <CheckBox x:Name="WebImagesBox" Content="{DynamicResource Settings.ShowWebImages}" Click="WebImages_Click" />
+                            <CheckBox x:Name="PartialMessagesBox" Content="{DynamicResource Settings.EnablePartialMessages}" Click="PartialMessages_Click" Margin="0,8,0,0" />
+                            <TextBlock x:Name="PartialMessagesRestartText" Text="{DynamicResource Settings.SwitchesAfterRestart}" Foreground="{DynamicResource Muted}"
+                                       FontSize="12" Margin="24,4,0,0" Visibility="Collapsed" />
                         </StackPanel>
                     </Border>
                     <DockPanel Margin="0,0,0,8">

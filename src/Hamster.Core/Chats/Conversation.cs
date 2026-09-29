@@ -18,7 +18,7 @@ public sealed class Conversation : IClaudeListener
     readonly Dictionary<string, ChatItem> _waiting = [];
     readonly Dictionary<string, ChatItem> _toolChats = [];
     string? _sessionId;
-    ChatItem? _turn, _lastAnswered;
+    ChatItem? _turn, _lastAnswered, _partialChat;
     bool _turnRunning, _autonomous, _stopping, _restartWhenIdle;
 
     public Conversation(IClaudeClient claude, JsonFile<SavedChats>? store)
@@ -211,6 +211,25 @@ public sealed class Conversation : IClaudeListener
         Changed?.Invoke();
     }
 
+    public void PartialMessageStarted(string? messageId)
+    {
+        _partialChat = _turn ?? (messageId is { } id ? _waiting.GetValueOrDefault(id) : null);
+        _partialChat?.StartPartialAnswer();
+    }
+
+    public void PartialMessageReceived(string text)
+    {
+        if (_partialChat is null && _autonomous)
+        {
+            _partialChat = _turn = Add(new ChatItem(BackgroundPrompt));
+            _partialChat.StartPartialAnswer();
+        }
+        if (_partialChat is not null && Chats.Contains(_partialChat))
+        {
+            _partialChat.AppendPartialAnswer(text);
+        }
+    }
+
     public void ToolStarted(ToolUse tool)
     {
         if (tool.IsWeb)
@@ -336,7 +355,7 @@ public sealed class Conversation : IClaudeListener
 
     void EndTurn()
     {
-        (_turn, _turnRunning, _autonomous, _stopping) = (null, false, false, false);
+        (_turn, _partialChat, _turnRunning, _autonomous, _stopping) = (null, null, false, false, false);
         _webTools.Clear();
         Save();
         Changed?.Invoke();

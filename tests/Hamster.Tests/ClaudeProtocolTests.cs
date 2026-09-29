@@ -335,9 +335,19 @@ public sealed class ClaudeProtocolTests
             ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
              "--permission-prompt-tool", "stdio", "--permission-mode", "default", "--setting-sources", "user",
              "--settings", """{"permissions":{"ask":["Skill","CronCreate"]},"allowedMcpServers":[{"serverUrl":"https://mcp.atlassian.com/*"},{"serverUrl":"https://api.githubcopilot.com/*"},{"serverUrl":"https://microsoft365.mcp.claude.com/*"}],"deniedMcpServers":[{"serverName":"claude.ai Atlassian Rovo"},{"serverName":"claude.ai Microsoft 365"}]}""",
-             "--model", "claude-opus-5-5", "--effort", "xhigh", "--append-system-prompt", ClaudeProtocol.PetInstructions,
+             "--model", "claude-opus-5-5", "--effort", "xhigh", "--include-partial-messages", "--append-system-prompt", ClaudeProtocol.PetInstructions,
              "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,ToolSearch,EnterPlanMode,ExitPlanMode,Workflow,TaskStop,ListAgents,CronList,CronCreate,CronDelete,ReportFindings,Skill"],
             arguments);
+    }
+
+    [Fact]
+    public void Arguments_WhenPartialMessagesAreDisabled_ThenDoesNotRequestThem()
+    {
+        // Act
+        var arguments = ClaudeProtocol.Arguments(null, ClaudeSettings.Default with { EnablePartialMessages = false });
+
+        // Assert
+        Assert.DoesNotContain("--include-partial-messages", arguments);
     }
 
     [Fact]
@@ -428,6 +438,47 @@ public sealed class ClaudeProtocolTests
 
         // Assert
         Assert.Equal([new TurnStarted("id-1")], events);
+    }
+
+    [Fact]
+    public void Parse_WhenPartialMessageStarts_ThenIdentifiesItsPrompt()
+    {
+        // Arrange
+        const string line = """{"type":"stream_event","user_message_uuid":"id-1","event":{"type":"message_start","message":{"id":"msg-1"}}}""";
+
+        // Act
+        var events = ClaudeProtocol.Parse(line);
+
+        // Assert
+        Assert.Equal([new PartialMessageStarted("id-1")], events);
+    }
+
+    [Fact]
+    public void Parse_WhenPartialTextArrives_ThenReturnsTheText()
+    {
+        // Arrange
+        const string line = """{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hej "}}}""";
+
+        // Act
+        var events = ClaudeProtocol.Parse(line);
+
+        // Assert
+        Assert.Equal([new PartialMessageText("Hej ")], events);
+    }
+
+    [Theory]
+    [InlineData("""{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"Tænker"}}}""")]
+    [InlineData("""{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"input_json_delta","partial_json":"{}"}}}""")]
+    [InlineData("""{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":""}}}""")]
+    [InlineData("""{"type":"stream_event","parent_tool_use_id":"toolu_agent","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Subagent"}}}""")]
+    [InlineData("""{"type":"stream_event","parent_tool_use_id":"toolu_agent","event":{"type":"message_start","message":{"id":"msg-agent"}}}""")]
+    public void Parse_WhenPartialEventHasNoMainText_ThenReturnsNothing(string line)
+    {
+        // Act
+        var events = ClaudeProtocol.Parse(line);
+
+        // Assert
+        Assert.Empty(events);
     }
 
     [Theory]

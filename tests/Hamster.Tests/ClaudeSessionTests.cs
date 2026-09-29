@@ -12,6 +12,8 @@ public sealed class ClaudeSessionTests
     const string _searchDone = """{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"..."}]}}""";
     const string _rateLimit = """{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","unifiedWindows":{"five_hour":{"utilization":0.03},"seven_day":{"utilization":0.59}}}}""";
     const string _started = """{"type":"command_lifecycle","command_uuid":"id-1","state":"started"}""";
+    const string _partialStarted = """{"type":"stream_event","user_message_uuid":"id-1","event":{"type":"message_start"}}""";
+    const string _partialText = """{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hej"}}}""";
     const string _tasks = """{"type":"system","subtype":"background_tasks_changed","tasks":[]}""";
     const string _status = """{"type":"system","subtype":"status","status":null,"permissionMode":"plan"}""";
     const string _result = """{"type":"result","subtype":"success","is_error":false,"result":"Svar","session_id":"session-1","user_message_uuids":["id-1"]}""";
@@ -86,6 +88,20 @@ public sealed class ClaudeSessionTests
 
         // Assert
         Assert.Equal(["id-1"], listener.Turns);
+    }
+
+    [Fact]
+    public async Task ReadAsync_WhenPartialMessageArrives_ThenForwardsItsStartAndText()
+    {
+        // Arrange
+        var listener = new FakeListener();
+
+        // Act
+        await new ClaudeSession(Output(_partialStarted, _partialText), new StringWriter(), listener).ReadAsync();
+
+        // Assert
+        Assert.Equal(["id-1"], listener.PartialStarts);
+        Assert.Equal(["Hej"], listener.PartialTexts);
     }
 
     [Fact]

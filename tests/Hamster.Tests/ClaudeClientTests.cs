@@ -150,6 +150,32 @@ public sealed class ClaudeClientTests : IDisposable
     }
 
     [Fact]
+    public void Settings_WhenSavedBeforePartialMessages_ThenPartialMessagesAreEnabled()
+    {
+        // Arrange
+        File.WriteAllText(_settingsFile, """{"Model":"claude-opus-5-5","Effort":"xhigh","PermissionMode":"default"}""");
+
+        // Act
+        var settings = NewClient().Settings;
+
+        // Assert
+        Assert.True(settings.EnablePartialMessages);
+    }
+
+    [Fact]
+    public void Settings_WhenPartialMessagesAreDisabled_ThenRemembersIt()
+    {
+        // Arrange
+        NewClient().Settings = ClaudeSettings.Default with { EnablePartialMessages = false };
+
+        // Act
+        var settings = NewClient().Settings;
+
+        // Assert
+        Assert.False(settings.EnablePartialMessages);
+    }
+
+    [Fact]
     public void Settings_WhenChanged_ThenTheNextStartUsesThem()
     {
         // Arrange

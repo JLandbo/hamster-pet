@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text;
 using Hamster.Core.Claude;
 using Hamster.Core.Languages;
 
@@ -8,6 +9,10 @@ namespace Hamster.Core.Chats;
 
 public sealed class ChatItem : INotifyPropertyChanged
 {
+    readonly StringBuilder _partialAnswer = new();
+    string? _shownPartialAnswer, _lastDisplayAnswer;
+    bool _partialAnswerChanged, _replacePartialAnswerOnNextText;
+
     public ChatItem(string prompt)
     {
         Prompt = prompt;
@@ -55,6 +60,11 @@ public sealed class ChatItem : INotifyPropertyChanged
         set
         {
             field = value;
+            if (field != ChatStatus.Busy)
+            {
+                _partialAnswer.Clear();
+                (_shownPartialAnswer, _lastDisplayAnswer, _partialAnswerChanged, _replacePartialAnswerOnNextText) = (null, null, false, false);
+            }
             Changed();
             Changed(nameof(DisplayAnswer));
         }
@@ -80,16 +90,45 @@ public sealed class ChatItem : INotifyPropertyChanged
 
     public bool NeedsAction => Requests.Count > 0;
 
-    public string DisplayAnswer => Status == ChatStatus.Busy ? Strings.Format("Chat.Chewing", FormatElapsed(DateTime.UtcNow - StartedAt)) : Answer;
+    public string DisplayAnswer => Status == ChatStatus.Busy ? _shownPartialAnswer ?? Strings.Format("Chat.Chewing", FormatElapsed(DateTime.UtcNow - StartedAt)) : Answer;
 
     public static string FormatElapsed(TimeSpan elapsed) => elapsed.TotalMinutes < 1 ? $"{elapsed.Seconds} s" : $"{(int)elapsed.TotalMinutes} min {elapsed.Seconds} s";
 
-    public void RefreshElapsed()
+    public void StartPartialAnswer()
     {
-        if (Status == ChatStatus.Busy)
+        _replacePartialAnswerOnNextText = true;
+    }
+
+    public void AppendPartialAnswer(string text)
+    {
+        if (_replacePartialAnswerOnNextText)
         {
-            Changed(nameof(DisplayAnswer));
+            _partialAnswer.Clear();
+            _replacePartialAnswerOnNextText = false;
         }
+        _partialAnswer.Append(text);
+        _partialAnswerChanged = true;
+    }
+
+    public bool RefreshDisplayAnswer()
+    {
+        if (Status != ChatStatus.Busy)
+        {
+            return false;
+        }
+        if (_partialAnswerChanged)
+        {
+            _shownPartialAnswer = _partialAnswer.Length > 0 ? _partialAnswer.ToString() : null;
+            _partialAnswerChanged = false;
+        }
+        var next = DisplayAnswer;
+        if (next == _lastDisplayAnswer)
+        {
+            return false;
+        }
+        _lastDisplayAnswer = next;
+        Changed(nameof(DisplayAnswer));
+        return true;
     }
 
     public ChatRecord ToRecord() => new(Prompt, Answer, Status, Title, [.. Commands.Lines], [.. Sources.Lines]);

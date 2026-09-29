@@ -43,6 +43,58 @@ public sealed class ChatItemTests
         Assert.Matches(@"^Tygger… \d+ s$", shown);
     }
 
+    [Fact]
+    public void DisplayAnswer_WhenPartialTextHasNotBeenRefreshed_ThenStillChews()
+    {
+        // Arrange
+        var chat = new ChatItem("hej");
+        chat.StartPartialAnswer();
+        chat.AppendPartialAnswer("Delvist svar");
+
+        // Act
+        var shown = chat.DisplayAnswer;
+
+        // Assert
+        Assert.Matches(@"^Tygger… \d+ s$", shown);
+    }
+
+    [Fact]
+    public void RefreshDisplayAnswer_WhenPartialTextArrived_ThenShowsAllChunks()
+    {
+        // Arrange
+        var chat = new ChatItem("hej");
+        chat.StartPartialAnswer();
+        chat.AppendPartialAnswer("Delvist ");
+        chat.AppendPartialAnswer("svar");
+
+        // Act
+        chat.RefreshDisplayAnswer();
+
+        // Assert
+        Assert.Equal("Delvist svar", chat.DisplayAnswer);
+    }
+
+    [Fact]
+    public void StartPartialAnswer_WhenAnotherClaudeMessageStarts_ThenKeepsEarlierTextUntilNewTextArrives()
+    {
+        // Arrange
+        var chat = new ChatItem("hej");
+        chat.StartPartialAnswer();
+        chat.AppendPartialAnswer("Jeg undersøger det.");
+        chat.RefreshDisplayAnswer();
+
+        // Act
+        chat.StartPartialAnswer();
+        chat.RefreshDisplayAnswer();
+        var beforeNewText = chat.DisplayAnswer;
+        chat.AppendPartialAnswer("Her er svaret.");
+        chat.RefreshDisplayAnswer();
+
+        // Assert
+        Assert.Equal("Jeg undersøger det.", beforeNewText);
+        Assert.Equal("Her er svaret.", chat.DisplayAnswer);
+    }
+
     [Theory]
     [InlineData(12, "12 s")]
     [InlineData(59.9, "59 s")]
@@ -59,7 +111,7 @@ public sealed class ChatItemTests
     [Theory]
     [InlineData(ChatStatus.Busy, true)]
     [InlineData(ChatStatus.Done, false)]
-    public void RefreshElapsed_WhenCalled_ThenNotifiesOnlyWhileBusy(ChatStatus status, bool expected)
+    public void RefreshDisplayAnswer_WhenCalled_ThenNotifiesOnlyWhileBusy(ChatStatus status, bool expected)
     {
         // Arrange
         var chat = new ChatItem("hej") { Status = status };
@@ -67,7 +119,7 @@ public sealed class ChatItemTests
         chat.PropertyChanged += (_, e) => notified |= e.PropertyName == nameof(ChatItem.DisplayAnswer);
 
         // Act
-        chat.RefreshElapsed();
+        chat.RefreshDisplayAnswer();
 
         // Assert
         Assert.Equal(expected, notified);

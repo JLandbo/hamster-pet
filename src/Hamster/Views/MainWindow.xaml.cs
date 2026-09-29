@@ -60,7 +60,7 @@ public partial class MainWindow : Window
     readonly WebSession _web;
     readonly Feed _feed;
     readonly DispatcherTimer _timer = new();
-    readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromSeconds(1) };
+    readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromMilliseconds(250) };
     readonly DispatcherTimer _feedTimer = new() { Interval = Subscriptions.Interval };
     readonly HashSet<ConnectorProblem> _dismissedProblems = [];
     readonly Window _petWindow;
@@ -177,9 +177,15 @@ public partial class MainWindow : Window
         };
         _clock.Tick += (_, _) =>
         {
+            var following = Chats.IsAtBottom;
+            var refreshed = false;
             foreach (var chat in conversation.Chats)
             {
-                chat.RefreshElapsed();
+                refreshed |= chat.RefreshDisplayAnswer();
+            }
+            if (refreshed && following)
+            {
+                Dispatcher.BeginInvoke(Chats.ScrollToNewest, DispatcherPriority.Background);
             }
         };
         Music.Changed += AnimateIfMoodChanged;
@@ -291,7 +297,7 @@ public partial class MainWindow : Window
             _settingsWindow.Activate();
             return;
         }
-        var window = _settingsWindow = new SettingsWindow(ChooseLanguage, (int)_hideTime.TotalSeconds, ChooseHideSeconds, MarkdownConverter.ShowWebImages, ChooseWebImages, _themes, _petFile.Load().ThemeName, ChooseTheme, _characters, _character.Name, ChooseCharacter, _connectors, _subscriptions, _web) { Topmost = KeepOnTopItem.IsChecked };
+        var window = _settingsWindow = new SettingsWindow(ChooseLanguage, (int)_hideTime.TotalSeconds, ChooseHideSeconds, MarkdownConverter.ShowWebImages, ChooseWebImages, _claude.Settings.EnablePartialMessages, ChoosePartialMessages, _themes, _petFile.Load().ThemeName, ChooseTheme, _characters, _character.Name, ChooseCharacter, _connectors, _subscriptions, _web) { Topmost = KeepOnTopItem.IsChecked };
         RememberSize(window, _settingsSize);
         window.Closed += (_, _) => _ = CheckConnectorsAsync();
         window.Show();
@@ -385,6 +391,12 @@ public partial class MainWindow : Window
         _petFile.Save(_petFile.Load() with { ShowWebImages = show });
         MarkdownConverter.ShowWebImages = show;
         Chats.ChatList.Items.Refresh();
+    }
+
+    void ChoosePartialMessages(bool enabled)
+    {
+        _claude.Settings = _claude.Settings with { EnablePartialMessages = enabled };
+        _conversation.Restart();
     }
 
     void ChooseCharacter(Character chosen)

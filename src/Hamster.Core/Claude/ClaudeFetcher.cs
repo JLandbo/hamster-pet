@@ -192,6 +192,14 @@ public sealed partial class ClaudeFetcher(string workspace)
         {
         }
 
+        public void PartialMessageStarted(string? messageId)
+        {
+        }
+
+        public void PartialMessageReceived(string text)
+        {
+        }
+
         public void UsageReported(Usage usage)
         {
         }

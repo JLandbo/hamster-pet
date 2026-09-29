@@ -34,6 +34,10 @@ public sealed record CancelRequest(string RequestId) : ClaudeEvent;
 
 public sealed record TurnStarted(string? MessageId) : ClaudeEvent;
 
+public sealed record PartialMessageStarted(string? MessageId) : ClaudeEvent;
+
+public sealed record PartialMessageText(string Text) : ClaudeEvent;
+
 public sealed record ModeChanged(string Mode) : ClaudeEvent;
 
 public sealed record BackgroundTasksChanged(int Count) : ClaudeEvent;
@@ -72,6 +76,7 @@ public static class ClaudeProtocol
         "--setting-sources", "user",
         "--settings", SettingsJson(settings),
         "--model", settings.Model, "--effort", settings.Effort,
+        .. (settings.EnablePartialMessages ? ["--include-partial-messages"] : Array.Empty<string>()),
         .. (sessionId is null ? Array.Empty<string>() : ["--resume", sessionId]),
         "--append-system-prompt", string.IsNullOrWhiteSpace(instructions) ? PetInstructions : $"{PetInstructions}\n\n{instructions}",
         "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,ToolSearch,EnterPlanMode,ExitPlanMode,"
@@ -109,6 +114,9 @@ public static class ClaudeProtocol
                 new ToolUse((string)block["id"]!, (string)block["name"]!, Detail(block["input"]), (string?)message["parent_tool_use_id"], block["input"]?.ToJsonString())),
             "user" => ContentBlocks(message, "tool_result").Select(block => new ToolResult((string)block["tool_use_id"]!, ContentText(block["content"]), (bool?)block["is_error"] == true)),
             "command_lifecycle" when (string?)message["state"] == "started" => [new TurnStarted((string?)message["command_uuid"])],
+            "stream_event" when IsMainMessage(message) && (string?)message["event"]?["type"] == "message_start" => [new PartialMessageStarted((string?)message["user_message_uuid"])],
+            "stream_event" when IsMainMessage(message) && (string?)message["event"]?["type"] == "content_block_delta" && (string?)message["event"]?["delta"]?["type"] == "text_delta"
+                && (string?)message["event"]?["delta"]?["text"] is { Length: > 0 } text => [new PartialMessageText(text)],
             "system" when (string?)message["subtype"] == "init" => [new TurnStarted(null)],
             "system" when (string?)message["subtype"] == "status" && (string?)message["permissionMode"] is { } mode => [new ModeChanged(mode)],
             "system" when (string?)message["subtype"] == "background_tasks_changed" && message["tasks"] is JsonArray tasks => [new BackgroundTasksChanged(tasks.Count)],
@@ -220,6 +228,8 @@ public static class ClaudeProtocol
         JsonArray blocks => string.Concat(blocks.Select(block => (string?)block?["text"])),
         _ => "",
     };
+
+    static bool IsMainMessage(JsonNode message) => (string?)message["parent_tool_use_id"] is null;
 
     static string ResultText(JsonNode message) => (string?)message["result"]
         ?? (message["errors"] is JsonArray { Count: > 0 } errors ? string.Join('\n', errors.Select(error => (string?)error)) : null)

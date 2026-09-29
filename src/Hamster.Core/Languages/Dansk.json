@@ -8,6 +8,7 @@
     "Settings.HideAfter": "Skjul chat og menu efter",
     "Settings.Chat": "Chat",
     "Settings.ShowWebImages": "Vis eksterne billeder",
+    "Settings.EnablePartialMessages": "Vis svar, mens Claude skriver",
     "Settings.Theme": "Tema",
     "Settings.Character": "Karakter",
     "Settings.Connectors": "Forbindelser",

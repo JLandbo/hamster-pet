@@ -91,10 +91,31 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <FlowDocumentScrollViewer Document="{Binding DisplayAnswer, Converter={StaticResource ChatMarkdown}}" Margin="16,4,0,0"
+                            <TextBlock Text="{Binding DisplayAnswer}" Margin="16,4,0,0" Foreground="{DynamicResource Muted}" TextWrapping="Wrap">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Status}" Value="Busy">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <FlowDocumentScrollViewer Document="{Binding Answer, Converter={StaticResource ChatMarkdown}}" Margin="16,4,0,0"
                                                       VerticalScrollBarVisibility="Disabled" FocusVisualStyle="{x:Null}"
-                                                      Hyperlink.RequestNavigate="Link_RequestNavigate"
-                                                      Foreground="{DynamicResource Muted}" />
+                                                      Hyperlink.RequestNavigate="Link_RequestNavigate" Foreground="{DynamicResource Muted}">
+                                <FlowDocumentScrollViewer.Style>
+                                    <Style TargetType="FlowDocumentScrollViewer" BasedOn="{StaticResource {x:Type FlowDocumentScrollViewer}}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Status}" Value="Busy">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </FlowDocumentScrollViewer.Style>
+                            </FlowDocumentScrollViewer>
                             <Button Content="{DynamicResource Main.LogIn}" Click="Login_Click" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Margin="16,8,0,0"
                                     Visibility="{Binding NeedsLogin, Converter={StaticResource VisibleWhenTrue}}" />
                             <ItemsControl ItemsSource="{Binding Requests}" Margin="16,0,0,0">

@@ -39,6 +39,49 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
+    public async Task PartialMessageReceived_WhenClaudeWrites_ThenShowsDraftUntilTheFinalAnswerArrives()
+    {
+        // Arrange
+        _claude.Reply = Started;
+        await _conversation.SendAsync("hej");
+        var chat = Assert.Single(_conversation.Chats);
+
+        // Act
+        _claude.Listener.PartialMessageStarted(_claude.Ids[0]);
+        _claude.Listener.PartialMessageReceived("Delvist ");
+        _claude.Listener.PartialMessageReceived("svar");
+        chat.RefreshDisplayAnswer();
+        var draft = chat.DisplayAnswer;
+        _claude.Listener.ResultReceived(_answered with { Answers = [_claude.Ids[0]] });
+
+        // Assert
+        Assert.Equal(("Delvist svar", "Svar", "Svar", ChatStatus.Done), (draft, chat.Answer, chat.DisplayAnswer, chat.Status));
+        Assert.Equal("Svar", new Conversation(new FakeClaude(), Store()).Chats.Single().Answer);
+    }
+
+    [Fact]
+    public async Task PartialMessageStarted_WhenQueuedPromptIdDiffersFromTheActiveTurn_ThenUsesTheActiveChat()
+    {
+        // Arrange
+        _claude.Reply = Silent;
+        await _conversation.SendAsync("første");
+        await _conversation.SendAsync("anden");
+        _claude.Listener.TurnStarted(_claude.Ids[0]);
+
+        // Act
+        _claude.Listener.PartialMessageStarted(_claude.Ids[1]);
+        _claude.Listener.PartialMessageReceived("Kladde til første");
+        foreach (var chat in _conversation.Chats)
+        {
+            chat.RefreshDisplayAnswer();
+        }
+
+        // Assert
+        Assert.Equal("Kladde til første", _conversation.Chats[0].DisplayAnswer);
+        Assert.Matches(@"^Tygger… \d+ s$", _conversation.Chats[1].DisplayAnswer);
+    }
+
+    [Fact]
     public async Task SendAsync_WhenATitleIsGiven_ThenTheChatShowsItButClaudeGetsThePrompt()
     {
         // Act
