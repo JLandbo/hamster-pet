@@ -186,6 +186,8 @@
             </Style>
 
             <Style x:Key="ChoiceItem" TargetType="MenuItem">
+                <EventSetter Event="PreviewMouseRightButtonDown" Handler="MenuItem_PreviewMouseRightButton" />
+                <EventSetter Event="PreviewMouseRightButtonUp" Handler="MenuItem_PreviewMouseRightButton" />
                 <Setter Property="Foreground" Value="{DynamicResource Text}" />
                 <Setter Property="Cursor" Value="Hand" />
                 <Setter Property="Template">

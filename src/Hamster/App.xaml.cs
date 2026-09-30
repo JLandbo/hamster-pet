@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Hamster.Core.Chats;
 using Hamster.Core.Claude;
@@ -114,6 +115,8 @@ public partial class App : Application
         copyLink.Tag = LinkAt(e.OriginalSource as DependencyObject);
         copyLink.Visibility = copyLink.Tag is null ? Visibility.Collapsed : Visibility.Visible;
     }
+
+    void MenuItem_PreviewMouseRightButton(object sender, MouseButtonEventArgs e) => e.Handled = true;
 
     void Reader_RequestBringIntoView(object sender, RequestBringIntoViewEventArgs e)
     {
