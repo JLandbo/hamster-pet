@@ -150,4 +150,35 @@ public sealed class PetSettingsTests : IDisposable
         // Assert
         Assert.Equal(250, store.Load().SizePercent);
     }
+
+    [Fact]
+    public void Load_WhenPetSettingsWereSavedBeforeMusicBar_ThenUsesMusicBarDefaults()
+    {
+        // Arrange
+        File.WriteAllText(_file, """{"CharacterName": "Hamster"}""");
+
+        // Act
+        var pet = Store().Load();
+
+        // Assert
+        Assert.True(pet.ShowMusicBar);
+        Assert.False(pet.AlwaysShowMusicBar);
+        Assert.Equal(30, pet.MusicBarHideSeconds);
+    }
+
+    [Fact]
+    public void Save_WhenMusicBarSettingsChange_ThenLoadReturnsThem()
+    {
+        // Arrange
+        var store = Store();
+
+        // Act
+        store.Save(PetSettings.Default with { ShowMusicBar = false, AlwaysShowMusicBar = true, MusicBarHideSeconds = 120 });
+        var pet = store.Load();
+
+        // Assert
+        Assert.False(pet.ShowMusicBar);
+        Assert.True(pet.AlwaysShowMusicBar);
+        Assert.Equal(120, pet.MusicBarHideSeconds);
+    }
 }

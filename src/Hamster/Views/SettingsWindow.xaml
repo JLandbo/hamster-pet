@@ -112,6 +112,21 @@
                                        FontSize="12" Margin="24,4,0,0" Visibility="Collapsed" />
                         </StackPanel>
                     </Border>
+                    <TextBlock Text="{DynamicResource Settings.Music}" Foreground="{DynamicResource Muted}" Margin="0,0,0,8" />
+                    <Border Margin="0,0,0,16" Padding="12,10" CornerRadius="10" Background="{DynamicResource Card}">
+                        <StackPanel>
+                            <CheckBox x:Name="ShowMusicBarBox" Content="{DynamicResource Settings.ShowMusicBar}" Click="ShowMusicBar_Click" />
+                            <StackPanel x:Name="MusicBarOptionsPanel" Margin="24,8,0,0">
+                                <CheckBox x:Name="AlwaysShowMusicBarBox" Content="{DynamicResource Settings.AlwaysShowMusicBar}" Click="AlwaysShowMusicBar_Click" />
+                                <DockPanel x:Name="MusicBarTimeoutPanel" Margin="0,8,0,0">
+                                    <TextBlock x:Name="MusicBarSecondsText" DockPanel.Dock="Right" Width="44" TextAlignment="Right" Foreground="{DynamicResource Text}" VerticalAlignment="Center" />
+                                    <TextBlock DockPanel.Dock="Left" Text="{DynamicResource Settings.HideMusicBarAfter}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                    <Slider x:Name="MusicBarSecondsSlider" Minimum="1" Maximum="240" TickFrequency="1" IsSnapToTickEnabled="True" Focusable="False" VerticalAlignment="Center"
+                                            LostMouseCapture="MusicBarSecondsSlider_LostMouseCapture" />
+                                </DockPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
                     <DockPanel Margin="0,0,0,8">
                         <Button DockPanel.Dock="Right" Content="&#xE838;" ToolTip="{DynamicResource Settings.OpenThemes}" Click="OpenThemes_Click"
                                 Style="{StaticResource SmallIconButton}" FontSize="12" VerticalAlignment="Center" />

@@ -51,6 +51,7 @@ public partial class SettingsWindow : Window
     readonly Action<int> _chooseLastResponseSeconds;
     readonly Action<bool> _chooseWebImages;
     readonly Action<bool> _choosePartialMessages;
+    readonly Action<MusicBarOptions> _chooseMusicBar;
     readonly ThemeLibrary _themes;
     readonly Action<Theme> _chooseTheme;
     readonly CharacterLibrary _characters;
@@ -62,11 +63,12 @@ public partial class SettingsWindow : Window
     readonly ObservableCollection<CharacterChoice> _tiles = [];
     readonly ConnectorRow[] _rows;
     readonly HashSet<string> _reconnected = [];
+    MusicBarOptions _musicBar;
     string _chosenCharacter;
     string? _chosenTheme;
     bool _partialMessagesAwaitingRestart;
 
-    public SettingsWindow(Action<Translation> chooseLanguage, int hideSeconds, Action<int> chooseHideSeconds, int lastResponseSeconds, Action<int> chooseLastResponseSeconds, bool webImages, Action<bool> chooseWebImages, bool partialMessages, Action<bool> choosePartialMessages, ThemeLibrary themes, string? chosenTheme, Action<Theme> chooseTheme, CharacterLibrary characters, string chosenCharacter,
+    public SettingsWindow(Action<Translation> chooseLanguage, int hideSeconds, Action<int> chooseHideSeconds, int lastResponseSeconds, Action<int> chooseLastResponseSeconds, bool webImages, Action<bool> chooseWebImages, bool partialMessages, Action<bool> choosePartialMessages, MusicBarOptions musicBar, Action<MusicBarOptions> chooseMusicBar, ThemeLibrary themes, string? chosenTheme, Action<Theme> chooseTheme, CharacterLibrary characters, string chosenCharacter,
         Action<Character> chooseCharacter, string dataFolder, Connectors connectors, Subscriptions subscriptions, WebSession web)
     {
         InitializeComponent();
@@ -80,6 +82,10 @@ public partial class SettingsWindow : Window
         LastResponseSecondsSlider.ValueChanged += (_, _) => ShowLastResponseSeconds();
         (WebImagesBox.IsChecked, _chooseWebImages) = (webImages, chooseWebImages);
         (PartialMessagesBox.IsChecked, _choosePartialMessages) = (partialMessages, choosePartialMessages);
+        (_musicBar, _chooseMusicBar) = (musicBar, chooseMusicBar);
+        (ShowMusicBarBox.IsChecked, AlwaysShowMusicBarBox.IsChecked, MusicBarSecondsSlider.Value) = (musicBar.Show, musicBar.Always, musicBar.HideSeconds);
+        MusicBarSecondsSlider.ValueChanged += (_, _) => ShowMusicBarSeconds();
+        ShowMusicBarOptions();
         (_themes, _chosenTheme, _chooseTheme) = (themes, chosenTheme, chooseTheme);
         (_characters, _chosenCharacter, _chooseCharacter, _dataFolder, _connectors, _subscriptions, _web) = (characters, chosenCharacter, chooseCharacter, dataFolder, connectors, subscriptions, web);
         _rows = [.. Connectors.All.Select(connector => new ConnectorRow(connector, connectors.SourceOf(connector)))];
@@ -239,6 +245,37 @@ public partial class SettingsWindow : Window
     void ShowLastResponseSeconds() => LastResponseSecondsText.Text = $"{LastResponseSecondsSlider.Value} s";
 
     void LastResponseSecondsSlider_LostMouseCapture(object sender, MouseEventArgs e) => _chooseLastResponseSeconds((int)LastResponseSecondsSlider.Value);
+
+    void ShowMusicBar_Click(object sender, RoutedEventArgs e)
+    {
+        _musicBar = _musicBar with { Show = ShowMusicBarBox.IsChecked == true };
+        _chooseMusicBar(_musicBar);
+        ShowMusicBarOptions();
+    }
+
+    void AlwaysShowMusicBar_Click(object sender, RoutedEventArgs e)
+    {
+        _musicBar = _musicBar with { Always = AlwaysShowMusicBarBox.IsChecked == true };
+        _chooseMusicBar(_musicBar);
+        ShowMusicBarOptions();
+    }
+
+    void ShowMusicBarOptions()
+    {
+        MusicBarOptionsPanel.IsEnabled = _musicBar.Show;
+        MusicBarOptionsPanel.Opacity = _musicBar.Show ? 1 : 0.5;
+        MusicBarTimeoutPanel.IsEnabled = _musicBar.Show && !_musicBar.Always;
+        MusicBarTimeoutPanel.Opacity = MusicBarTimeoutPanel.IsEnabled ? 1 : 0.5;
+        ShowMusicBarSeconds();
+    }
+
+    void ShowMusicBarSeconds() => MusicBarSecondsText.Text = $"{MusicBarSecondsSlider.Value} s";
+
+    void MusicBarSecondsSlider_LostMouseCapture(object sender, MouseEventArgs e)
+    {
+        _musicBar = _musicBar with { HideSeconds = (int)MusicBarSecondsSlider.Value };
+        _chooseMusicBar(_musicBar);
+    }
 
     void WebImages_Click(object sender, RoutedEventArgs e) => _chooseWebImages(WebImagesBox.IsChecked == true);
 

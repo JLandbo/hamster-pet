@@ -127,6 +127,7 @@ public partial class MainWindow : Window
         _chatsExpanded = pet.ChatsExpanded;
         _hideTime = TimeSpan.FromSeconds(pet.HideSeconds);
         _lastResponseTime = TimeSpan.FromSeconds(pet.LastResponseSeconds);
+        Music.Configure(MusicBarOptionsOf(pet));
         _placementFile = files.Store("placement.json", DefaultPlacement);
         _placement = _placementFile.Load();
         if (_chatOnly)
@@ -200,7 +201,7 @@ public partial class MainWindow : Window
         {
             ShowChatOnly();
             UpdateToolbar();
-            Music.Show();
+            Music.RefreshText();
             UpdateAttachments();
             ShowProblems();
             _ = feed.RefreshAsync();
@@ -212,6 +213,8 @@ public partial class MainWindow : Window
     static string SwitchWhenIdle => Strings.Of("Main.SwitchWhenIdle");
 
     static Placement DefaultPlacement => new(SystemParameters.WorkArea.Right, SystemParameters.WorkArea.Bottom, _defaultWidth, _defaultChatHeight);
+
+    static MusicBarOptions MusicBarOptionsOf(PetSettings pet) => new(pet.ShowMusicBar, pet.AlwaysShowMusicBar, pet.MusicBarHideSeconds);
 
     PetStatus Status => new(
         Pressed: _pressed,
@@ -312,7 +315,8 @@ public partial class MainWindow : Window
             _settingsWindow.Activate();
             return;
         }
-        var window = _settingsWindow = new SettingsWindow(ChooseLanguage, (int)_hideTime.TotalSeconds, ChooseHideSeconds, (int)_lastResponseTime.TotalSeconds, ChooseLastResponseSeconds, MarkdownConverter.ShowWebImages, ChooseWebImages, _claude.Settings.EnablePartialMessages, ChoosePartialMessages, _themes, _petFile.Load().ThemeName, ChooseTheme, _characters, _character.Name, ChooseCharacter, _files.Folder, _connectors, _subscriptions, _web) { Topmost = KeepOnTopItem.IsChecked };
+        var pet = _petFile.Load();
+        var window = _settingsWindow = new SettingsWindow(ChooseLanguage, (int)_hideTime.TotalSeconds, ChooseHideSeconds, (int)_lastResponseTime.TotalSeconds, ChooseLastResponseSeconds, MarkdownConverter.ShowWebImages, ChooseWebImages, _claude.Settings.EnablePartialMessages, ChoosePartialMessages, MusicBarOptionsOf(pet), ChooseMusicBar, _themes, pet.ThemeName, ChooseTheme, _characters, _character.Name, ChooseCharacter, _files.Folder, _connectors, _subscriptions, _web) { Topmost = KeepOnTopItem.IsChecked };
         RememberSize(window, _settingsSize);
         window.Closed += (_, _) => _ = CheckConnectorsAsync();
         window.Show();
@@ -431,6 +435,12 @@ public partial class MainWindow : Window
     {
         _claude.Settings = _claude.Settings with { EnablePartialMessages = enabled };
         _conversation.Restart();
+    }
+
+    void ChooseMusicBar(MusicBarOptions options)
+    {
+        _petFile.Save(_petFile.Load() with { ShowMusicBar = options.Show, AlwaysShowMusicBar = options.Always, MusicBarHideSeconds = options.HideSeconds });
+        Music.Configure(options);
     }
 
     void ChooseCharacter(Character chosen)
