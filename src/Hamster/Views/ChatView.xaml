@@ -54,7 +54,7 @@
                             Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Edge}" BorderThickness="1"
                             Visibility="{Binding Shown, Converter={StaticResource VisibleWhenTrue}}">
                         <Grid>
-                            <Border x:Name="StatusBar" Width="4" Margin="16,10,0,10" HorizontalAlignment="Left" CornerRadius="2"
+                            <Border x:Name="StatusBar" Width="4" Margin="10,10,0,10" HorizontalAlignment="Left" CornerRadius="2"
                                     Background="{DynamicResource Link}" />
                             <StackPanel Margin="14,10">
                             <DockPanel>

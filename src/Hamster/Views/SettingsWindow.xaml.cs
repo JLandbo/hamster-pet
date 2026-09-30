@@ -55,6 +55,7 @@ public partial class SettingsWindow : Window
     readonly Action<Theme> _chooseTheme;
     readonly CharacterLibrary _characters;
     readonly Action<Character> _chooseCharacter;
+    readonly string _dataFolder;
     readonly WebSession _web;
     readonly Connectors _connectors;
     readonly Subscriptions _subscriptions;
@@ -66,7 +67,7 @@ public partial class SettingsWindow : Window
     bool _partialMessagesAwaitingRestart;
 
     public SettingsWindow(Action<Translation> chooseLanguage, int hideSeconds, Action<int> chooseHideSeconds, int lastResponseSeconds, Action<int> chooseLastResponseSeconds, bool webImages, Action<bool> chooseWebImages, bool partialMessages, Action<bool> choosePartialMessages, ThemeLibrary themes, string? chosenTheme, Action<Theme> chooseTheme, CharacterLibrary characters, string chosenCharacter,
-        Action<Character> chooseCharacter, Connectors connectors, Subscriptions subscriptions, WebSession web)
+        Action<Character> chooseCharacter, string dataFolder, Connectors connectors, Subscriptions subscriptions, WebSession web)
     {
         InitializeComponent();
         (_chooseLanguage, _chooseHideSeconds, _chooseLastResponseSeconds) = (chooseLanguage, chooseHideSeconds, chooseLastResponseSeconds);
@@ -80,7 +81,7 @@ public partial class SettingsWindow : Window
         (WebImagesBox.IsChecked, _chooseWebImages) = (webImages, chooseWebImages);
         (PartialMessagesBox.IsChecked, _choosePartialMessages) = (partialMessages, choosePartialMessages);
         (_themes, _chosenTheme, _chooseTheme) = (themes, chosenTheme, chooseTheme);
-        (_characters, _chosenCharacter, _chooseCharacter, _connectors, _subscriptions, _web) = (characters, chosenCharacter, chooseCharacter, connectors, subscriptions, web);
+        (_characters, _chosenCharacter, _chooseCharacter, _dataFolder, _connectors, _subscriptions, _web) = (characters, chosenCharacter, chooseCharacter, dataFolder, connectors, subscriptions, web);
         _rows = [.. Connectors.All.Select(connector => new ConnectorRow(connector, connectors.SourceOf(connector)))];
         CharacterList.ItemsSource = _tiles;
         ConnectorList.ItemsSource = _rows;
@@ -327,6 +328,10 @@ public partial class SettingsWindow : Window
     void OpenCharacters_Click(object sender, RoutedEventArgs e) => OpenFolder(_characters.Folder);
 
     void OpenThemes_Click(object sender, RoutedEventArgs e) => OpenFolder(_themes.Folder);
+
+    void OpenProgramFolder_Click(object sender, RoutedEventArgs e) => OpenFolder(AppContext.BaseDirectory);
+
+    void OpenDataFolder_Click(object sender, RoutedEventArgs e) => OpenFolder(_dataFolder);
 
     void OpenFolder(string folder)
     {
