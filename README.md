@@ -8,7 +8,7 @@
   En lille Windows-makker til Claude Code, som bor på skrivebordet, hjælper i dine mapper og holder øje med dine opgaver.
 </p>
 
-Hamster pakker Claude Code ind i en fokuseret WPF-app. Du kan chatte, vedhæfte filer og skærmbilleder, godkende værktøjer og lade Claude arbejde direkte i en valgt mappe. Hamsterens animation følger arbejdet, så du kan se forskel på blandt andet tænkning, research, ventende tilladelse og et færdigt svar uden at åbne chatten.
+Hamster giver Claude Code en lille Windows-brugerflade. Animationerne viser, om Claude arbejder, venter på din tilladelse eller er færdig, uden at du behøver åbne chatten.
 
 ## Det får du
 
@@ -29,6 +29,7 @@ Hamster pakker Claude Code ind i en fokuseret WPF-app. Du kan chatte, vedhæfte 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - [Git for Windows](https://git-scm.com/downloads/win) – valgfrit, men anbefalet for Bash-understøttelse
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code/getting-started) installeret, logget ind og tilgængelig som `claude` i `PATH`
+- [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) – kun nødvendigt til Jira-web-login; er ofte allerede installeret
 
 ### Kør fra kildekoden
 
@@ -36,7 +37,7 @@ Hamster pakker Claude Code ind i en fokuseret WPF-app. Du kan chatte, vedhæfte 
 dotnet run --project .\src\Hamster\Hamster.csproj
 ```
 
-Hamster starter en Claude Code-session, når hovedvinduet er indlæst. Vælg **Folder**, hvis Claude skal arbejde i et bestemt projekt, eller behold **Chat** for en samtale i Hamsters eget workspace.
+Hamster starter en Claude Code-session, når hovedvinduet er indlæst. Vælg **Mappe**, hvis Claude skal arbejde i et bestemt projekt, eller behold **Chat** for en samtale i Hamsters eget workspace.
 
 ### Installer med autostart
 
@@ -50,33 +51,23 @@ Scriptet publicerer en single-file release til `publish\`, opretter en genvej i 
 
 ```mermaid
 flowchart LR
-    UI["WPF UI<br/>chat · settings · feed"]
-    Conversation["Conversation<br/>historik og tilstand"]
-    ClaudeClient["ClaudeClient<br/>proces og stream-protokol"]
-    CLI["claude CLI<br/>stream-json"]
-    Tools["Lokale værktøjer<br/>filer · shell · web · agents"]
-    MCP["MCP<br/>GitHub · Atlassian · M365"]
-    Pet["PetStatus → Mood<br/>sprite-animation"]
-    Data["Lokale data<br/>JSON · chats · prompts"]
+    UI["Hamster · WPF<br/>chat · indstillinger · feed"]
+    Chat["Samtale og forbindelse<br/>Conversation · ClaudeClient"]
+    CLI["Claude Code CLI"]
+    Tools["Værktøjer og connectors<br/>filer · shell · web · MCP"]
+    Pet["Animation<br/>PetStatus → Mood"]
     Feed["Opgavefeed<br/>Jira · GitHub"]
-    Subscriptions["Subscriptions<br/>valg og opdatering"]
-    Web["Web-login + REST<br/>Jira"]
 
-    UI <--> Conversation
-    Conversation <--> ClaudeClient
-    ClaudeClient <--> CLI
+    UI <--> Chat
+    Chat <-->|stream-json| CLI
     CLI <--> Tools
-    CLI <--> MCP
     UI --> Pet
-    UI <--> Data
     UI <--> Feed
-    Feed <--> Subscriptions
-    Subscriptions -->|Hamster| MCP
-    Subscriptions -->|Claude.ai| CLI
-    Subscriptions -->|Web-login| Web
 ```
 
 `App` samler afhængighederne. `MainWindow` styrer desktopoplevelsen, mens domænelogikken ligger i `Hamster.Core`. Selve Claude-processen kører separat og kommunikerer med appen som newline-separeret JSON over standard input/output.
+
+Opgavefeedet henter data via MCP, Claude Code eller Jira-web-login, afhængigt af den valgte connector.
 
 ### En prompt gennem systemet
 
@@ -103,7 +94,7 @@ sequenceDiagram
     Conversation-->>UI: Gem og vis svaret
 ```
 
-Tilladelser vises i appen med værktøjets konkrete handling. **Allow always** gælder kun for den aktuelle session og det scope, Claude sender med forespørgslen.
+Tilladelser vises i appen med værktøjets konkrete handling. **Tillad altid** gælder kun for den aktuelle session og det scope, Claude sender med forespørgslen.
 
 ## Hamsterens humør er programstatus
 
