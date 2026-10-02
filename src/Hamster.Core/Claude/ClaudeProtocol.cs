@@ -63,6 +63,24 @@ public sealed record Usage(double FiveHour, double SevenDay, DateTimeOffset? Fiv
     public double SevenDayAt(DateTimeOffset now) => now >= SevenDayResets ? 0 : SevenDay;
 
     public double HighestAt(DateTimeOffset now) => Math.Max(FiveHourAt(now), SevenDayAt(now));
+
+    public static string FormatResetCountdown(DateTimeOffset? resetTime, DateTimeOffset now, bool includeDays)
+    {
+        if (resetTime is null)
+        {
+            return "—";
+        }
+        var remaining = resetTime.Value - now;
+        if (remaining <= TimeSpan.Zero)
+        {
+            return includeDays ? "00:00:00" : "00:00";
+        }
+        var totalMinutes = (remaining.Ticks + TimeSpan.TicksPerMinute - 1) / TimeSpan.TicksPerMinute;
+        var minutes = totalMinutes % 60;
+        var hours = totalMinutes / 60;
+        var days = hours / 24;
+        return includeDays ? $"{days:00}:{hours % 24:00}:{minutes:00}" : $"{hours:00}:{minutes:00}";
+    }
 }
 
 public static class ClaudeProtocol

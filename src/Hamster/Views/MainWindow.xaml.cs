@@ -64,6 +64,7 @@ public partial class MainWindow : Window
     readonly DispatcherTimer _timer = new();
     readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromMilliseconds(250) };
     readonly DispatcherTimer _feedTimer = new() { Interval = Subscriptions.Interval };
+    readonly DispatcherTimer _usageTimer = new() { Interval = TimeSpan.FromMinutes(1) };
     readonly HashSet<ConnectorProblem> _dismissedProblems = [];
     readonly Window _petWindow;
 
@@ -197,6 +198,7 @@ public partial class MainWindow : Window
             }
         };
         Music.Changed += AnimateIfMoodChanged;
+        _usageTimer.Tick += (_, _) => ShowUsage();
         Strings.Changed += () =>
         {
             ShowChatOnly();
@@ -586,6 +588,7 @@ public partial class MainWindow : Window
 
     void Window_Closed(object sender, EventArgs e)
     {
+        _usageTimer.Stop();
         SystemEvents.DisplaySettingsChanged -= Display_Changed;
         _conversation.Save();
         _settingsWindow?.Close();
@@ -629,6 +632,7 @@ public partial class MainWindow : Window
         TasksText.Visibility = _conversation.BackgroundTasks > 0 && !_conversation.IsBusy ? Visibility.Visible : Visibility.Collapsed;
         PromptsButton.Visibility = StopButton.Visibility == Visibility.Collapsed && TasksText.Visibility == Visibility.Collapsed ? Visibility.Visible : Visibility.Collapsed;
         _clock.IsEnabled = _conversation.IsBusy;
+        ShowUsage();
         ShowFolder();
         FitWidth();
     }
@@ -972,8 +976,21 @@ public partial class MainWindow : Window
     {
         FullScreenItem.IsChecked = _beforeFullScreen is not null;
         SaveChatItem.IsEnabled = _conversation.Chats.Count > 0;
+        ShowUsage();
+        _usageTimer.Start();
+    }
+
+    void MoreMenu_Closed(object sender, RoutedEventArgs e) => _usageTimer.Stop();
+
+    void ShowUsage()
+    {
+        if (MoreButton.ContextMenu?.IsOpen != true)
+        {
+            return;
+        }
+        var now = DateTimeOffset.UtcNow;
         UsageItem.Header = _conversation.Usage is { } usage
-            ? Strings.Format("Main.Usage", usage.FiveHourAt(DateTimeOffset.UtcNow), usage.SevenDayAt(DateTimeOffset.UtcNow))
+            ? $"{Strings.Of("Main.UsageFiveHour")} {usage.FiveHourAt(now):P0} ({Usage.FormatResetCountdown(usage.FiveHourResets, now, includeDays: false)}) · {Strings.Of("Main.UsageWeek")} {usage.SevenDayAt(now):P0} ({Usage.FormatResetCountdown(usage.SevenDayResets, now, includeDays: true)})"
             : Strings.Of("Main.UsageLater");
     }
 

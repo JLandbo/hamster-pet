@@ -140,7 +140,7 @@
                                 <Button x:Name="MoreButton" Grid.Row="1" Grid.Column="0" Content="&#xE712;" ToolTip="{DynamicResource Main.More}" Click="ShowChoices_Click" Style="{StaticResource IconButton}"
                                         ToolTipService.ShowOnDisabled="True">
                                     <Button.ContextMenu>
-                                        <ContextMenu Style="{StaticResource ChoiceMenu}" Opened="MoreMenu_Opened">
+                                        <ContextMenu Style="{StaticResource ChoiceMenu}" Opened="MoreMenu_Opened" Closed="MoreMenu_Closed">
                                             <MenuItem x:Name="FullScreenItem" Header="{DynamicResource Main.FullScreen}" Click="FullScreen_Click" />
                                             <MenuItem Header="{DynamicResource Main.Instructions}" Click="Instructions_Click" />
                                             <MenuItem x:Name="SaveChatItem" Header="{DynamicResource Main.SaveChat}" Click="SaveChat_Click" />
