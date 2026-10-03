@@ -17,6 +17,7 @@
                     <SolidColorBrush x:Key="Link" Color="#6FA8FF" />
                     <SolidColorBrush x:Key="Busy" Color="#E08F60" />
                     <SolidColorBrush x:Key="Error" Color="#FF6B6B" />
+                    <SolidColorBrush x:Key="ErrorSoft" Color="#33FF6B6B" />
                     <SolidColorBrush x:Key="Handle" Color="#99FFFFFF" />
                     <SolidColorBrush x:Key="Hover" Color="#0FFFFFFF" />
                     <SolidColorBrush x:Key="Card" Color="#14FFFFFF" />

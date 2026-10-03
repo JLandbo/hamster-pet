@@ -387,7 +387,12 @@ public partial class MainWindow : Window
         FeedBadge.SetResourceReference(Border.BackgroundProperty, any ? "Attention" : "Muted");
         FeedButton.SetResourceReference(ForegroundProperty, any ? "Attention" : "Muted");
         FeedCount.SetResourceReference(TextBlock.ForegroundProperty, any ? "OnAttention" : "Surface");
-        if (any)
+        // A failed fetch outweighs new tasks, as the list may then be missing some.
+        if (_feed.Errors.Count > 0)
+        {
+            FeedButton.SetResourceReference(BackgroundProperty, "ErrorSoft");
+        }
+        else if (any)
         {
             FeedButton.SetResourceReference(BackgroundProperty, "AttentionSoft");
         }
