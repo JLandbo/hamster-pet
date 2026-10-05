@@ -33,7 +33,7 @@ public sealed class InstructionValuesTests : IDisposable
     }
 
     [Fact]
-    public void Of_WhenGivenTheDataFiles_ThenNamesTheirFolders()
+    public void Of_WhenGivenTheDataFiles_ThenNamesTheDataFolder()
     {
         // Arrange
         Directory.CreateDirectory(_folder);
@@ -43,6 +43,16 @@ public sealed class InstructionValuesTests : IDisposable
         var values = InstructionValues.Of(files);
 
         // Assert
-        Assert.Equal((_folder, files.Workspace), (values["dataFolder"], values["workspace"]));
+        Assert.Equal(_folder, values["dataFolder"]);
+    }
+
+    [Fact]
+    public void WithWorkspace_WhenGivenTheFolderClaudeStartsIn_ThenNamesItAsTheWorkspace()
+    {
+        // Act
+        var values = InstructionValues.WithWorkspace(new Dictionary<string, string> { ["dataFolder"] = @"C:\Data" }, @"C:\Projects\Shop");
+
+        // Assert
+        Assert.Equal((@"C:\Data", @"C:\Projects\Shop"), (values["dataFolder"], values["workspace"]));
     }
 }

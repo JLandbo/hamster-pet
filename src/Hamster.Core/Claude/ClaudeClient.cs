@@ -172,8 +172,9 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
     {
         Directory.CreateDirectory(workspace);
         var instructions = File.Exists(instructionsFile) ? File.ReadAllText(instructionsFile) : "";
-        var arguments = ClaudeProtocol.Arguments(sessionId, Settings, instructions, instructionValues);
-        return StartProcess(arguments, Settings.WorkingDirectory ?? workspace);
+        var directory = Settings.WorkingDirectory ?? workspace;
+        var arguments = ClaudeProtocol.Arguments(sessionId, Settings, instructions, InstructionValues.WithWorkspace(instructionValues, directory));
+        return StartProcess(arguments, directory);
     }
 
     internal static Process StartProcess(IReadOnlyList<string> arguments, string workingDirectory)

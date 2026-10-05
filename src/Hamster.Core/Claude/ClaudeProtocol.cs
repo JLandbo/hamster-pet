@@ -87,7 +87,7 @@ public static class ClaudeProtocol
 {
     // The {{names}} are filled with the app's own folders, so the text holds for any user and wherever the app is installed.
     public const string PetInstructions = "Du kører gennem hamster-pet, en desktop-app, der sender brugerens beskeder til Claude Code. "
-        + "Appen ligger i {{appFolder}}, dens data og brugerens instruktioner i {{dataFolder}}, og din standard-arbejdsmappe er {{workspace}}. "
+        + "Appen ligger i {{appFolder}}, dens data og brugerens instruktioner i {{dataFolder}}, og din arbejdsmappe er {{workspace}}. "
         + "Du kan stadig arbejde i alle andre mapper, brugeren beder om. "
         + "Appen viser selv de kilder, du har søgt i og hentet. Skriv derfor ikke en kilde- eller kildeliste-sektion i svaret. "
         + "Nævn ikke MCP-servere eller connectors, der mangler godkendelse, medmindre brugeren beder om noget, der kræver dem. "

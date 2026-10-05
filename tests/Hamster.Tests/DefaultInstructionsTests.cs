@@ -35,6 +35,21 @@ public sealed class DefaultInstructionsTests : IDisposable
     }
 
     [Fact]
+    public void WriteIfMissing_WhenTheFolderCannotBeMade_ThenGoesOn()
+    {
+        // Arrange
+        Directory.CreateDirectory(_folder);
+        var blocking = Path.Combine(_folder, "blocking");
+        System.IO.File.WriteAllText(blocking, "");
+
+        // Act
+        var failure = Record.Exception(() => DefaultInstructions.WriteIfMissing(Path.Combine(blocking, "instructions.txt")));
+
+        // Assert
+        Assert.Null(failure);
+    }
+
+    [Fact]
     public void WriteIfMissing_WhenTheFileExists_ThenLeavesIt()
     {
         // Arrange

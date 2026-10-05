@@ -5,14 +5,20 @@ public static class DefaultInstructions
 {
     public static string Text { get; } = Read();
 
+    // A file that is there, or that another instance writes at the same time, is left alone,
+    // and a folder that cannot be written to only means Claude starts without instructions, so the app still opens.
     public static void WriteIfMissing(string path)
     {
-        if (File.Exists(path))
+        try
         {
-            return;
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            using var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write);
+            using var writer = new StreamWriter(file);
+            writer.Write(Text);
         }
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, Text);
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     static string Read()

@@ -1,8 +1,3 @@
-# Context
-- I prompt you through hamster-pet, my own desktop app that runs Claude Code.
-- The app is installed in {{appFolder}}. Its data, including these instructions, is in {{dataFolder}}.
-- Your default working folder is {{workspace}}. You can still work in any other folder I point you to.
-
 # Rules
 These rules always apply.
 
