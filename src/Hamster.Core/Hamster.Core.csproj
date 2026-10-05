@@ -14,6 +14,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Pet\Hamster PNG\*" LogicalName="%(Filename)%(Extension)" />
     <EmbeddedResource Include="Languages\*.json" LogicalName="Languages/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Claude\DefaultInstructions.md" LogicalName="DefaultInstructions.md" />
   </ItemGroup>
 
   <ItemGroup>

@@ -374,6 +374,26 @@ public sealed class ClaudeProtocolTests
     }
 
     [Fact]
+    public void Arguments_WhenValuesGiven_ThenFillsThemIntoThePetsOwnInstructions()
+    {
+        // Act
+        var arguments = ClaudeProtocol.Arguments(null, ClaudeSettings.Default, "", new Dictionary<string, string> { ["workspace"] = @"C:\Data\workspace" });
+
+        // Assert
+        Assert.Contains(@"C:\Data\workspace", arguments[Array.IndexOf(arguments, "--append-system-prompt") + 1]);
+    }
+
+    [Fact]
+    public void Arguments_WhenValuesGiven_ThenFillsThemIntoTheUsersInstructions()
+    {
+        // Act
+        var arguments = ClaudeProtocol.Arguments(null, ClaudeSettings.Default, "Work in {{workspace}}.", new Dictionary<string, string> { ["workspace"] = @"C:\Data\workspace" });
+
+        // Assert
+        Assert.EndsWith(@"Work in C:\Data\workspace.", arguments[Array.IndexOf(arguments, "--append-system-prompt") + 1]);
+    }
+
+    [Fact]
     public void Arguments_WhenInstructionsGiven_ThenAppendsThemAfterThePetsOwn()
     {
         // Act

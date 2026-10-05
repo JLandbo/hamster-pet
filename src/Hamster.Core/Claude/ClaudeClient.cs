@@ -36,7 +36,7 @@ public interface IClaudeClient
     void End();
 }
 
-public sealed class ClaudeClient(string workspace, string instructionsFile, JsonFile<ClaudeSettings> store) : IClaudeClient
+public sealed class ClaudeClient(string workspace, string instructionsFile, JsonFile<ClaudeSettings> store, IReadOnlyDictionary<string, string>? instructionValues = null) : IClaudeClient
 {
     static readonly TimeSpan _stopTimeout = TimeSpan.FromSeconds(5);
     static readonly TimeSpan _requestTimeout = TimeSpan.FromMinutes(1);
@@ -172,7 +172,7 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
     {
         Directory.CreateDirectory(workspace);
         var instructions = File.Exists(instructionsFile) ? File.ReadAllText(instructionsFile) : "";
-        var arguments = ClaudeProtocol.Arguments(sessionId, Settings, instructions);
+        var arguments = ClaudeProtocol.Arguments(sessionId, Settings, instructions, instructionValues);
         return StartProcess(arguments, Settings.WorkingDirectory ?? workspace);
     }
 

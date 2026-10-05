@@ -85,12 +85,16 @@ public sealed record Usage(double FiveHour, double SevenDay, DateTimeOffset? Fiv
 
 public static class ClaudeProtocol
 {
-    public const string PetInstructions = "Appen viser selv de kilder, du har søgt i og hentet. Skriv derfor ikke en kilde- eller kildeliste-sektion i svaret. "
+    // The {{names}} are filled with the app's own folders, so the text holds for any user and wherever the app is installed.
+    public const string PetInstructions = "Du kører gennem hamster-pet, en desktop-app, der sender brugerens beskeder til Claude Code. "
+        + "Appen ligger i {{appFolder}}, dens data og brugerens instruktioner i {{dataFolder}}, og din standard-arbejdsmappe er {{workspace}}. "
+        + "Du kan stadig arbejde i alle andre mapper, brugeren beder om. "
+        + "Appen viser selv de kilder, du har søgt i og hentet. Skriv derfor ikke en kilde- eller kildeliste-sektion i svaret. "
         + "Nævn ikke MCP-servere eller connectors, der mangler godkendelse, medmindre brugeren beder om noget, der kræver dem. "
         + "Når brugeren beder om en påmindelse, så brug CronCreate med en prompt, der beder dig om kun at skrive påmindelsen til brugeren, når den affyres. "
         + "Chatten vises i en app, der kan vise billeder: når du har gemt eller fundet et billede, som brugeren skal se, så skriv den fulde sti til filen i backticks, så vises billedet i svaret.";
 
-    public static string[] Arguments(string? sessionId, ClaudeSettings settings, string instructions = "") => [
+    public static string[] Arguments(string? sessionId, ClaudeSettings settings, string instructions = "", IReadOnlyDictionary<string, string>? values = null) => [
         "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
         "--permission-prompt-tool", "stdio", "--permission-mode", settings.PermissionMode,
         "--setting-sources", "user",
@@ -98,7 +102,7 @@ public static class ClaudeProtocol
         "--model", settings.Model, "--effort", settings.Effort,
         .. (settings.EnablePartialMessages ? ["--include-partial-messages"] : Array.Empty<string>()),
         .. (sessionId is null ? Array.Empty<string>() : ["--resume", sessionId]),
-        "--append-system-prompt", string.IsNullOrWhiteSpace(instructions) ? PetInstructions : $"{PetInstructions}\n\n{instructions}",
+        "--append-system-prompt", InstructionValues.Fill(string.IsNullOrWhiteSpace(instructions) ? PetInstructions : $"{PetInstructions}\n\n{instructions}", values ?? new Dictionary<string, string>()),
         "--tools", "Read,Glob,Grep,Bash,PowerShell,Edit,Write,NotebookEdit,WebSearch,WebFetch,Agent,ToolSearch,EnterPlanMode,ExitPlanMode,"
             + "Workflow,TaskStop,ListAgents,CronList,CronCreate,CronDelete,ReportFindings,Skill",
     ];

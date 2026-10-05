@@ -29,7 +29,9 @@ public partial class App : Application
     {
         base.OnStartup(e);
         _services = Services(DataFolder.Current).BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
-        var pet = _services.GetRequiredService<DataFiles>().Pet.Load();
+        var files = _services.GetRequiredService<DataFiles>();
+        DefaultInstructions.WriteIfMissing(files.Instructions);
+        var pet = files.Pet.Load();
         Use(Translation.All.FirstOrDefault(translation => translation.Name == pet.LanguageName) ?? Translation.Danish);
         _services.GetRequiredService<MainWindow>().Show();
     }
@@ -47,7 +49,7 @@ public partial class App : Application
         services.AddSingleton(provider =>
         {
             var files = provider.GetRequiredService<DataFiles>();
-            return new ClaudeClient(files.Workspace, files.Instructions, files.Settings);
+            return new ClaudeClient(files.Workspace, files.Instructions, files.Settings, InstructionValues.Of(files));
         });
         services.AddSingleton(provider =>
         {

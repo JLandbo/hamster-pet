@@ -1048,8 +1048,7 @@ public partial class MainWindow : Window
 
     void Instructions_Click(object sender, RoutedEventArgs e)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(_files.Instructions)!);
-        File.AppendAllText(_files.Instructions, "");
+        DefaultInstructions.WriteIfMissing(_files.Instructions);
         Warning.Open(this, new ProcessStartInfo(_files.Instructions) { UseShellExecute = true }, Strings.Of("Main.InstructionsFailed"));
     }
 
