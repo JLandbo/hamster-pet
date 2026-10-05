@@ -94,11 +94,11 @@ public static class ClaudeProtocol
         + "Når brugeren beder om en påmindelse, så brug CronCreate med en prompt, der beder dig om kun at skrive påmindelsen til brugeren, når den affyres. "
         + "Chatten vises i en app, der kan vise billeder: når du har gemt eller fundet et billede, som brugeren skal se, så skriv den fulde sti til filen i backticks, så vises billedet i svaret.";
 
-    public static string[] Arguments(string? sessionId, ClaudeSettings settings, string instructions = "", IReadOnlyDictionary<string, string>? values = null) => [
+    public static string[] Arguments(string? sessionId, ClaudeSettings settings, string instructions = "", IReadOnlyDictionary<string, string>? values = null, string? claudeConfig = null) => [
         "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
         "--permission-prompt-tool", "stdio", "--permission-mode", settings.PermissionMode,
         "--setting-sources", "user",
-        "--settings", SettingsJson(settings),
+        "--settings", SettingsJson(settings, claudeConfig),
         "--model", settings.Model, "--effort", settings.Effort,
         .. (settings.EnablePartialMessages ? ["--include-partial-messages"] : Array.Empty<string>()),
         .. (sessionId is null ? Array.Empty<string>() : ["--resume", sessionId]),
@@ -107,10 +107,10 @@ public static class ClaudeProtocol
             + "Workflow,TaskStop,ListAgents,CronList,CronCreate,CronDelete,ReportFindings,Skill",
     ];
 
-    static string SettingsJson(ClaudeSettings settings) => new JsonObject
+    static string SettingsJson(ClaudeSettings settings, string? claudeConfig) => new JsonObject
     {
         ["permissions"] = new JsonObject { ["ask"] = new JsonArray("Skill", "CronCreate") },
-        ["allowedMcpServers"] = Connectors.AllowedServers(),
+        ["allowedMcpServers"] = Connectors.AllowedServers(claudeConfig),
         ["deniedMcpServers"] = Connectors.DeniedServers(settings),
     }.ToJsonString();
 

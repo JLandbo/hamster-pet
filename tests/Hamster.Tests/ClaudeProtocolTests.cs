@@ -374,6 +374,16 @@ public sealed class ClaudeProtocolTests
     }
 
     [Fact]
+    public void Arguments_WhenTheUserHasALocalServer_ThenAllowsItsCommand()
+    {
+        // Act
+        var arguments = ClaudeProtocol.Arguments(null, ClaudeSettings.Default, claudeConfig: """{"mcpServers":{"hoboman":{"command":"hoboman-cli.exe","args":["mcp"]}}}""");
+
+        // Assert
+        Assert.Contains("""{"serverCommand":["hoboman-cli.exe","mcp"]}""", arguments[Array.IndexOf(arguments, "--settings") + 1]);
+    }
+
+    [Fact]
     public void Arguments_WhenValuesGiven_ThenFillsThemIntoThePetsOwnInstructions()
     {
         // Act

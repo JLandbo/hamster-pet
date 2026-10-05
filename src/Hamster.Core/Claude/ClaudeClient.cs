@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json.Nodes;
 using Hamster.Core.Chats;
+using Hamster.Core.Connections;
 using Hamster.Core.Languages;
 using Hamster.Core.Storage;
 
@@ -173,8 +174,21 @@ public sealed class ClaudeClient(string workspace, string instructionsFile, Json
         Directory.CreateDirectory(workspace);
         var instructions = File.Exists(instructionsFile) ? File.ReadAllText(instructionsFile) : "";
         var directory = Settings.WorkingDirectory ?? workspace;
-        var arguments = ClaudeProtocol.Arguments(sessionId, Settings, instructions, InstructionValues.WithWorkspace(instructionValues, directory));
+        var arguments = ClaudeProtocol.Arguments(sessionId, Settings, instructions, InstructionValues.WithWorkspace(instructionValues, directory), ClaudeConfig());
         return StartProcess(arguments, directory);
+    }
+
+    // Claude Code writes its config while it runs, so one that cannot be read now only leaves the user's own servers out of this session.
+    static string? ClaudeConfig()
+    {
+        try
+        {
+            return File.Exists(McpEndpoint.ClaudeConfigFile) ? File.ReadAllText(McpEndpoint.ClaudeConfigFile) : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     internal static Process StartProcess(IReadOnlyList<string> arguments, string workingDirectory)

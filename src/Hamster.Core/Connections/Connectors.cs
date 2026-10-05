@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Hamster.Core.Claude;
 using Hamster.Core.Languages;
@@ -90,7 +91,28 @@ public sealed class Connectors(IClaudeClient claude, Action restart, Func<bool> 
             ClaudeAiName: "claude.ai Microsoft 365"),
     ];
 
-    public static JsonArray AllowedServers() => [.. All.Select(connector => new JsonObject { ["serverUrl"] = connector.ServerUrlPattern })];
+    // The URLs keep claude.ai's other connectors out. A server the user has added to Claude Code that runs on this machine is theirs, so its command gets through.
+    public static JsonArray AllowedServers(string? claudeConfig = null) => [
+        .. All.Select(connector => new JsonObject { ["serverUrl"] = connector.ServerUrlPattern }),
+        .. LocalCommands(claudeConfig).Select(command => new JsonObject { ["serverCommand"] = command })];
+
+    // A config that cannot be read allows no more than the connectors, as before.
+    static IReadOnlyList<JsonArray> LocalCommands(string? claudeConfig)
+    {
+        try
+        {
+            return claudeConfig is not null && JsonNode.Parse(claudeConfig)?["mcpServers"] is JsonObject servers
+                ? [.. servers.Select(server => server.Value).OfType<JsonObject>().Select(server => (JsonNode?[])[server["command"], .. server["args"] as JsonArray ?? []])
+                    .Where(command => command.All(part => part?.GetValueKind() == JsonValueKind.String) && (string?)command[0] is { Length: > 0 })
+                    .Select(command => new JsonArray([.. command.Select(part => part!.DeepClone())]))]
+                : [];
+        }
+        // A name twice in the same object is only found when it is read.
+        catch (Exception exception) when (exception is JsonException or ArgumentException)
+        {
+            return [];
+        }
+    }
 
     public static JsonArray DeniedServers(ClaudeSettings settings) => [.. All.SelectMany(connector => SourceOf(connector, settings) switch
             {

@@ -236,6 +236,31 @@ public sealed class ConnectorsTests : IDisposable
     }
 
     [Fact]
+    public void AllowedServers_WhenTheUserHasALocalServer_ThenAllowsItsCommand()
+    {
+        // Act
+        var allowed = Connectors.AllowedServers("""{"mcpServers":{"hoboman":{"type":"stdio","command":"C:\\Hoboman\\hoboman-cli.exe","args":["mcp"]}}}""");
+
+        // Assert
+        Assert.Equal("""{"serverCommand":["C:\\Hoboman\\hoboman-cli.exe","mcp"]}""", allowed[^1]!.ToJsonString());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not json")]
+    [InlineData("""{"mcpServers":{"hamster-github":{"type":"http","url":"https://api.githubcopilot.com/mcp/"}}}""")]
+    [InlineData("""{"mcpServers":{"odd":{"command":"tool.exe","args":[1]}}}""")]
+    [InlineData("""{"mcpServers":{"twice":{"command":"a.exe"},"twice":{"command":"b.exe"}}}""")]
+    public void AllowedServers_WhenThereIsNoValidLocalServer_ThenAllowsOnlyTheConnectors(string? claudeConfig)
+    {
+        // Act
+        var allowed = Connectors.AllowedServers(claudeConfig);
+
+        // Assert
+        Assert.Equal(Connectors.All.Count, allowed.Count);
+    }
+
+    [Fact]
     public void DeniedServers_WhenClaudeAiIsChosenForGitHub_ThenBlocksTheHamstersGitHub()
     {
         // Act
