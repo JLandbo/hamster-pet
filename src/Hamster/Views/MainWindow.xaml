@@ -122,6 +122,7 @@
                                             <MenuItem Header="high" Tag="high" />
                                             <MenuItem Header="xhigh" Tag="xhigh" />
                                             <MenuItem Header="max" Tag="max" />
+                                            <MenuItem x:Name="UltracodeItem" Header="ultracode" Tag="ultracode" IsEnabled="False" />
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>

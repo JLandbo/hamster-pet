@@ -69,6 +69,7 @@ public partial class MainWindow : Window
     readonly Window _petWindow;
 
     IReadOnlyList<ConnectorProblem> _problems = [];
+    IReadOnlyList<string>? _ultracodeModels;
     string _lastPrompt = "";
     Task _attaching = Task.CompletedTask;
     DateTime _feedNewsAt;
@@ -165,6 +166,7 @@ public partial class MainWindow : Window
         conversation.Changed += Conversation_Changed;
         conversation.Started += () =>
         {
+            _ = CheckUltracodeAsync();
             if (_chatOnly)
             {
                 return;
@@ -364,6 +366,29 @@ public partial class MainWindow : Window
             return;
         }
         ShowProblems();
+    }
+
+    async Task CheckUltracodeAsync()
+    {
+        try
+        {
+            _ultracodeModels = ClaudeProtocol.UltracodeModels(await _claude.RequestAsync(ClaudeProtocol.Initialize()));
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or OperationCanceledException or IOException or ObjectDisposedException)
+        {
+            return;
+        }
+        ShowUltracode();
+    }
+
+    // Until Claude has said which models can use ultracode, the choice is kept but cannot be made.
+    void ShowUltracode()
+    {
+        UltracodeItem.IsEnabled = _ultracodeModels?.Contains(_claude.Settings.Model) == true;
+        if (_ultracodeModels is not null && !UltracodeItem.IsEnabled && _claude.Settings.Effort == ClaudeProtocol.Ultracode)
+        {
+            ChooseEffort(ClaudeProtocol.UltracodeEffort);
+        }
     }
 
     void ShowProblems()
@@ -1139,13 +1164,12 @@ public partial class MainWindow : Window
     {
         var model = Choose(ModelButton, (string)((MenuItem)e.OriginalSource).Tag);
         _claude.Choose(_claude.Settings with { Model = model }, ClaudeProtocol.SetModel(model));
+        ShowUltracode();
     }
 
-    void Effort_Click(object sender, RoutedEventArgs e)
-    {
-        var effort = Choose(EffortButton, (string)((MenuItem)e.OriginalSource).Tag);
-        _claude.Choose(_claude.Settings with { Effort = effort }, ClaudeProtocol.SetEffort(effort));
-    }
+    void Effort_Click(object sender, RoutedEventArgs e) => ChooseEffort((string)((MenuItem)e.OriginalSource).Tag);
+
+    void ChooseEffort(string effort) => _claude.Choose(_claude.Settings with { Effort = Choose(EffortButton, effort) }, ClaudeProtocol.SetEffort(effort));
 
     void Mode_Click(object sender, RoutedEventArgs e)
     {

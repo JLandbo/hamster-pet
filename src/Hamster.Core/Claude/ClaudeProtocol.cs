@@ -85,6 +85,9 @@ public sealed record Usage(double FiveHour, double SevenDay, DateTimeOffset? Fiv
 
 public static class ClaudeProtocol
 {
+    public const string Ultracode = "ultracode";
+    public const string UltracodeEffort = "xhigh";
+
     // The {{names}} are filled with the app's own folders, so the text holds for any user and wherever the app is installed.
     public const string PetInstructions = "Du kører gennem hamster-pet, en desktop-app, der sender brugerens beskeder til Claude Code. "
         + "Appen ligger i {{appFolder}}, dens data og brugerens instruktioner i {{dataFolder}}, og din arbejdsmappe er {{workspace}}. "
@@ -202,7 +205,21 @@ public static class ClaudeProtocol
 
     public static string SetModel(string model) => Control(new JsonObject { ["subtype"] = "set_model", ["model"] = model });
 
-    public static string SetEffort(string effort) => Control(new JsonObject { ["subtype"] = "apply_flag_settings", ["settings"] = new JsonObject { ["effortLevel"] = effort } });
+    // A level alone leaves ultracode on when it is the level ultracode already runs at.
+    public static string SetEffort(string effort) => Control(new JsonObject
+    {
+        ["subtype"] = "apply_flag_settings",
+        ["settings"] = effort == Ultracode ? new JsonObject { ["effortLevel"] = effort } : new JsonObject { ["effortLevel"] = effort, ["ultracode"] = false },
+    });
+
+    public static JsonObject Initialize() => new() { ["subtype"] = "initialize" };
+
+    // Ultracode needs workflows, which bring the workflow-authoring skill, and a model that runs at its effort level.
+    public static IReadOnlyList<string> UltracodeModels(JsonObject? initialized) => initialized?["commands"] is JsonArray commands
+            && commands.Any(command => (string?)command?["name"] == "workflow-authoring") && initialized["models"] is JsonArray models
+        ? [.. models.OfType<JsonObject>().Where(model => (model["supportedEffortLevels"] as JsonArray ?? []).Any(level => (string?)level == UltracodeEffort))
+            .SelectMany(model => new[] { (string?)model["value"], (string?)model["resolvedModel"] }).OfType<string>().Distinct()]
+        : [];
 
     public static string SetPermissionMode(string mode) => Control(new JsonObject { ["subtype"] = "set_permission_mode", ["mode"] = mode });
 

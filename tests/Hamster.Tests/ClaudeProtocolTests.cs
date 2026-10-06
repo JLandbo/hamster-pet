@@ -679,6 +679,57 @@ public sealed class ClaudeProtocolTests
     }
 
     [Fact]
+    public void SetEffort_WhenALevelIsChosen_ThenTurnsUltracodeOff()
+    {
+        // Act
+        var settings = JsonNode.Parse(ClaudeProtocol.SetEffort("xhigh"))!["request"]!["settings"]!;
+
+        // Assert
+        Assert.Equal(("xhigh", false), ((string?)settings["effortLevel"], (bool?)settings["ultracode"]));
+    }
+
+    [Fact]
+    public void SetEffort_WhenUltracodeIsChosen_ThenAsksForUltracode()
+    {
+        // Act
+        var settings = JsonNode.Parse(ClaudeProtocol.SetEffort(ClaudeProtocol.Ultracode))!["request"]!["settings"]!.AsObject();
+
+        // Assert
+        Assert.Equal(("ultracode", false), ((string?)settings["effortLevel"], settings.ContainsKey("ultracode")));
+    }
+
+    [Fact]
+    public void UltracodeModels_WhenWorkflowsAreOn_ThenListsTheModelsThatRunAtItsEffortLevel()
+    {
+        // Arrange
+        var initialized = JsonNode.Parse("""
+            {"commands":[{"name":"workflow-authoring"}],"models":[
+              {"value":"opus","resolvedModel":"claude-opus-5-5","supportedEffortLevels":["low","medium","high","xhigh","max"]},
+              {"value":"claude-sonnet-4-6","resolvedModel":"claude-sonnet-4-6","supportedEffortLevels":["low","medium","high","max"]},
+              {"value":"haiku","resolvedModel":"claude-haiku-4-5-20251001"}]}
+            """)!.AsObject();
+
+        // Act
+        var models = ClaudeProtocol.UltracodeModels(initialized);
+
+        // Assert
+        Assert.Equal(["opus", "claude-opus-5-5"], models);
+    }
+
+    [Fact]
+    public void UltracodeModels_WhenWorkflowsAreOff_ThenListsNone()
+    {
+        // Arrange
+        var initialized = JsonNode.Parse("""{"commands":[{"name":"effort"}],"models":[{"value":"opus","resolvedModel":"claude-opus-5-5","supportedEffortLevels":["xhigh"]}]}""")!.AsObject();
+
+        // Act
+        var models = ClaudeProtocol.UltracodeModels(initialized);
+
+        // Assert
+        Assert.Empty(models);
+    }
+
+    [Fact]
     public void SetPermissionMode_WhenCalled_ThenAsksClaudeToSwitchMode()
     {
         // Act
