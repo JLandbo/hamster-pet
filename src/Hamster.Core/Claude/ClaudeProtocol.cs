@@ -262,7 +262,7 @@ public static class ClaudeProtocol
     static string Detail(JsonNode? input) => _detailFields.Select(field => input is JsonObject fields && fields[field] is JsonValue value && value.TryGetValue(out string? text) ? text : null)
             .FirstOrDefault(text => text is not null) ?? "";
 
-    static string ContentText(JsonNode? content) => content switch
+    internal static string ContentText(JsonNode? content) => content switch
     {
         JsonValue value when value.TryGetValue(out string? text) => text,
         JsonArray blocks => string.Concat(blocks.Select(block => (string?)block?["text"])),

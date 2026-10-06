@@ -180,6 +180,22 @@ public sealed class ClaudeFetcherTests
     }
 
     [Fact]
+    public void FullText_WhenClaudeSavedTheContentBlocksToAJsonFile_ThenReadsTheirText()
+    {
+        // Arrange
+        var file = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
+        File.WriteAllText(file, """[{"type":"text","text":"{\"data\":{\"issues\":[]}}"}]""");
+        var text = $"<persisted-output>\nOutput too large (60.9KB). Full output saved to: {file}\n\nPreview (first 2KB):\n[\n</persisted-output>";
+
+        // Act
+        var full = ClaudeFetcher.FullText(text);
+        File.Delete(file);
+
+        // Assert
+        Assert.Equal("""{"data":{"issues":[]}}""", full);
+    }
+
+    [Fact]
     public void FullText_WhenTheResultWasTooLargeForClaude_ThenReadsTheSavedFile()
     {
         // Arrange

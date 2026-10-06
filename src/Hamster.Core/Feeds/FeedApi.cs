@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using Hamster.Core.Connections;
 using Hamster.Core.Languages;
+using ReverseMarkdown;
 
 namespace Hamster.Core.Feeds;
 
@@ -13,6 +14,7 @@ static class FeedApi
     static readonly string[] _issueFields = ["summary", "status", "updated", "issuetype", "parent", "priority", "labels", "components", "created", "description", "duedate", "timetracking"];
     internal static readonly IReadOnlyDictionary<string, string> DefaultFields = new Dictionary<string, string> { [_sprintName] = "customfield_10020" };
     const int _gitHubSearchLimit = 1000;
+    static readonly Converter _htmlToMarkdown = HtmlToMarkdown();
 
     public static IReadOnlyDictionary<string, string> JiraFieldsOf(string json)
     {
@@ -57,11 +59,7 @@ static class FeedApi
         return pages;
     }
 
-    public static string? NextPageToken(string json) => JsonNode.Parse(json) is JsonObject page
-            ? (string?)page["nextPageToken"] is { Length: > 0 } token
-                ? token
-                : page["issues"] is JsonObject issues && issues["pageInfo"] is JsonObject info && (bool?)info["hasNextPage"] == true ? (string?)info["endCursor"] : null
-            : null;
+    public static string? NextPageToken(string json) => (string?)Unwrapped(JsonNode.Parse(json))?["nextPageToken"] is { Length: > 0 } token ? token : null;
 
     public static ToolCall? NextJiraPage(ToolCall call, string text) => NextPageToken(text) is { } token ? call with { Arguments = With(call.Arguments, "nextPageToken", token) } : null;
 
@@ -130,16 +128,15 @@ static class FeedApi
 
     public static bool IsJiraSite(string url) => Uri.TryCreate(url, UriKind.Absolute, out var site) && Subscriptions.Jira.Login!.SiteOf(site) is not null;
 
-    public static IReadOnlyList<string> JiraSites(string json) => [.. (JsonNode.Parse(json) switch
-            {
-                JsonArray sites => sites,
-                JsonObject result => result["data"]?["resources"] as JsonArray,
-                _ => null,
-            } ?? []).OfType<JsonObject>()
+    public static IReadOnlyList<string> JiraSites(string json) => [.. (Unwrapped(JsonNode.Parse(json))?["resources"] as JsonArray ?? []).OfType<JsonObject>()
             .Select(site => (string?)site["url"]).OfType<string>()];
 
-    public static IEnumerable<FeedItem> JiraItems(string json, string site, IReadOnlyDictionary<string, string> columns, IReadOnlyDictionary<string, string>? customFields = null) => JiraIssues(json)
-            .Select(issue => (Key: (string?)issue["key"], Fields: issue["fields"], Site: site))
+    public static IEnumerable<FeedItem> JiraItems(string json, string site, IReadOnlyDictionary<string, string> columns, IReadOnlyDictionary<string, string>? customFields = null)
+    {
+        var page = Unwrapped(JsonNode.Parse(json));
+        var html = (string?)page?["appliedContentFormat"] == "html";
+        return (page?["issues"] as JsonArray ?? []).OfType<JsonObject>()
+            .Select(issue => (Key: (string?)issue["key"], Fields: AsRestFields(issue["fields"], html), Site: site))
             .Where(issue => issue.Key is not null)
             .Select(issue => new FeedItem(
                 Subscriptions.JiraSource,
@@ -151,6 +148,7 @@ static class FeedApi
                 Kind: KindOf(issue.Fields?["issuetype"]),
                 Parent: ParentOf(issue.Fields?["parent"], issue.Site),
                 Details: DetailsOf(issue.Fields, customFields ?? DefaultFields)));
+    }
 
     static IssueDetails? DetailsOf(JsonNode? fields, IReadOnlyDictionary<string, string> customFields)
     {
@@ -225,12 +223,38 @@ static class FeedApi
             .DistinctBy(found => found.Status).ToDictionary(found => found.Status, found => found.Column);
     }
 
-    static IEnumerable<JsonObject> JiraIssues(string json) => (JsonNode.Parse(json)?["issues"] switch
+    // Rovo MCP v2 wraps its answer in data.
+    static JsonObject? Unwrapped(JsonNode? answer) => answer is JsonObject found ? found["data"] as JsonObject ?? found : null;
+
+    // Rovo MCP v2's media have no address, so they are made images to be marked as such.
+    static Converter HtmlToMarkdown()
+    {
+        var config = new Config { Tags = { Unknown = Config.UnknownTagsOption.Bypass } };
+        config.Preprocess.Rename("[data-type=media], [data-type=media-inline]", "img");
+        return new(config);
+    }
+
+    // Rovo MCP v2 groups custom fields by name, so they are put where Jira's REST API has them, and its HTML description is read as markdown.
+    static JsonNode? AsRestFields(JsonNode? fields, bool html)
+    {
+        if (fields is not JsonObject found)
         {
-            JsonArray issues => issues,
-            JsonObject page => page["nodes"] as JsonArray,
-            _ => null,
-        } ?? []).OfType<JsonObject>();
+            return fields;
+        }
+        var rest = found.DeepClone().AsObject();
+        foreach (var (_, field) in found["customFields"] as JsonObject ?? [])
+        {
+            if (field is JsonObject entry && (string?)entry["id"] is { } id)
+            {
+                rest[id] = entry["value"]?.DeepClone();
+            }
+        }
+        if (html && rest["description"] is JsonValue description && description.TryGetValue(out string? text))
+        {
+            rest["description"] = _htmlToMarkdown.Convert(text);
+        }
+        return rest;
+    }
 
     public static ToolCall JiraSearch(string site, string jql, IEnumerable<string> customFields) => new("searchJiraIssuesUsingJql", new JsonObject
     {
@@ -238,7 +262,10 @@ static class FeedApi
         ["jql"] = jql,
         ["maxResults"] = _pageSize,
         ["fields"] = new JsonArray([.. _issueFields.Concat(customFields).Select(field => (JsonNode)field)]),
-        ["responseContentFormat"] = "markdown",
+        // Rovo MCP v2 gives some descriptions as HTML whatever is asked for, without telling which.
+        ["responseContentFormat"] = "html",
+        // Rovo MCP v2's default compact view leaves out the status id, dates and parents.
+        ["view"] = "full",
     });
 
     internal static ToolCall GitHubSearch(string tool, string query) => new(tool, new JsonObject

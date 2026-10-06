@@ -73,13 +73,20 @@ public sealed partial class ClaudeFetcher(string workspace)
     public static string ToolPrefix(string serverName) => $"mcp__{NotAllowedInToolNames().Replace(serverName, "_")}__";
 
     public static string FullText(string text) => !text.TrimStart().StartsWith('{') && SavedFile().Match(text) is { Success: true } match && File.Exists(match.Groups[1].Value)
-            ? File.ReadAllText(match.Groups[1].Value)
+            ? SavedText(match.Groups[1].Value)
             : text;
+
+    // Claude Code saves a large result in a .json file as the tool's content blocks.
+    static string SavedText(string file)
+    {
+        var saved = File.ReadAllText(file);
+        return Path.GetExtension(file) == ".json" && JsonNode.Parse(saved) is JsonArray blocks ? ClaudeProtocol.ContentText(blocks) : saved;
+    }
 
     [GeneratedRegex("[^A-Za-z0-9_-]")]
     private static partial Regex NotAllowedInToolNames();
 
-    [GeneratedRegex(@"saved to:? (.+?\.txt)")]
+    [GeneratedRegex(@"saved to:? (.+?\.(?:txt|json))")]
     private static partial Regex SavedFile();
 
     static string Prompt(IReadOnlyList<ToolCall> calls)

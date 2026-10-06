@@ -12,17 +12,22 @@ static class JiraDescription
 {
     static readonly MarkdownPipeline _sourcePositions = new MarkdownPipelineBuilder().UsePreciseSourceLocation().Build();
 
-    public static string Of(JsonNode? description) => WithImagesMarked(description switch
+    public static string Of(JsonNode? description) => WithMediaMarked(description switch
     {
         JsonValue value when value.TryGetValue(out string? text) => text,
         JsonObject document => MarkdownOf(document),
         _ => "",
     }).Trim();
 
-    static string WithImagesMarked(string markdown) => Markdown.Parse(markdown, _sourcePositions).Descendants<LinkInline>().Where(link => link.IsImage && !InsideImage(link)).Reverse()
-            .Aggregate(markdown, (text, image) => text.Remove(image.Span.Start, image.Span.Length).Insert(image.Span.Start, ImageMark));
+    // An image on the web keeps its address so it can be shown, with the mark as its text for when it cannot.
+    static string WithMediaMarked(string markdown) => Markdown.Parse(markdown, _sourcePositions).Descendants<LinkInline>().Where(link => link.IsImage && !InsideImage(link)).Reverse()
+            .Aggregate(markdown, (text, image) => !OnTheWeb(image.Url) ? text.Remove(image.Span.Start, image.Span.Length).Insert(image.Span.Start, MediaMark)
+                : image.FirstChild is null ? text.Insert(image.Span.Start + "![".Length, Escaped(MediaMark))
+                : text);
 
-    static string ImageMark => Strings.Of("Tasks.Image");
+    static bool OnTheWeb(string? url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https";
+
+    static string MediaMark => Strings.Of("Tasks.Media");
 
     static bool InsideImage(Inline inline) => inline.Parent is { } parent && (parent is LinkInline { IsImage: true } || InsideImage(parent));
 
@@ -37,7 +42,7 @@ static class JiraDescription
         "codeBlock" => CodeBlockOf(item),
         "blockquote" => $"> {ChildrenOf(item).Trim().Replace("\n", "\n> ")}\n\n",
         "rule" => "---\n\n",
-        "mediaSingle" => $"{ImageMark}\n\n",
+        "mediaSingle" => $"{MediaMark}\n\n",
         "inlineCard" => (string?)item["attrs"]?["url"] ?? "",
         "blockCard" or "embedCard" => $"{(string?)item["attrs"]?["url"]}\n\n",
         "date" => DayOf(item["attrs"]?["timestamp"]),

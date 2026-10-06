@@ -35,6 +35,12 @@
                                 <Run Text="Markdig 1.4.0 — " /><Hyperlink NavigateUri="https://github.com/xoofx/markdig/blob/main/license.txt" RequestNavigate="Link_RequestNavigate">BSD-2-Clause</Hyperlink>
                             </TextBlock>
                             <TextBlock Style="{StaticResource LicenseItem}">
+                                <Run Text="ReverseMarkdown 6.2.1 — " /><Hyperlink NavigateUri="https://github.com/mysticmind/reversemarkdown-net/blob/master/LICENSE" RequestNavigate="Link_RequestNavigate">MIT</Hyperlink>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource LicenseItem}">
+                                <Run Text="AngleSharp 1.5.2 — " /><Hyperlink NavigateUri="https://github.com/AngleSharp/AngleSharp/blob/devel/LICENSE" RequestNavigate="Link_RequestNavigate">MIT</Hyperlink>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource LicenseItem}">
                                 <Run Text="Microsoft.Extensions.DependencyInjection and Abstractions 10.0.12 — " /><Hyperlink NavigateUri="https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/LICENSE.TXT" RequestNavigate="Link_RequestNavigate">MIT</Hyperlink>
                             </TextBlock>
                             <TextBlock Style="{StaticResource LicenseItem}">

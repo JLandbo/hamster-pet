@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json.Nodes;
 
 namespace Hamster.Tests;
@@ -131,13 +131,11 @@ public sealed class SubscriptionsTests : IDisposable
         Assert.Equal(expected, accepted);
     }
 
-    [Theory]
-    [InlineData("""[{"id":"f6909ca2","url":"https://firma.atlassian.net","name":"firma"}]""")]
-    [InlineData("""{"data":{"resources":[{"cloudId":"f6909ca2","url":"https://firma.atlassian.net"}]}}""")]
-    public void JiraSites_WhenEitherAtlassianServerAnswers_ThenReadsTheSites(string json)
+    [Fact]
+    public void JiraSites_WhenRovoAnswers_ThenReadsTheSites()
     {
         // Act
-        var sites = FeedApi.JiraSites(json);
+        var sites = FeedApi.JiraSites("""{"data":{"resources":[{"cloudId":"f6909ca2","url":"https://firma.atlassian.net"}]}}""");
 
         // Assert
         Assert.Equal([_site], sites);
@@ -145,7 +143,7 @@ public sealed class SubscriptionsTests : IDisposable
 
     [Theory]
     [InlineData("""{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test af login","status":{"id":"10012","name":"Test"}}}]}""")]
-    [InlineData("""{"issues":{"nodes":[{"key":"ACS-1","self":"https://api.atlassian.com/ex/jira/f6909ca2/rest/api/3/issue/1","fields":{"summary":"Test af login","status":{"id":"10012","name":"Test"}}}]}}""")]
+    [InlineData("""{"data":{"issues":[{"id":"1","key":"ACS-1","fields":{"summary":"Test af login","status":{"name":"Test","id":"10012"}}}],"isLast":true}}""")]
     public void JiraItems_WhenIssuesAreFound_ThenLinksToTheirSiteUnderTheirColumn(string json)
     {
         // Act
@@ -353,8 +351,8 @@ public sealed class SubscriptionsTests : IDisposable
     [Theory]
     [InlineData("""{"issues":[],"nextPageToken":"t2","isLast":false}""", "t2")]
     [InlineData("""{"issues":[],"isLast":true}""", null)]
-    [InlineData("""{"issues":{"nodes":[],"pageInfo":{"hasNextPage":true,"endCursor":"c2"}}}""", "c2")]
-    [InlineData("""{"issues":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}""", null)]
+    [InlineData("""{"data":{"issues":[],"nextPageToken":"t2","isLast":false}}""", "t2")]
+    [InlineData("""{"data":{"issues":[],"isLast":true}}""", null)]
     public void NextPageToken_WhenJiraAnswers_ThenFindsTheNextPage(string json, string? expected)
     {
         // Act
@@ -389,7 +387,7 @@ public sealed class SubscriptionsTests : IDisposable
         var call = new ToolCall("searchJiraIssuesUsingJql", new JsonObject { ["jql"] = "x" });
 
         // Act
-        var next = FeedApi.NextJiraPage(call, """{"issues":{"nodes":[],"pageInfo":{"hasNextPage":true,"endCursor":"c2"}}}""");
+        var next = FeedApi.NextJiraPage(call, """{"data":{"issues":[],"nextPageToken":"c2","isLast":false}}""");
 
         // Assert
         Assert.Equal(("x", "c2"), ((string?)next?.Arguments["jql"], (string?)next?.Arguments["nextPageToken"]));
@@ -475,6 +473,25 @@ public sealed class SubscriptionsTests : IDisposable
     }
 
     [Fact]
+    public void JiraItems_WhenCustomFieldsAreGroupedByName_ThenShowsTheActiveSprintAndTheirTags()
+    {
+        // Arrange
+        const string json = """
+            {"data":{"issues":[{"key":"ACS-1","fields":{"summary":"Test","customFields":{
+              "Story Points":{"id":"customfield_10026","value":3},"Kundenavn":{"id":"customfield_10068","value":{"value":"Idealcombi","id":"10141"}},
+              "Sprint":{"id":"customfield_10020","value":[{"name":"Sprint 2","state":"active","boardId":8,"endDate":"2026-10-01T10:00:00.000Z"}]}}}}]}}
+            """;
+        var fields = new Dictionary<string, string> { ["Sprint"] = "customfield_10020", ["Story Points"] = "customfield_10026", ["Kundenavn"] = "customfield_10068" };
+
+        // Act
+        var details = Assert.Single(FeedApi.JiraItems(json, _site, new Dictionary<string, string>(), fields)).Details!;
+
+        // Assert
+        Assert.Equal($"Sprint 2 · slutter {new DateTimeOffset(2026, 10, 1, 10, 0, 0, TimeSpan.Zero).ToLocalTime().ToString("d. MMM", CultureInfo.CurrentCulture)}", details.Sprint);
+        Assert.Equal(["Story Points 3", "Kundenavn Idealcombi"], details.Tags.Select(tag => $"{tag.Key} {tag.Value}"));
+    }
+
+    [Fact]
     public void JiraItems_WhenTheDescriptionIsLong_ThenKeepsItWhole()
     {
         // Arrange
@@ -507,6 +524,20 @@ public sealed class SubscriptionsTests : IDisposable
 
         // Assert
         Assert.Equal("## Baggrund\n\nRing til @Jacob om **API**\\-kaldet\\, se https://x.atlassian.net/browse/ACS-2 og `Foo()`\\.\n\n- punkt 1\n- punkt 2", description);
+    }
+
+    [Theory]
+    [InlineData("""<h2>Baggrund</h2><p>Ring om <strong>API</strong>, se <a href="https://x.dk">x</a>.</p><ul><li><p>punkt 1</p></li><li><p>punkt 2</p></li></ul>""", "## Baggrund\r\n\r\nRing om **API**, se [x](https://x.dk).\r\n\r\n- punkt 1\r\n\r\n- punkt 2")]
+    [InlineData("""<p>Se her</p><figure data-type="media-single"><div data-type="media" data-id="abc"></div></figure><p>Fil <span data-type="media-inline" data-media-id="x"></span></p>""", "Se her\r\n\r\n[MEDIA]\r\n\r\nFil [MEDIA]")]
+    [InlineData("""<p>Logo</p><img src="https://x.dk/logo.png" width="200">""", "Logo\r\n\r\n![\\[MEDIA\\]](https://x.dk/logo.png)")]
+    [InlineData("""<div data-type="panel-note"><p>Hej <span data-type="mention" data-user-id="5e7b">@Jacob</span></p></div>""", "Hej @Jacob")]
+    public void JiraItems_WhenRovoGivesTheDescriptionAsHtml_ThenShowsItAsMarkdown(string html, string expected)
+    {
+        // Act
+        var description = DescribedInHtml(html);
+
+        // Assert
+        Assert.Equal(expected, description);
     }
 
     [Fact]
@@ -604,7 +635,7 @@ public sealed class SubscriptionsTests : IDisposable
         var description = Assert.Single(FeedApi.JiraItems(json, _site, new Dictionary<string, string>())).Details!.Description;
 
         // Assert
-        Assert.Equal("Følgende:\n\n[Billede]Problem i dag [Billede]", description);
+        Assert.Equal("Følgende:\n\n[MEDIA]Problem i dag [MEDIA]", description);
     }
 
     [Fact]
@@ -760,7 +791,7 @@ public sealed class SubscriptionsTests : IDisposable
         var description = Described(content);
 
         // Assert
-        Assert.Equal("Se her\n\n[Billede]", description);
+        Assert.Equal("Se her\n\n[MEDIA]", description);
     }
 
     [Fact]
@@ -773,7 +804,7 @@ public sealed class SubscriptionsTests : IDisposable
         var description = Assert.Single(FeedApi.JiraItems(json, _site, new Dictionary<string, string>())).Details!.Description;
 
         // Assert
-        Assert.Equal("Før [[Billede]](b) efter", description);
+        Assert.Equal("Før [[MEDIA]](b) efter", description);
     }
 
     [Fact]
@@ -786,17 +817,18 @@ public sealed class SubscriptionsTests : IDisposable
         var description = Assert.Single(FeedApi.JiraItems(json, _site, new Dictionary<string, string>())).Details!.Description;
 
         // Assert
-        Assert.Equal("Før [Billede] efter", description);
+        Assert.Equal("Før [MEDIA] efter", description);
     }
 
     [Fact]
-    public void JiraSearch_WhenBuilt_ThenAsksForAllDetailsAsMarkdownAHundredAtATime()
+    public void JiraSearch_WhenBuilt_ThenAsksForAllDetailsAsHtmlAHundredAtATime()
     {
         // Act
         var call = FeedApi.JiraSearch(_site, "assignee = currentUser()", ["customfield_10020", "customfield_10026"]);
 
         // Assert
-        Assert.Equal(("markdown", 100, "customfield_10026"), ((string?)call.Arguments["responseContentFormat"], (int?)call.Arguments["maxResults"], (string?)call.Arguments["fields"]!.AsArray()[^1]));
+        Assert.Equal(("html", "full", 100, "customfield_10026"),
+            ((string?)call.Arguments["responseContentFormat"], (string?)call.Arguments["view"], (int?)call.Arguments["maxResults"], (string?)call.Arguments["fields"]!.AsArray()[^1]));
         Assert.Contains("description", call.Arguments["fields"]!.AsArray().Select(field => (string?)field));
     }
 
@@ -837,6 +869,19 @@ public sealed class SubscriptionsTests : IDisposable
     {
         return Assert.Single(FeedApi.JiraItems("""{"issues":[{"key":"ACS-1","self":"https://firma.atlassian.net/rest/api/3/issue/1","fields":{"summary":"Test","description":{"type":"doc","content":[CONTENT]}}}]}""".Replace("CONTENT", content),
             _site, new Dictionary<string, string>())).Details!.Description;
+    }
+
+    static string DescribedInHtml(string html)
+    {
+        var json = new JsonObject
+        {
+            ["data"] = new JsonObject
+            {
+                ["issues"] = new JsonArray(new JsonObject { ["key"] = "ACS-1", ["fields"] = new JsonObject { ["summary"] = "Test", ["description"] = html } }),
+                ["appliedContentFormat"] = "html",
+            },
+        };
+        return Assert.Single(FeedApi.JiraItems(json.ToJsonString(), _site, new Dictionary<string, string>())).Details!.Description;
     }
 
     static string Url(string key) => $"{_site}/browse/{key}";
